@@ -20,6 +20,51 @@ app.post('/api/market/ingest',(req,res)=>{
   quotes.set(symbol,quote);broadcast({type:'market-quote',quote});res.json({ok:true});
 });
 app.get('/api/market/status',(_req,res)=>res.json({licensedProviderConnected:quotes.size>0,quotes:[...quotes.values()],note:'Quotes are accepted only from a separately licensed provider adapter.'}));
+// Optional Twelve Data adapter. Enable only with public-display/redistribution rights.
+// API keys remain server-side and are never sent to browsers.
+const tdKey=process.env.TWELVE_DATA_API_KEY;
+const tdSymbols={
+  '005930':process.env.TD_SAMSUNG_SYMBOL,
+  '000660':process.env.TD_HYNIX_SYMBOL,
+  'KOSPI':process.env.TD_KOSPI_SYMBOL,
+  'NDX':process.env.TD_NDX_SYMBOL
+};
+const tdInterval=Math.max(60000,Number(process.env.TD_POLL_MS)||60000);
+let tdBusy=false;
+async function pollTwelveData(){
+  if(!tdKey||tdBusy)return;
+  tdBusy=true;
+  try{
+    for(const [symbol,providerSymbol] of Object.entries(tdSymbols)){
+      if(!providerSymbol)continue;
+      try{
+        const url=new URL('https://api.twelvedata.com/quote');
+        url.searchParams.set('symbol',providerSymbol);
+        url.searchParams.set('apikey',tdKey);
+        const response=await fetch(url,{signal:AbortSignal.timeout(10000)});
+        if(!response.ok)throw Error('HTTP '+response.status);
+        const body=await response.json();
+        if(body.status==='error'||body.code)throw Error(body.message||'Provider error');
+        const price=Number(body.close);
+        if(!Number.isFinite(price)||price<=0)throw Error('No valid quote');
+        // A quote may be the previous close. Preserve the provider's market timestamp.
+        const rawTime=body.datetime||body.timestamp;
+        let quoteTime=null;
+        if(typeof rawTime==='number')quoteTime=new Date(rawTime*1000);
+        else if(typeof rawTime==='string'){
+          // Date-only or exchange-local timestamps cannot be assumed to be UTC.
+          // Date-only values are labeled as closing data in the client.
+          const dateString=rawTime.length===10?rawTime+'T00:00:00Z':rawTime;
+          quoteTime=new Date(dateString);
+        }
+        if(!quoteTime||!Number.isFinite(quoteTime.getTime()))throw Error('Missing timestamp');
+        const quote={symbol,price,timestamp:quoteTime.toISOString(),source:'Twelve Data',delayed:true};
+        quotes.set(symbol,quote);broadcast({type:'market-quote',quote});
+      }catch(error){console.warn('Market quote unavailable:',symbol,error.message)}
+    }
+  }finally{tdBusy=false}
+}
+if(tdKey){pollTwelveData();setInterval(pollTwelveData,tdInterval)}
 const server=createServer(app);const wss=new WebSocketServer({server,path:'/ws'});
 const animalIds=new Set(["seal","lion","hamster","hedgehog","wolf","whale","cheetah","squid","panda","fox","bear","rabbit","cat","dog","penguin","frog","otter","koala","tiger","octopus"]);
 const themeIds=new Set(["mint","pink","blue"]);
