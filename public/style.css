@@ -24,3 +24,30 @@
 .avatar-themes button.selected{border-color:#4de0bc;background:#17483f}
 #avatar-close{position:absolute;top:13px;right:15px;background:transparent;border:0;color:#fff;font-size:20px;cursor:pointer}
 @media(max-width:480px){.avatar-choices{grid-template-columns:repeat(3,minmax(0,1fr))}}
+
+/* JMC CYBER COMMAND CENTER — visual redesign */
+:root{--neon:#4bbdff;--mint:#53f6d5;--glass:rgba(5,17,39,.86)}
+body{background:radial-gradient(ellipse at 50% -5%,#0b3865 0,#07182d 30%,#030813 76%);color:#e6f5ff;min-height:100vh}
+.cyber-sky{position:fixed;inset:0;pointer-events:none;z-index:-1;background:linear-gradient(90deg,transparent 49.9%,rgba(30,125,235,.06) 50%,transparent 50.1%),repeating-linear-gradient(0deg,transparent 0 67px,rgba(55,157,255,.045) 68px);background-size:100px 100px}
+header{height:86px;background:linear-gradient(180deg,#07152b,#061024);border-bottom:1px solid #2871af;box-shadow:0 0 30px #047de32b;position:relative;z-index:5}
+.logo{color:#fff;font-size:23px;text-shadow:0 0 15px #4aa9ff;font-weight:900}.logo span{color:#b7eaff}.logo small{color:#63bafa;letter-spacing:2px}
+.top{gap:12px}.top button{border:1px solid #2e81ba;background:#102a4a;color:#d6efff;box-shadow:inset 0 0 10px #1674bc2c}
+.cyber-nav{display:flex;justify-content:center;align-items:center;gap:8px;padding:12px 14px;background:#081629d9;border-bottom:1px solid #164775;flex-wrap:wrap}
+.cyber-nav a{color:#c7eaff;text-decoration:none;font-size:12px;font-weight:700;border:1px solid #255b91;border-radius:10px;padding:10px 22px;background:linear-gradient(180deg,#133a65,#0a1b35);box-shadow:0 0 12px #146ce72a}.cyber-nav a:hover{border-color:#59e8ff;box-shadow:0 0 18px #19a8ff88}
+main{grid-template-columns:minmax(0,1fr) 400px;max-width:1900px;gap:14px;padding:16px}
+.scene-wrap,.panel{background:linear-gradient(155deg,rgba(12,32,61,.95),rgba(4,13,31,.96));border:1px solid #2b72ad;box-shadow:inset 0 0 22px #0b6aa42b,0 8px 34px #0008;border-radius:13px}
+.scene-head{background:linear-gradient(90deg,#0b2548,#07192f);padding:20px 24px 15px;border-bottom:1px solid #2168a4}
+.scene-head h1{font-size:clamp(19px,2.1vw,32px);color:#f5fcff;text-shadow:0 0 20px #3897ff88}
+.eyebrow{color:#67d6ff}.scene-head p{color:#b6cce7}.pill{background:#0b4b73;border:1px solid #2989ca;color:#a3e7ff}
+#scene{height:min(72vh,780px);min-height:470px;background:radial-gradient(circle at 50% 40%,#0b3a63,#020815);position:relative}
+.scene-hud{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;gap:8px;pointer-events:none;z-index:4}.hud-chip{padding:8px 12px;background:#031328b9;border:1px solid #2c80bc;border-radius:7px;color:#8adfff;font-size:10px;letter-spacing:1px;box-shadow:0 0 12px #2c80bc33}
+.scene-bottom{background:#06192e;color:#8cc8f0;border-color:#23598c}
+.panel{padding:17px}.panel-head{border-color:#245b8d}.panel-head h2{color:#d3edff;font-size:14px}.panel-head span{color:#64c4ed}
+.asset{border-color:#1c466c;padding:13px 4px}.asset:hover{background:#143f6d}.asset strong{color:#e7f5ff}.asset .price{color:#fff;font-size:17px}.asset .up{color:#49efc9}.asset .down{color:#ff6e91}
+.arena-panel{border:1px solid #388fd0}.arena-panel .prize{background:linear-gradient(110deg,#173c69,#152c56);border:1px solid #327bb6}
+#chat-input{border:1px solid #286c9e;background:#06182c}#chat-form button,.vote-buttons #long{background:#42e7cb}
+.arena-view-toolbar{background:#071c37;border-bottom:1px solid #245b89}.arena-view-toolbar button{background:#115a8e!important;border:1px solid #48b8f9!important;color:#fff!important}
+@media(max-width:1100px){main{grid-template-columns:1fr}aside{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.arena-panel,.chat-panel{grid-column:1/-1}}
+@media(max-width:650px){header{height:auto;min-height:74px;gap:8px;padding:12px;flex-wrap:wrap}.logo{font-size:16px}.top{gap:6px;flex-wrap:wrap}.top button{padding:7px;font-size:10px}.cyber-nav{gap:5px;padding:8px}.cyber-nav a{padding:8px 9px;font-size:10px}main{padding:8px;gap:10px}.scene-head{padding:14px}.scene-head h1{font-size:21px}#scene{height:420px;min-height:0}.scene-hud{flex-wrap:wrap}.hud-chip{font-size:8px;padding:6px}aside{display:flex}}
+
+.mobile-pad{display:none;position:absolute;bottom:16px;left:12px;z-index:8;touch-action:none;pointer-events:auto}.mobile-pad>button{display:block;margin:0 auto 4px}.mobile-pad>div{display:flex;gap:5px}.mobile-pad button{width:47px;height:47px;border-radius:12px;border:1px solid #4abaff;background:#0a2c53d9;color:#e5faff;font-size:20px;font-weight:900;box-shadow:0 0 13px #178dff77;touch-action:none}@media(pointer:coarse){.mobile-pad{display:block}}
