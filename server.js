@@ -22,7 +22,7 @@ app.post('/api/market/ingest',(req,res)=>{
 app.get('/api/market/status',(_req,res)=>res.json({licensedProviderConnected:quotes.size>0,quotes:[...quotes.values()],note:'Quotes are accepted only from a separately licensed provider adapter.'}));
 // Optional Twelve Data adapter. Enable only with public-display/redistribution rights.
 // API keys remain server-side and are never sent to browsers.
-const tdKey=process.env.TWELVE_DATA_API_KEY;
+const tdKey=process.env.TWELVEDATA_API_KEY || process.env.TWELVE_DATA_API_KEY;
 const tdSymbols={
   '005930':process.env.TD_SAMSUNG_SYMBOL,
   '000660':process.env.TD_HYNIX_SYMBOL,
