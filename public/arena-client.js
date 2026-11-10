@@ -1,3 +1,4 @@
+(()=>{
 const $=id=>document.getElementById(id), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let state={games:[],challenges:[],prize:{}},myId=null,selected=null,people=[];
 // The existing main client already maintains a websocket; arena uses a separate spectator socket.
