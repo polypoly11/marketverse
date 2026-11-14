@@ -16,7 +16,7 @@ const ANIMALS = [
   'panda', 'bear', 'penguin', 'frog', 'hamster'
 ];
 
-const START = { x: 0, z: -8 };
+const START = { x: 0, z: -8, direction: 0 };
 const clients = new Map();
 const votes = { long: 0, short: 0 };
 const history = [];
@@ -43,18 +43,21 @@ function broadcast(data) {
 }
 
 function presence() {
+  const players = [...clients.values()]
+    .filter(p => p.ready)
+    .map(p => ({
+      id: p.id,
+      name: p.name,
+      animal: p.animal,
+      x: p.x,
+      z: p.z,
+      direction: p.direction
+    }));
+
   broadcast({
     type: 'presence',
-    count: [...clients.values()].filter(p => p.ready).length,
-    players: [...clients.values()]
-      .filter(p => p.ready)
-      .map(p => ({
-        id: p.id,
-        name: p.name,
-        animal: p.animal,
-        x: p.x,
-        z: p.z
-      }))
+    count: players.length,
+    players
   });
 }
 
@@ -65,6 +68,7 @@ wss.on('connection', ws => {
     animal: 'seal',
     x: START.x,
     z: START.z,
+    direction: START.direction,
     ready: false,
     vote: null,
     lastChat: 0,
@@ -76,7 +80,7 @@ wss.on('connection', ws => {
   send(ws, {
     type: 'welcome',
     id: player.id,
-    votes,
+    votes: { ...votes },
     history
   });
 
@@ -86,6 +90,7 @@ wss.on('connection', ws => {
     if (raw.length > 2048) return;
 
     let message;
+
     try {
       message = JSON.parse(raw.toString());
     } catch {
@@ -100,6 +105,7 @@ wss.on('connection', ws => {
       player.animal = ANIMALS.includes(message.animal)
         ? message.animal
         : 'seal';
+
       player.ready = true;
       presence();
       return;
@@ -113,13 +119,24 @@ wss.on('connection', ws => {
 
       const x = Number(message.x);
       const z = Number(message.z);
+      const direction = Number(message.direction);
 
-      if (!Number.isFinite(x) || !Number.isFinite(z)) return;
+      if (
+        !Number.isFinite(x) ||
+        !Number.isFinite(z)
+      ) return;
 
       player.x = Math.max(-18, Math.min(18, x));
       player.z = Math.max(-18, Math.min(18, z));
-      player.lastMove = now;
 
+      if (Number.isFinite(direction)) {
+        player.direction = Math.atan2(
+          Math.sin(direction),
+          Math.cos(direction)
+        );
+      }
+
+      player.lastMove = now;
       presence();
       return;
     }
@@ -161,7 +178,10 @@ wss.on('connection', ws => {
       player.vote = message.side;
       votes[message.side]++;
 
-      broadcast({ type: 'votes', votes });
+      broadcast({
+        type: 'votes',
+        votes: { ...votes }
+      });
     }
   });
 
@@ -171,7 +191,11 @@ wss.on('connection', ws => {
         0,
         votes[player.vote] - 1
       );
-      broadcast({ type: 'votes', votes });
+
+      broadcast({
+        type: 'votes',
+        votes: { ...votes }
+      });
     }
 
     clients.delete(ws);
@@ -191,7 +215,12 @@ async function cached(cache, key, ttl, loader) {
   }
 
   const data = await loader();
-  cache.set(key, { time: Date.now(), data });
+
+  cache.set(key, {
+    time: Date.now(),
+    data
+  });
+
   return data;
 }
 
@@ -199,7 +228,9 @@ app.get('/api/price/:symbol', async (req, res) => {
   const symbol = req.params.symbol.toUpperCase();
 
   if (!SYMBOLS.includes(symbol)) {
-    return res.status(404).json({ error: 'Unknown symbol' });
+    return res.status(404).json({
+      error: 'Unknown symbol'
+    });
   }
 
   try {
@@ -210,10 +241,14 @@ app.get('/api/price/:symbol', async (req, res) => {
       async () => {
         const response = await fetch(
           `https://api.coinbase.com/v2/prices/${symbol}-USD/spot`,
-          { signal: AbortSignal.timeout(9000) }
+          {
+            signal: AbortSignal.timeout(9000)
+          }
         );
 
-        if (!response.ok) throw new Error('Price unavailable');
+        if (!response.ok) {
+          throw new Error('Price unavailable');
+        }
 
         const json = await response.json();
         const price = Number(json?.data?.amount);
@@ -229,7 +264,10 @@ app.get('/api/price/:symbol', async (req, res) => {
     res.set('Cache-Control', 'no-store').json(data);
   } catch (error) {
     console.error(symbol, error.message);
-    res.status(502).json({ error: 'Price unavailable' });
+
+    res.status(502).json({
+      error: 'Price unavailable'
+    });
   }
 });
 
@@ -239,14 +277,19 @@ app.get('/api/candles/:symbol', async (req, res) => {
   const requestedLimit = Number(req.query.limit);
 
   const limit = Number.isFinite(requestedLimit)
-    ? Math.max(2, Math.min(300, Math.floor(requestedLimit)))
+    ? Math.max(
+        2,
+        Math.min(300, Math.floor(requestedLimit))
+      )
     : 96;
 
   if (
     !SYMBOLS.includes(symbol) ||
     ![60, 900, 3600].includes(granularity)
   ) {
-    return res.status(400).json({ error: 'Invalid request' });
+    return res.status(400).json({
+      error: 'Invalid request'
+    });
   }
 
   const key = `${symbol}:${granularity}:${limit}`;
@@ -258,22 +301,38 @@ app.get('/api/candles/:symbol', async (req, res) => {
       45000,
       async () => {
         const end = Date.now();
-        const start = end - granularity * limit * 1000;
+        const start =
+          end - granularity * limit * 1000;
 
         const url = new URL(
           `https://api.exchange.coinbase.com/products/${symbol}-USD/candles`
         );
 
-        url.searchParams.set('start', new Date(start).toISOString());
-        url.searchParams.set('end', new Date(end).toISOString());
-        url.searchParams.set('granularity', String(granularity));
+        url.searchParams.set(
+          'start',
+          new Date(start).toISOString()
+        );
+
+        url.searchParams.set(
+          'end',
+          new Date(end).toISOString()
+        );
+
+        url.searchParams.set(
+          'granularity',
+          String(granularity)
+        );
 
         const response = await fetch(url, {
-          headers: { 'User-Agent': 'JMC-Invest-Lounge/1.0' },
+          headers: {
+            'User-Agent': 'JMC-Invest-Lounge/1.0'
+          },
           signal: AbortSignal.timeout(10000)
         });
 
-        if (!response.ok) throw new Error('Candles unavailable');
+        if (!response.ok) {
+          throw new Error('Candles unavailable');
+        }
 
         const raw = await response.json();
 
@@ -282,7 +341,9 @@ app.get('/api/candles/:symbol', async (req, res) => {
         }
 
         const candles = raw
-          .filter(a => Array.isArray(a) && a.length >= 5)
+          .filter(a =>
+            Array.isArray(a) && a.length >= 5
+          )
           .map(a => ({
             time: Number(a[0]),
             low: Number(a[1]),
@@ -291,8 +352,13 @@ app.get('/api/candles/:symbol', async (req, res) => {
             close: Number(a[4])
           }))
           .filter(c =>
-            [c.time, c.low, c.high, c.open, c.close]
-              .every(Number.isFinite)
+            [
+              c.time,
+              c.low,
+              c.high,
+              c.open,
+              c.close
+            ].every(Number.isFinite)
           )
           .sort((a, b) => a.time - b.time)
           .slice(-limit);
@@ -305,15 +371,23 @@ app.get('/api/candles/:symbol', async (req, res) => {
       }
     );
 
-    res.set('Cache-Control', 'public, max-age=30').json(data);
+    res
+      .set('Cache-Control', 'public, max-age=30')
+      .json(data);
   } catch (error) {
     console.error(symbol, error.message);
-    res.status(502).json({ error: 'Candles unavailable' });
+
+    res.status(502).json({
+      error: 'Candles unavailable'
+    });
   }
 });
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, online: clients.size });
+  res.json({
+    ok: true,
+    online: clients.size
+  });
 });
 
 const port = Number(process.env.PORT) || 3000;
