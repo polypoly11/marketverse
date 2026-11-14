@@ -1,171 +1,24 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
 const $=id=>document.getElementById(id);
-const symbols=[{id:'BTC',name:'비트코인',ticker:'BTC / USD',source:'coinbase',price:null},{id:'ETH',name:'이더리움',ticker:'ETH / USD',source:'coinbase',price:null},{id:'005930',name:'삼성전자',ticker:'KRX 005930',currency:'KRW',price:null},{id:'000660',name:'SK하이닉스',ticker:'KRX 000660',currency:'KRW',price:null},{id:'KOSPI',name:'코스피',ticker:'KOSPI INDEX',currency:'points',price:null},{id:'NDX',name:'나스닥100',ticker:'NASDAQ 100',currency:'points',price:null}];
+const symbols=[{id:'BTC',name:'비트코인',ticker:'BTC / USD',price:null,candles:[]},{id:'ETH',name:'이더리움',ticker:'ETH / USD',price:null,candles:[]}];
 const format=n=>n==null?'연동 대기':Number(n).toLocaleString('en-US',{maximumFractionDigits:2});
-function renderAssets(){ $('assets').replaceChildren(...symbols.map(s=>{const el=document.createElement('div');el.className='asset';const left=document.createElement('div');const name=document.createElement('strong');name.textContent=s.name;const ticker=document.createElement('small');ticker.textContent=s.ticker;left.append(name,ticker);const right=document.createElement('div');right.className='price';right.textContent=s.price==null?'—':format(s.price);const note=document.createElement('span');note.className='change';note.textContent=s.price==null?'시세 제공처 미연결':`${s.currency||'USD'} · ${s.sourceName||'Coinbase 현물'}`;right.append(note);el.append(left,right);el.onclick=()=>showDetail(s);return el}))}
-function showDetail(s){$('detail-name').textContent=s.name;$('detail-price').textContent=s.price==null?'시세 연동 대기':`${format(s.price)} ${s.currency||'USD'}`;$('detail-note').textContent=s.price==null?'데모 버전입니다. 실제 시세 데이터 제공처 연결이 필요합니다.':`${s.sourceName||'Coinbase 현물'} 제공 가격입니다. 마지막 수신: ${s.lastUpdated||'확인 중'}`;$('detail').hidden=false}$('close').onclick=()=>$('detail').hidden=true;$('detail').onclick=e=>{if(e.target===$('detail'))$('detail').hidden=true};renderAssets();
-async function updatePrices(){for(const s of symbols.filter(x=>x.source==='coinbase')){try{const response=await fetch(`https://api.coinbase.com/v2/prices/${s.id}-USD/spot`,{cache:'no-store'});if(!response.ok)throw Error();const data=await response.json();s.price=Number(data.data.amount)}catch{s.price=null}}renderAssets();refreshBoard()}updatePrices();setInterval(updatePrices,15000);
+const chartRanges={'1h':{granularity:60,limit:60},'1d':{granularity:900,limit:96},'1w':{granularity:3600,limit:168}};
+let activeSymbol=null,activeRange='1d';
+function plotChart(canvas,prices,options={}){const ctx=canvas.getContext('2d');const w=canvas.width,h=canvas.height;ctx.clearRect(0,0,w,h);ctx.fillStyle='#0a1625';ctx.fillRect(0,0,w,h);if(!prices||prices.length<2){ctx.fillStyle='#8399ad';ctx.font='20px sans-serif';ctx.fillText('차트 데이터 연결 대기',25,h/2);return}const lo=Math.min(...prices),hi=Math.max(...prices),pad=(hi-lo)*.12||1;const min=lo-pad,max=hi+pad;const L=options.mini?18:64,R=options.mini?18:75,T=options.mini?15:28,B=options.mini?15:38;const x=i=>L+i*(w-L-R)/(prices.length-1),y=v=>T+(max-v)*(h-T-B)/(max-min);ctx.strokeStyle='#20394b';ctx.lineWidth=1;for(let i=0;i<4;i++){const yy=T+i*(h-T-B)/3;ctx.beginPath();ctx.moveTo(L,yy);ctx.lineTo(w-R,yy);ctx.stroke();if(!options.mini){ctx.fillStyle='#7c99af';ctx.font='17px sans-serif';ctx.fillText(format(max-i*(max-min)/3),w-R+8,yy+5)}}const up=prices.at(-1)>=prices[0];ctx.beginPath();prices.forEach((v,i)=>i?ctx.lineTo(x(i),y(v)):ctx.moveTo(x(i),y(v)));ctx.strokeStyle=up?'#4de0bc':'#f47c94';ctx.lineWidth=options.mini?4:3;ctx.stroke();ctx.lineTo(x(prices.length-1),h-B);ctx.lineTo(L,h-B);ctx.closePath();ctx.fillStyle=up?'rgba(77,224,188,.10)':'rgba(244,124,148,.10)';ctx.fill()}
+function renderAssets(){ $('assets').replaceChildren(...symbols.map(s=>{const el=document.createElement('div');el.className='asset crypto-asset';const head=document.createElement('div');head.className='crypto-head';const left=document.createElement('div');const name=document.createElement('strong');name.textContent=s.name;const ticker=document.createElement('small');ticker.textContent=s.ticker;left.append(name,ticker);const right=document.createElement('div');right.className='price';right.textContent=s.price==null?'—':`$${format(s.price)}`;const note=document.createElement('span');note.className='change';note.textContent=s.price==null?'시세 연결 대기':'USD · Coinbase 현물';right.append(note);head.append(left,right);const canvas=document.createElement('canvas');canvas.width=580;canvas.height=155;canvas.className='spark-chart';plotChart(canvas,s.candles.map(x=>x.close),{mini:true});el.append(head,canvas);el.onclick=()=>showDetail(s);return el}))}
+async function loadCandles(s,range='1d'){const {granularity,limit}=chartRanges[range];const response=await fetch(`/api/candles/${s.id}?granularity=${granularity}&limit=${limit}`,{cache:'no-store'});if(!response.ok)throw Error('차트 조회 실패');const data=await response.json();if(!Array.isArray(data.candles)||!data.candles.length)throw Error('차트 데이터 없음');return data.candles}
+async function showDetail(s){activeSymbol=s;$('detail-name').textContent=s.name;$('detail-price').textContent=s.price==null?'시세 연결 대기':`$${format(s.price)}`;$('detail-note').textContent='Coinbase 현물 기준 · 거래소별 시세 차이가 있을 수 있습니다.';$('detail').hidden=false;await updateDetailChart()}
+async function updateDetailChart(){const s=activeSymbol,range=activeRange;if(!s)return;$('chart-status').textContent='차트 불러오는 중…';try{const candles=range==='1d'&&s.candles.length?s.candles:await loadCandles(s,range);if(s!==activeSymbol||range!==activeRange)return;plotChart($('detail-chart'),candles.map(x=>x.close));$('chart-status').textContent=`${range==='1h'?'최근 1시간':range==='1d'?'최근 1일':'최근 1주'} · Coinbase 캔들 기준`}catch{plotChart($('detail-chart'),[]);$('chart-status').textContent='차트를 불러올 수 없습니다. 잠시 후 다시 시도해 주세요.'}}
+document.querySelectorAll('[data-range]').forEach(b=>b.onclick=()=>{activeRange=b.dataset.range;document.querySelectorAll('[data-range]').forEach(x=>x.classList.toggle('selected',x===b));updateDetailChart()});$('close').onclick=()=>$('detail').hidden=true;$('detail').onclick=e=>{if(e.target===$('detail'))$('detail').hidden=true};renderAssets();
+async function updatePrices(){await Promise.all(symbols.map(async s=>{try{const response=await fetch(`/api/price/${s.id}`,{cache:'no-store'});if(!response.ok)throw Error();const data=await response.json();s.price=Number(data.price);if(!Number.isFinite(s.price))throw Error()}catch{s.price=null}}));renderAssets();refreshBoard()}
+async function updateAllCandles(){await Promise.all(symbols.map(async s=>{try{s.candles=await loadCandles(s)}catch{s.candles=[]}}));renderAssets();refreshBoard();if(activeSymbol&&activeRange==='1d')updateDetailChart()}
+updatePrices();updateAllCandles();setInterval(updatePrices,15000);setInterval(updateAllCandles,60000);
 const sceneEl=$('scene');const scene=new THREE.Scene();scene.background=new THREE.Color('#080f1b');scene.fog=new THREE.Fog('#080f1b',20,75);const camera=new THREE.PerspectiveCamera(64,1,.1,120);const renderer=new THREE.WebGLRenderer({antialias:true});renderer.setPixelRatio(Math.min(devicePixelRatio,2));sceneEl.appendChild(renderer.domElement);scene.add(new THREE.HemisphereLight(0x8ebbd7,0x0b1524,2));const lamp=new THREE.PointLight(0x5ee9c8,85,30);lamp.position.set(0,8,-9);scene.add(lamp);
 function box(w,h,d,color,x,y,z,emissive=0){const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color,metalness:.55,roughness:.4,emissive,emissiveIntensity:.22}));mesh.position.set(x,y,z);scene.add(mesh);return mesh}
 box(42,.4,42,0x101c2b,0,-.25,0);const grid=new THREE.GridHelper(42,42,0x24435a,0x182a3e);grid.position.y=.01;scene.add(grid);for(let x of [-20,20])for(let z of [-20,20]){box(.5,8,.5,0x213a51,x,4,z);const glow=new THREE.PointLight(0x1b9d8c,12,8);glow.position.set(x,6,z);scene.add(glow)}
 box(20,8,.5,0x14283a,0,4,-16);box(22,.5,2,0x223c52,0,8,-15);box(11,.25,1.2,0x27515d,0,1.2,-9);for(const x of [-9,-5,5,9]){box(2,.15,2,0x213b4e,x,1,4);box(.15,1,.15,0x4de0bc,x,.5,4)}
 function screenCanvas(){const c=document.createElement('canvas');c.width=1280;c.height=620;return c}const boardCanvas=screenCanvas();const ctx=boardCanvas.getContext('2d');const tex=new THREE.CanvasTexture(boardCanvas);tex.colorSpace=THREE.SRGBColorSpace;const board=new THREE.Mesh(new THREE.PlaneGeometry(17,8.2),new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide}));board.position.set(0,4.5,-15.65);scene.add(board);
-function refreshBoard(){ctx.fillStyle='#07131f';ctx.fillRect(0,0,1280,620);ctx.fillStyle='#4de0bc';ctx.font='bold 30px Arial';ctx.fillText('◈ MARKETVERSE  /  LIVE MARKET',50,60);ctx.fillStyle='#5d8299';ctx.fillRect(50,86,1180,2);symbols.forEach((s,i)=>{const x=55+(i%3)*405,y=155+Math.floor(i/3)*225;ctx.fillStyle='#122638';ctx.fillRect(x,y,375,190);ctx.fillStyle='#98b2c9';ctx.font='bold 24px Arial';ctx.fillText(s.name,x+25,y+48);ctx.fillStyle=s.price==null?'#71889c':'#4de0bc';ctx.font='bold 36px Arial';ctx.fillText(s.price==null?'DATA PENDING':format(s.price),x+25,y+110);ctx.font='18px Arial';ctx.fillText(s.price==null?'PROVIDER NOT CONNECTED':`${s.currency||'USD'} · ${(s.sourceName||'COINBASE SPOT').slice(0,23)}`,x+25,y+153)});tex.needsUpdate=true}refreshBoard();
-// Futuristic circular trading command hall (procedural Three.js geometry).
-const hallRoot=new THREE.Group();scene.add(hallRoot);
-const cyanMat=new THREE.MeshBasicMaterial({color:0x2bafff});
-const goldMat=new THREE.MeshBasicMaterial({color:0xffc77b});
-const makeRing=(radius,tube,y,color=0x2bafff)=>{const m=new THREE.Mesh(new THREE.TorusGeometry(radius,tube,7,96),new THREE.MeshBasicMaterial({color}));m.rotation.x=-Math.PI/2;m.position.set(0,y,-2);hallRoot.add(m);return m};
-for(const r of [9.2,10.8,13.2,17.5])makeRing(r,.035,.07,r===13.2?0xffbb66:0x168fe3);
-for(const r of [10.8,16.5,19.5])makeRing(r,.09,9.1,r===16.5?0xffbf72:0x1f95e6);
-for(let i=0;i<24;i++){
- const a=i*Math.PI*2/24,x=Math.sin(a)*19,z=Math.cos(a)*19-2;
- const pillar=new THREE.Mesh(new THREE.CylinderGeometry(.19,.23,9,10),new THREE.MeshStandardMaterial({color:0x173456,metalness:.8,roughness:.25}));pillar.position.set(x,4.5,z);hallRoot.add(pillar);
- const strip=new THREE.Mesh(new THREE.CylinderGeometry(.035,.035,8.6,6),new THREE.MeshBasicMaterial({color:i%3===0?0x6ed8ff:0x1767a4}));strip.position.set(x,4.5,z);hallRoot.add(strip);
-}
-const hub=new THREE.Mesh(new THREE.CylinderGeometry(2.5,2.8,.26,64),new THREE.MeshStandardMaterial({color:0x153b66,metalness:.8,roughness:.25,emissive:0x06335e}));hub.position.set(0,.08,-2);hallRoot.add(hub);
-makeRing(2.6,.085,.28,0x53dfff);
-const boardHeading=document.createElement('canvas');boardHeading.width=2048;boardHeading.height=220;
-const bh=boardHeading.getContext('2d');bh.fillStyle='#07152b';bh.fillRect(0,0,2048,220);bh.strokeStyle='#2b9de4';bh.lineWidth=10;bh.strokeRect(8,8,2032,204);bh.fillStyle='#d8f4ff';bh.textAlign='center';bh.font='bold 110px Arial';bh.fillText('JMC INVESTOR LOUNGE',1024,143);
-const headingTex=new THREE.CanvasTexture(boardHeading);headingTex.colorSpace=THREE.SRGBColorSpace;
-const headingMesh=new THREE.Mesh(new THREE.PlaneGeometry(18,2),new THREE.MeshBasicMaterial({map:headingTex,side:THREE.DoubleSide}));headingMesh.position.set(0,9,-15.4);hallRoot.add(headingMesh);
-const overhead=new THREE.PointLight(0x159bff,90,40);overhead.position.set(0,8,-2);hallRoot.add(overhead);
-
-// A walk-up, clickable 3D Gomoku arena at the center of the trading floor.
-const arenaRoot=new THREE.Group();scene.add(arenaRoot);arenaRoot.position.set(0,0,-2);
-const podium=new THREE.Mesh(new THREE.CylinderGeometry(7.1,7.4,.55,64),new THREE.MeshStandardMaterial({color:0x263b5b,metalness:.5,roughness:.38}));podium.position.y=.12;arenaRoot.add(podium);
-const ring=new THREE.Mesh(new THREE.TorusGeometry(6.65,.09,8,80),new THREE.MeshBasicMaterial({color:0x56e3d3}));ring.rotation.x=-Math.PI/2;ring.position.y=.43;arenaRoot.add(ring);
-for(let i=0;i<14;i++){const a=i*Math.PI*2/14;const seat=new THREE.Mesh(new THREE.BoxGeometry(1.3,.4,.85),new THREE.MeshStandardMaterial({color:0x30445c}));seat.position.set(Math.cos(a)*8,.25,Math.sin(a)*8-2);seat.rotation.y=-a;scene.add(seat)}
-const gomokuCanvas=document.createElement('canvas');gomokuCanvas.width=1024;gomokuCanvas.height=1024;const gc=gomokuCanvas.getContext('2d');const gomokuTexture=new THREE.CanvasTexture(gomokuCanvas);gomokuTexture.colorSpace=THREE.SRGBColorSpace;
-const gomokuMesh=new THREE.Mesh(new THREE.PlaneGeometry(8.2,8.2),new THREE.MeshBasicMaterial({map:gomokuTexture,side:THREE.DoubleSide}));gomokuMesh.rotation.x=-Math.PI/2;gomokuMesh.position.y=.55;arenaRoot.add(gomokuMesh);
-let arenaState={games:[],prize:{}},arenaSelected=null,arenaMyId=null;
-function paintGomoku(){gc.fillStyle='#caa875';gc.fillRect(0,0,1024,1024);gc.fillStyle='#9d7849';gc.fillRect(65,65,894,894);gc.fillStyle='#d6b784';gc.fillRect(75,75,874,874);gc.strokeStyle='#6a4a2e';gc.lineWidth=2;for(let i=0;i<15;i++){const n=105+i*58;gc.beginPath();gc.moveTo(105,n);gc.lineTo(917,n);gc.moveTo(n,105);gc.lineTo(n,917);gc.stroke()}for(let y of [3,7,11])for(let x of [3,7,11]){gc.beginPath();gc.arc(105+x*58,105+y*58,5,0,Math.PI*2);gc.fillStyle='#68452a';gc.fill()}
-const game=arenaState.games?.find(g=>g.id===arenaSelected)||arenaState.games?.find(g=>g.status==='playing')||arenaState.games?.[0];if(game){game.board.forEach((row,y)=>row.forEach((v,x)=>{if(!v)return;const px=105+x*58,py=105+y*58;gc.beginPath();gc.arc(px,py,25,0,Math.PI*2);const grad=gc.createRadialGradient(px-9,py-10,2,px,py,28);if(v===1){grad.addColorStop(0,'#666');grad.addColorStop(1,'#080808')}else{grad.addColorStop(0,'#fff');grad.addColorStop(1,'#a7a7a7')}gc.fillStyle=grad;gc.fill()}));gc.fillStyle='#30231a';gc.font='bold 28px Arial';gc.textAlign='center';gc.fillText(game.names.join('  VS  '),512,45)}else{gc.fillStyle='#46311f';gc.font='bold 38px Arial';gc.textAlign='center';gc.fillText('대결 신청을 하면 이곳에서 경기가 시작됩니다',512,53)}gomokuTexture.needsUpdate=true}
-paintGomoku();window.addEventListener('mv:arena-update',e=>{arenaState=e.detail.state;arenaSelected=e.detail.selected;arenaMyId=e.detail.myId;paintGomoku()});
-const raycaster=new THREE.Raycaster();const pointer=new THREE.Vector2();renderer.domElement.addEventListener('click',e=>{const bounds=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-bounds.left)/bounds.width*2-1,-(e.clientY-bounds.top)/bounds.height*2+1);raycaster.setFromCamera(pointer,camera);const hit=raycaster.intersectObject(gomokuMesh)[0];if(!hit)return;const game=arenaState.games?.find(g=>g.id===arenaSelected)||arenaState.games?.find(g=>g.status==='playing');if(!game){document.querySelector('.arena-panel')?.scrollIntoView({behavior:'smooth',block:'center'});return}if(arenaSelected!==game.id)window.mvArenaSelect?.(game.id);const u=hit.uv?.x,v=hit.uv?.y;if(u==null||v==null)return;const x=Math.round((u*1024-105)/58),y=Math.round(((1-v)*1024-105)/58);if(x<0||x>14||y<0||y>14)return;if(game.status==='playing'&&game.players[game.turn-1]===arenaMyId)window.mvSend?.({type:'arena-move',id:game.id,x,y})});
-// Twenty lightweight, procedural 3D animal avatars (no external model downloads).
-const ANIMALS=[
- ['seal','아기물개','🦭',0xf1f5f5,'flippers'],['lion','사자','🦁',0xdca65b,'mane'],
- ['hamster','햄스터','🐹',0xe8b977,'cheeks'],['hedgehog','고슴도치','🦔',0xa17b59,'spines'],
- ['wolf','늑대','🐺',0x8996a6,'ears'],['whale','고래','🐳',0x649fd3,'fins'],
- ['cheetah','치타','🐆',0xe8b85b,'spots'],['squid','오징어','🦑',0xe59bb7,'tentacles'],
- ['panda','판다','🐼',0xf1eee7,'panda'],['fox','여우','🦊',0xe88a4b,'ears'],
- ['bear','곰','🐻',0x9a6d50,'roundears'],['rabbit','토끼','🐰',0xe7dedf,'longears'],
- ['cat','고양이','🐱',0xc7a889,'ears'],['dog','강아지','🐶',0xcfa878,'floppyears'],
- ['penguin','펭귄','🐧',0x313d52,'wings'],['frog','개구리','🐸',0x76b66d,'frogeyes'],
- ['otter','수달','🦦',0x9b7051,'whiskers'],['koala','코알라','🐨',0xa4a8b2,'bigears'],
- ['tiger','호랑이','🐯',0xe49a4e,'stripes'],['octopus','문어','🐙',0xc981a8,'tentacles']
-];
-const animalIds=new Set(ANIMALS.map(a=>a[0]));
-const themes={mint:0x4de0bc,pink:0xf0a0c6,blue:0x7eafff};
-const chosenAvatar=()=>animalIds.has(localStorage.getItem('mv-avatar'))?localStorage.getItem('mv-avatar'):'seal';
-const chosenTheme=()=>Object.hasOwn(themes,localStorage.getItem('mv-theme'))?localStorage.getItem('mv-theme'):'mint';
-function makeAvatar(kind,theme='mint'){
-  const def=ANIMALS.find(a=>a[0]===kind)||ANIMALS[0];kind=def[0];
-  const group=new THREE.Group(),fur=def[3],accent=themes[theme]||themes.mint;
-  const mat=c=>new THREE.MeshStandardMaterial({color:c,roughness:.83});
-  const main=mat(fur),dark=mat(0x25303a),cream=mat(0xf6e9dc),pink=mat(0xe8a4a9),white=mat(0xffffff),highlight=mat(accent);
-  const add=(geo,m,x,y,z,sx=1,sy=1,sz=1)=>{const o=new THREE.Mesh(geo,m);o.position.set(x,y,z);o.scale.set(sx,sy,sz);group.add(o);return o};
-  const ball=(m,x,y,z,r=.2,sx=1,sy=1,sz=1)=>add(new THREE.SphereGeometry(r,12,10),m,x,y,z,sx,sy,sz);
-  const cone=(m,x,y,z,r=.13,h=.35)=>add(new THREE.ConeGeometry(r,h,8),m,x,y,z);
-  const cylinder=(m,x,y,z,r=.08,h=.5)=>add(new THREE.CylinderGeometry(r,r,h,8),m,x,y,z);
-  // Faces point toward -Z, matching the original baby seal.
-  ball(main,0,.67,.05,.48,1.05,.86,1.25);ball(main,0,1.18,-.23,.43,1.08,1,.98);
-  if(['whale','seal','penguin','otter'].includes(kind)){
-    ball(main,-.48,.42,-.04,.23,1.3,.32,.8);ball(main,.48,.42,-.04,.23,1.3,.32,.8);
-  }else if(!['squid','octopus'].includes(kind)){
-    for(const x of [-.29,.29]){ball(main,x,.24,.22,.17,.8,1,.9);ball(main,x,.24,-.2,.15,.8,1,.9)}
-  }
-  if(['lion','wolf','fox','cat','cheetah','tiger','bear','panda','koala','rabbit','dog','hamster','hedgehog'].includes(kind)){
-    for(const x of [-.31,.31]){
-      if(['wolf','fox','cat','cheetah','tiger'].includes(kind))cone(main,x,1.57,-.19,.17,.4);
-      else if(kind==='rabbit')ball(main,x,1.77,-.2,.13,.7,2.7,.7);
-      else if(kind==='dog')ball(main,x*1.25,1.38,-.12,.22,.65,1.45,.7);
-      else ball(main,x,1.52,-.2,kind==='koala'?.23:.17);
-    }
-  }
-  if(kind==='lion')for(let i=0;i<12;i++){const t=i*Math.PI/6;ball(mat(0x986134),Math.cos(t)*.43,1.18+Math.sin(t)*.43,-.12,.21)}
-  if(kind==='hedgehog')for(let i=0;i<18;i++){const t=i*Math.PI*2/18;const spike=cone(dark,Math.cos(t)*.45,1.18+Math.sin(t)*.36,.07,.09,.36);spike.rotation.z=-Math.cos(t)*.75}
-  if(kind==='panda'){for(const x of [-.19,.19])ball(dark,x,1.23,-.58,.16,1,.9,.28);ball(cream,0,.73,-.37,.31,1,1,.25)}
-  if(kind==='penguin')ball(cream,0,.76,-.39,.32,1,1.25,.3);
-  if(kind==='hamster')for(const x of [-.33,.33])ball(cream,x,1.04,-.49,.2);
-  if(kind==='koala')ball(dark,0,1.08,-.65,.18,1,1.35,.8);
-  if(kind==='frog')for(const x of [-.25,.25])ball(main,x,1.54,-.38,.19);
-  if(kind==='whale'){ball(main,0,.68,.58,.24,1,.5,1.4);ball(main,0,1.23,.14,.15,.7,1.3,.5)}
-  if(kind==='squid'||kind==='octopus'){
-    for(let i=0;i<8;i++){const t=i*Math.PI/4;const tent=cylinder(main,Math.cos(t)*.34,.22,Math.sin(t)*.34,.075,.5);tent.rotation.z=Math.sin(t)*.4}
-    if(kind==='squid')cone(main,0,1.65,-.05,.37,.65);
-  }
-  if(kind==='cheetah')for(let i=0;i<14;i++){const t=i*2.399;ball(dark,Math.sin(t)*.43,.64+Math.cos(t)*.28,-.38,.045)}
-  if(kind==='tiger')for(let i=0;i<5;i++){const stripe=add(new THREE.BoxGeometry(.06,.17,.035),dark,-.32+i*.16,1.47-Math.abs(2-i)*.05,-.61);stripe.rotation.z=(i-2)*.2}
-  if(kind==='otter')for(const x of [-.34,.34])for(let i=0;i<2;i++){const w=cylinder(cream,x,1.01-i*.09,-.59,.012,.25);w.rotation.z=x>0?-.8:.8}
-  if(kind==='fox'||kind==='wolf')ball(cream,0,1.02,-.58,.21,1,.6,1.3);
-  if(kind==='seal')for(const x of [-.2,.2])ball(pink,x*1.6,1.02,-.59,.085);
-  for(const x of [-.19,.19])ball(kind==='panda'?white:dark,x,1.22,-.63,.064);
-  ball(kind==='whale'?main:dark,0,1.06,-.67,.085,1,.8,.7);
-  // Small colored collar distinguishes the three selectable color themes.
-  const collar=add(new THREE.TorusGeometry(.35,.035,6,20),highlight,0,.91,-.23);collar.rotation.x=Math.PI/2;
-  group.userData.kind=kind;group.userData.theme=theme;
-  return group;
-}
-let me=makeAvatar(chosenAvatar(),chosenTheme());scene.add(me);me.position.set(0,0,9);const others=new Map();
-function replaceSelfAvatar(kind,theme){const pos=me.position.clone();const oldRotation=me.rotation.y;scene.remove(me);me=makeAvatar(kind,theme);me.position.copy(pos);me.rotation.y=oldRotation;scene.add(me)}
-// Screen-space speech bubbles are anchored to each avatar's 3D world position.
-const speechLayer=document.createElement('div');speechLayer.className='speech-layer';sceneEl.appendChild(speechLayer);
-const bubbles=new Map();const bubblePoint=new THREE.Vector3();
-function showSpeech(item){
-  if(!item?.id || typeof item.message!=='string')return;
-  const existing=bubbles.get(item.id);
-  if(existing){existing.el.remove();clearTimeout(existing.timer)}
-  const el=document.createElement('div');el.className='speech-bubble';
-  const who=document.createElement('strong');who.textContent=String(item.name||'방문자').slice(0,16);
-  const msg=document.createElement('span');msg.textContent=item.message.slice(0,180);
-  el.append(who,msg);speechLayer.appendChild(el);
-  const timer=setTimeout(()=>{el.remove();bubbles.delete(item.id)},5000);
-  bubbles.set(item.id,{el,timer});
-}
-function positionSpeech(){
-  const width=sceneEl.clientWidth,height=sceneEl.clientHeight;
-  for(const [playerId,bubble] of bubbles){
-    const avatar=playerId===id?me:others.get(playerId);
-    if(!avatar){bubble.el.style.display='none';continue}
-    bubblePoint.set(avatar.position.x,playerId===id?2.18:2.1,avatar.position.z).project(camera);
-    const visible=bubblePoint.z>-1&&bubblePoint.z<1&&Math.abs(bubblePoint.x)<1.1&&Math.abs(bubblePoint.y)<1.1;
-    bubble.el.style.display=visible?'flex':'none';
-    if(visible){bubble.el.style.left=((bubblePoint.x+1)*.5*width)+'px';bubble.el.style.top=((-bubblePoint.y+1)*.5*height)+'px'}
-  }
-}
-function updatePlayers(players,myId){const seen=new Set();for(const p of players){if(p.id===myId)continue;seen.add(p.id);const kind=animalIds.has(p.avatar)?p.avatar:'seal';const theme=Object.hasOwn(themes,p.theme)?p.theme:'mint';const prev=others.get(p.id);if(!prev||prev.userData.kind!==kind||prev.userData.theme!==theme){if(prev)scene.remove(prev);const m=makeAvatar(kind,theme);scene.add(m);others.set(p.id,m)}others.get(p.id).position.set(p.x,0,p.z);if(Number.isFinite(p.heading))others.get(p.id).rotation.y=p.heading}for(const [playerId,m] of others)if(!seen.has(playerId)){scene.remove(m);others.delete(playerId)}}
-let arenaCameraMode=false;document.getElementById('arena-view-toggle')?.addEventListener('click',()=>{arenaCameraMode=!arenaCameraMode;document.getElementById('arena-view-toggle').textContent=arenaCameraMode?'캐릭터 시점으로 돌아가기':'오목판 크게 보기';});let yaw=0,dragging=false,lastX=0;renderer.domElement.addEventListener('pointerdown',e=>{dragging=true;lastX=e.clientX});window.addEventListener('pointerup',()=>dragging=false);window.addEventListener('pointermove',e=>{if(dragging){yaw+=(e.clientX-lastX)*.005;lastX=e.clientX}});const keys=new Set();window.addEventListener('keydown',e=>{if(['INPUT','TEXTAREA'].includes(document.activeElement.tagName))return;keys.add(e.key.toLowerCase());if(e.key.startsWith('Arrow'))e.preventDefault()});window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));// Touch movement controls, displayed only on touch-capable devices.
-if(window.matchMedia('(pointer:coarse)').matches){
- const pad=document.createElement('div');pad.className='mobile-pad';
- pad.innerHTML='<button data-move="arrowup" aria-label="앞으로">▲</button><div><button data-move="arrowleft" aria-label="왼쪽">◀</button><button data-move="arrowdown" aria-label="뒤로">▼</button><button data-move="arrowright" aria-label="오른쪽">▶</button></div>';
- sceneEl.appendChild(pad);
- pad.querySelectorAll('[data-move]').forEach(b=>{const key=b.dataset.move;b.addEventListener('pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);keys.add(key)});for(const ev of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(ev,()=>keys.delete(key))});
-}
-let last=performance.now(),lastMove=0;function animate(now){requestAnimationFrame(animate);const dt=Math.min((now-last)/1000,.05);last=now;const forward=Number(keys.has('w')||keys.has('arrowup'))-Number(keys.has('s')||keys.has('arrowdown'));const side=Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft'));if(forward||side){const speed=5*dt;const dx=Math.sin(yaw)*forward+Math.cos(yaw)*side;const dz=-Math.cos(yaw)*forward+Math.sin(yaw)*side;me.position.x=Math.max(-18,Math.min(18,me.position.x+dx*speed));me.position.z=Math.max(-18,Math.min(18,me.position.z+dz*speed));const heading=Math.atan2(-dx,-dz);me.rotation.y=heading;if(now-lastMove>150){send({type:'move',x:me.position.x,z:me.position.z,heading});lastMove=now}}const target=new THREE.Vector3(me.position.x+Math.sin(yaw)*7,5.2,me.position.z+Math.cos(yaw)*7);if(arenaCameraMode){camera.position.lerp(new THREE.Vector3(0,16,10),.12);camera.lookAt(0,0,-2)}else{camera.position.lerp(target,.065);camera.lookAt(me.position.x,1.5,me.position.z-4)}positionSpeech();renderer.render(scene,camera)}function resize(){const w=sceneEl.clientWidth,h=sceneEl.clientHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix()}new ResizeObserver(resize).observe(sceneEl);resize();requestAnimationFrame(animate);
-let socket,id;function send(m){if(socket?.readyState===1)socket.send(JSON.stringify(m))}window.mvSend=send;function connect(){socket=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`);socket.onopen=()=>{$('connection').textContent='● 연결됨';send({type:'join',name:localStorage.getItem('mv-name')||'슈댕'});send({type:'avatar',avatar:chosenAvatar(),theme:chosenTheme()})};socket.onclose=()=>{$('connection').textContent='연결 재시도 중';setTimeout(connect,2000)};socket.onmessage=e=>{const m=JSON.parse(e.data);window.dispatchEvent(new CustomEvent('mv:socket',{detail:m}));if(m.type==='market-quote')applyLicensedQuote(m.quote);if(m.type==='welcome'){(m.quotes||[]).forEach(applyLicensedQuote);id=m.id;updateVotes(m.votes);$('messages').replaceChildren();m.history.forEach(addMessage)}if(m.type==='presence'){$('online').textContent=m.count;updatePlayers(m.players,id)}if(m.type==='chat'){addMessage(m.item);showSpeech(m.item)}if(m.type==='votes')updateVotes(m.votes)}}connect();function addMessage(item){const p=document.createElement('div');p.className='msg';const b=document.createElement('b');b.textContent=item.name+': ';p.append(b,document.createTextNode(item.message));$('messages').append(p);$('messages').scrollTop=$('messages').scrollHeight}function updateVotes(v){const total=v.long+v.short;const pct=total?Math.round(v.long/total*100):50;$('longbar').style.width=pct+'%';$('longpct').textContent=`${pct}% LONG (${v.long})`;$('shortpct').textContent=`${100-pct}% SHORT (${v.short})`}$('long').onclick=()=>send({type:'vote',side:'long'});$('short').onclick=()=>send({type:'vote',side:'short'});$('chat-form').onsubmit=e=>{e.preventDefault();const input=$('chat-input');send({type:'chat',message:input.value});input.value=''};$('rename').onclick=()=>{const name=prompt('닉네임 (최대 16자)',localStorage.getItem('mv-name')||'');if(name?.trim()){localStorage.setItem('mv-name',name.trim().slice(0,16));send({type:'join',name:name.trim()})}};
-
-function applyLicensedQuote(q){const s=symbols.find(x=>x.id===q.symbol);if(!s)return;const t=Date.parse(q.timestamp);if(!Number.isFinite(t)||!Number.isFinite(Number(q.price))||Number(q.price)<=0)return;s.price=Number(q.price);s.sourceName=q.source+(q.delayed?' · 지연/종가 가능':'');s.lastUpdated=new Date(t).toLocaleString('ko-KR');renderAssets();refreshBoard()}
-
-// Avatar editor: selection, color and nickname persist in this browser.
-const avatarModal=$('avatar-modal');
-const avatarChoices=$('avatar-choices');
-let pendingAvatar=chosenAvatar(),pendingTheme=chosenTheme();
-function updateAvatarEditor(){
-  avatarChoices.replaceChildren(...ANIMALS.map(([kind,name,emoji])=>{
-    const button=document.createElement('button');button.type='button';button.className='avatar-option'+(kind===pendingAvatar?' selected':'');
-    button.textContent=`${emoji} ${name}`;button.setAttribute('aria-pressed',String(kind===pendingAvatar));
-    button.onclick=()=>{pendingAvatar=kind;updateAvatarEditor()};return button;
-  }));
-  document.querySelectorAll('[data-theme]').forEach(button=>{button.classList.toggle('selected',button.dataset.theme===pendingTheme);button.setAttribute('aria-pressed',String(button.dataset.theme===pendingTheme))});
-}
-$('avatar-customize').onclick=()=>{pendingAvatar=chosenAvatar();pendingTheme=chosenTheme();$('avatar-name').value=localStorage.getItem('mv-name')||'슈댕';updateAvatarEditor();avatarModal.hidden=false};
-$('avatar-close').onclick=()=>avatarModal.hidden=true;
-avatarModal.addEventListener('click',e=>{if(e.target===avatarModal)avatarModal.hidden=true});
-document.querySelectorAll('[data-theme]').forEach(button=>button.onclick=()=>{pendingTheme=button.dataset.theme;updateAvatarEditor()});
-$('avatar-save').onclick=()=>{
-  const name=$('avatar-name').value.trim().slice(0,16)||'슈댕';
-  localStorage.setItem('mv-name',name);localStorage.setItem('mv-avatar',pendingAvatar);localStorage.setItem('mv-theme',pendingTheme);
-  replaceSelfAvatar(pendingAvatar,pendingTheme);send({type:'join',name});send({type:'avatar',avatar:pendingAvatar,theme:pendingTheme});avatarModal.hidden=true;
-};
+function refreshBoard(){ctx.fillStyle='#07131f';ctx.fillRect(0,0,1280,620);ctx.fillStyle='#4de0bc';ctx.font='bold 33px Arial';ctx.fillText('◈ JMC INVEST LOUNGE  /  BTC · ETH',48,61);ctx.fillStyle='#244257';ctx.fillRect(48,85,1180,2);symbols.forEach((s,i)=>{const x=48+i*600,y=115;ctx.fillStyle='#102438';ctx.fillRect(x,y,580,460);ctx.fillStyle='#a7bed1';ctx.font='bold 31px Arial';ctx.fillText(`${s.name}  ${s.id}/USD`,x+28,y+52);ctx.fillStyle=s.price==null?'#71889c':'#4de0bc';ctx.font='bold 52px Arial';ctx.fillText(s.price==null?'연결 대기':`$${format(s.price)}`,x+28,y+121);ctx.fillStyle='#819db2';ctx.font='21px Arial';ctx.fillText('COINBASE SPOT · 1D CHART',x+28,y+160);const points=s.candles.map(c=>c.close);if(points.length>1){const lo=Math.min(...points),hi=Math.max(...points),span=hi-lo||1;ctx.strokeStyle=points.at(-1)>=points[0]?'#4de0bc':'#f47c94';ctx.lineWidth=5;ctx.beginPath();points.forEach((v,j)=>{const xx=x+28+j*524/(points.length-1),yy=y+400-(v-lo)/span*190;j?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy)});ctx.stroke()}else{ctx.fillStyle='#8095aa';ctx.font='25px Arial';ctx.fillText('차트 데이터 연결 대기',x+28,y+290)}});tex.needsUpdate=true}refreshBoard();
+const me=new THREE.Group();const body=new THREE.Mesh(new THREE.CapsuleGeometry(.32,.75,4,8),new THREE.MeshStandardMaterial({color:0x4de0bc}));body.position.y=.85;me.add(body);const head=new THREE.Mesh(new THREE.SphereGeometry(.25,12,12),new THREE.MeshStandardMaterial({color:0xd9b89c}));head.position.y=1.63;me.add(head);scene.add(me);me.position.set(0,0,9);const others=new Map();function updatePlayers(players,id){const seen=new Set();for(const p of players){if(p.id===id)continue;seen.add(p.id);if(!others.has(p.id)){const m=new THREE.Mesh(new THREE.CapsuleGeometry(.33,1,4,8),new THREE.MeshStandardMaterial({color:0x789bff}));scene.add(m);others.set(p.id,m)}others.get(p.id).position.set(p.x,1,p.z)}for(const [id,m] of others)if(!seen.has(id)){scene.remove(m);others.delete(id)}}
+let yaw=0,dragging=false,lastX=0;renderer.domElement.addEventListener('pointerdown',e=>{dragging=true;lastX=e.clientX});window.addEventListener('pointerup',()=>dragging=false);window.addEventListener('pointermove',e=>{if(dragging){yaw+=(e.clientX-lastX)*.005;lastX=e.clientX}});const keys=new Set();window.addEventListener('keydown',e=>{if(['INPUT','TEXTAREA'].includes(document.activeElement.tagName))return;keys.add(e.key.toLowerCase());if(e.key.startsWith('Arrow'))e.preventDefault()});window.addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));let last=performance.now(),lastMove=0;function animate(now){requestAnimationFrame(animate);const dt=Math.min((now-last)/1000,.05);last=now;const forward=Number(keys.has('w')||keys.has('arrowup'))-Number(keys.has('s')||keys.has('arrowdown'));const side=Number(keys.has('d')||keys.has('arrowright'))-Number(keys.has('a')||keys.has('arrowleft'));if(forward||side){const speed=5*dt;me.position.x=Math.max(-18,Math.min(18,me.position.x+(Math.sin(yaw)*forward+Math.cos(yaw)*side)*speed));me.position.z=Math.max(-18,Math.min(18,me.position.z+(-Math.cos(yaw)*forward+Math.sin(yaw)*side)*speed));if(now-lastMove>150){send({type:'move',x:me.position.x,z:me.position.z});lastMove=now}}const target=new THREE.Vector3(me.position.x+Math.sin(yaw)*7,5.2,me.position.z+Math.cos(yaw)*7);camera.position.lerp(target,.065);camera.lookAt(me.position.x,1.5,me.position.z-4);renderer.render(scene,camera)}function resize(){const w=sceneEl.clientWidth,h=sceneEl.clientHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix()}new ResizeObserver(resize).observe(sceneEl);resize();requestAnimationFrame(animate);
+let socket,id;function send(m){if(socket?.readyState===1)socket.send(JSON.stringify(m))}function connect(){socket=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`);socket.onopen=()=>{$('connection').textContent='● 연결됨';send({type:'join',name:localStorage.getItem('mv-name')||'방문자'})};socket.onclose=()=>{$('connection').textContent='연결 재시도 중';setTimeout(connect,2000)};socket.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='welcome'){id=m.id;updateVotes(m.votes);$('messages').replaceChildren();m.history.forEach(addMessage)}if(m.type==='presence'){$('online').textContent=m.count;updatePlayers(m.players,id)}if(m.type==='chat')addMessage(m.item);if(m.type==='votes')updateVotes(m.votes)}}connect();function addMessage(item){const p=document.createElement('div');p.className='msg';const b=document.createElement('b');b.textContent=item.name+': ';p.append(b,document.createTextNode(item.message));$('messages').append(p);$('messages').scrollTop=$('messages').scrollHeight}function updateVotes(v){const total=v.long+v.short;const pct=total?Math.round(v.long/total*100):50;$('longbar').style.width=pct+'%';$('longpct').textContent=`${pct}% LONG (${v.long})`;$('shortpct').textContent=`${100-pct}% SHORT (${v.short})`}$('long').onclick=()=>send({type:'vote',side:'long'});$('short').onclick=()=>send({type:'vote',side:'short'});$('chat-form').onsubmit=e=>{e.preventDefault();const input=$('chat-input');send({type:'chat',message:input.value});input.value=''};$('rename').onclick=()=>{const name=prompt('닉네임 (최대 16자)',localStorage.getItem('mv-name')||'');if(name?.trim()){localStorage.setItem('mv-name',name.trim().slice(0,16));send({type:'join',name:name.trim()})}};
