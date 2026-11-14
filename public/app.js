@@ -2,86 +2,249 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
 
 const $ = id => document.getElementById(id);
-const symbols = [
-  { id:'BTC', name:'비트코인', ticker:'BTC / USD', price:null, candles:[] },
-  { id:'ETH', name:'이더리움', ticker:'ETH / USD', price:null, candles:[] },
-  { id:'SOL', name:'솔라나', ticker:'SOL / USD', price:null, candles:[] },
-  { id:'XRP', name:'리플', ticker:'XRP / USD', price:null, candles:[] }
+
+const animals = [
+  { id:'seal', name:'아기물개', emoji:'🦭' },
+  { id:'cat', name:'고양이', emoji:'🐱' },
+  { id:'dog', name:'강아지', emoji:'🐶' },
+  { id:'rabbit', name:'토끼', emoji:'🐰' },
+  { id:'fox', name:'여우', emoji:'🦊' },
+  { id:'panda', name:'판다', emoji:'🐼' },
+  { id:'bear', name:'곰', emoji:'🐻' },
+  { id:'penguin', name:'펭귄', emoji:'🐧' },
+  { id:'frog', name:'개구리', emoji:'🐸' },
+  { id:'hamster', name:'햄스터', emoji:'🐹' }
 ];
 
-const format = n => n == null ? '연동 대기' :
-  Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+const symbols = [
+  { id:'BTC', name:'비트코인', price:null, candles:[] },
+  { id:'ETH', name:'이더리움', price:null, candles:[] },
+  { id:'SOL', name:'솔라나', price:null, candles:[] },
+  { id:'XRP', name:'리플', price:null, candles:[] }
+];
 
-const chartRanges = {
+const ranges = {
   '1h': { granularity:60, limit:60 },
   '1d': { granularity:900, limit:96 },
   '1w': { granularity:3600, limit:168 }
 };
 
+let profile = null;
+let selectedAnimal = 'seal';
+let editingProfile = false;
 let activeSymbol = null;
 let activeRange = '1d';
+let socket = null;
+let myId = null;
+let latestPlayers = [];
 
-function plotChart(canvas, candles, options = {}) {
+function animalInfo(id) {
+  return animals.find(a => a.id === id) || animals[0];
+}
+
+function formatPrice(symbol, value) {
+  if (value == null || !Number.isFinite(Number(value))) {
+    return '연결 대기';
+  }
+
+  const digits = symbol === 'XRP' ? 2 : 2;
+
+  return '$' + Number(value).toLocaleString('en-US', {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits
+  });
+}
+
+function safeProfile(value) {
+  if (!value || typeof value !== 'object') return null;
+
+  const name = String(value.name || '').trim().slice(0, 16);
+  const animal = animals.some(a => a.id === value.animal)
+    ? value.animal : 'seal';
+
+  return name ? { name, animal } : null;
+}
+
+function loadProfile() {
+  try {
+    return safeProfile(
+      JSON.parse(localStorage.getItem('jmc-profile'))
+    );
+  } catch {
+    return null;
+  }
+}
+
+function showProfileModal(editing = false) {
+  editingProfile = editing;
+  selectedAnimal = profile?.animal || 'seal';
+
+  $('nickname').value = profile?.name || '';
+  $('profile-error').textContent = '';
+  $('cancel-profile').hidden = !editing;
+  $('enter-lounge').textContent = editing
+    ? '설정 저장하기'
+    : 'JMC 라운지 입장하기';
+
+  renderAnimalOptions();
+  $('profile-modal').hidden = false;
+  $('nickname').focus();
+}
+
+function renderAnimalOptions() {
+  const grid = $('animal-grid');
+  grid.replaceChildren();
+
+  for (const animal of animals) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'animal-option' +
+      (selectedAnimal === animal.id ? ' selected' : '');
+
+    const emoji = document.createElement('span');
+    emoji.className = 'animal-emoji';
+    emoji.textContent = animal.emoji;
+
+    const name = document.createElement('span');
+    name.className = 'animal-name';
+    name.textContent = animal.name;
+
+    button.append(emoji, name);
+    button.onclick = () => {
+      selectedAnimal = animal.id;
+      renderAnimalOptions();
+    };
+
+    grid.append(button);
+  }
+}
+
+$('enter-lounge').onclick = () => {
+  const name = $('nickname').value.trim().slice(0, 16);
+
+  if (!name) {
+    $('profile-error').textContent =
+      '닉네임을 입력해주세요.';
+    $('nickname').focus();
+    return;
+  }
+
+  profile = { name, animal:selectedAnimal };
+
+  try {
+    localStorage.setItem(
+      'jmc-profile',
+      JSON.stringify(profile)
+    );
+  } catch {}
+
+  $('profile-modal').hidden = true;
+  $('my-profile').textContent =
+    `${animalInfo(profile.animal).emoji} ${profile.name}`;
+
+  updateMyAvatar();
+  sendProfile();
+};
+
+$('cancel-profile').onclick = () => {
+  if (profile) $('profile-modal').hidden = true;
+};
+
+$('rename').onclick = () => showProfileModal(true);
+
+$('nickname').addEventListener('keydown', e => {
+  if (e.key === 'Enter') $('enter-lounge').click();
+});
+
+profile = loadProfile();
+
+if (profile) {
+  $('profile-modal').hidden = true;
+  $('my-profile').textContent =
+    `${animalInfo(profile.animal).emoji} ${profile.name}`;
+} else {
+  showProfileModal(false);
+}
+
+// ------------------------------
+// 캔들 차트
+// ------------------------------
+function plotChart(canvas, candles, mini = false) {
   const ctx = canvas.getContext('2d');
-  const w = canvas.width, h = canvas.height;
+  const w = canvas.width;
+  const h = canvas.height;
 
   ctx.clearRect(0, 0, w, h);
   ctx.fillStyle = '#081421';
   ctx.fillRect(0, 0, w, h);
 
-  if (!candles?.length) {
-    ctx.fillStyle = '#91a9c0';
-    ctx.font = '17px sans-serif';
-    ctx.fillText('캔들 데이터 연결 대기', 20, h / 2);
+  const data = (candles || []).filter(c =>
+    [c.open, c.high, c.low, c.close]
+      .every(Number.isFinite)
+  );
+
+  if (!data.length) {
+    ctx.fillStyle = '#8ba4ba';
+    ctx.font = mini ? '20px sans-serif' : '16px sans-serif';
+    ctx.fillText(
+      '캔들 데이터 연결 대기',
+      20,
+      h / 2
+    );
     return;
   }
 
-  const data = candles.filter(c =>
-    [c.open,c.high,c.low,c.close].every(Number.isFinite)
-  );
-  if (!data.length) return;
+  const low = Math.min(...data.map(c => c.low));
+  const high = Math.max(...data.map(c => c.high));
+  const padding = (high - low) * .08 || 1;
+  const min = low - padding;
+  const max = high + padding;
 
-  const lo = Math.min(...data.map(c => c.low));
-  const hi = Math.max(...data.map(c => c.high));
-  const pad = (hi - lo) * .08 || 1;
-  const min = lo - pad, max = hi + pad;
-
-  const L = options.mini ? 12 : 28;
-  const R = options.mini ? 12 : 85;
-  const T = options.mini ? 12 : 24;
-  const B = options.mini ? 12 : 30;
+  const L = mini ? 12 : 28;
+  const R = mini ? 12 : 90;
+  const T = mini ? 12 : 24;
+  const B = mini ? 12 : 30;
 
   const areaW = w - L - R;
   const areaH = h - T - B;
   const step = areaW / data.length;
-  const bodyW = Math.max(1.2, Math.min(step * .64, options.mini ? 8 : 16));
+  const bodyWidth = Math.max(
+    1.5,
+    Math.min(step * .65, mini ? 8 : 16)
+  );
+
   const y = v => T + (max - v) / (max - min) * areaH;
 
   ctx.strokeStyle = '#1d3548';
   ctx.lineWidth = 1;
 
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i <= 4; i++) {
     const yy = T + areaH * i / 4;
+
     ctx.beginPath();
     ctx.moveTo(L, yy);
     ctx.lineTo(w - R, yy);
     ctx.stroke();
 
-    if (!options.mini) {
+    if (!mini) {
       ctx.fillStyle = '#809ab0';
-      ctx.font = '14px sans-serif';
-      ctx.fillText(format(max - (max - min) * i / 4), w - R + 7, yy + 4);
+      ctx.font = '13px sans-serif';
+      ctx.fillText(
+        (max - (max - min) * i / 4).toFixed(2),
+        w - R + 7,
+        yy + 4
+      );
     }
   }
 
   data.forEach((c, i) => {
     const x = L + step * (i + .5);
-    const up = c.close >= c.open;
-    const color = up ? '#42dfbd' : '#f17a98';
+    const rising = c.close >= c.open;
+    const color = rising ? '#42dfbd' : '#f17a98';
 
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
-    ctx.lineWidth = options.mini ? 1 : 1.6;
+    ctx.lineWidth = mini ? 1 : 1.5;
 
     ctx.beginPath();
     ctx.moveTo(x, y(c.high));
@@ -90,133 +253,92 @@ function plotChart(canvas, candles, options = {}) {
 
     const top = y(Math.max(c.open, c.close));
     const bottom = y(Math.min(c.open, c.close));
+
     ctx.fillRect(
-      x - bodyW / 2,
+      x - bodyWidth / 2,
       top,
-      bodyW,
+      bodyWidth,
       Math.max(1.5, bottom - top)
     );
   });
 }
 
 function renderAssets() {
-  $('assets').replaceChildren(...symbols.map(s => {
-    const el = document.createElement('div');
-    el.className = 'asset crypto-asset';
+  const container = $('assets');
+  container.replaceChildren();
+
+  for (const s of symbols) {
+    const card = document.createElement('div');
+    card.className = 'crypto-asset';
 
     const head = document.createElement('div');
     head.className = 'crypto-head';
 
     const left = document.createElement('div');
-    const name = document.createElement('strong');
-    name.textContent = s.name;
+    const title = document.createElement('strong');
+    title.textContent = s.name;
 
     const ticker = document.createElement('small');
-    ticker.textContent = s.ticker;
-    left.append(name, ticker);
+    ticker.textContent = `${s.id} / USD`;
+
+    left.append(title, ticker);
 
     const right = document.createElement('div');
     right.className = 'price';
-    right.textContent = s.price == null ? '—' : `$${format(s.price)}`;
+    right.textContent = formatPrice(s.id, s.price);
 
     const note = document.createElement('span');
     note.className = 'change';
-    note.textContent = s.price == null ?
-      '시세 연결 대기' : 'USD · Coinbase 시세';
-
+    note.textContent = 'USD · Coinbase';
     right.append(note);
+
     head.append(left, right);
 
     const canvas = document.createElement('canvas');
+    canvas.className = 'spark-chart';
     canvas.width = 580;
     canvas.height = 155;
-    canvas.className = 'spark-chart';
-    plotChart(canvas, s.candles, { mini:true });
 
-    el.append(head, canvas);
-    el.onclick = () => showDetail(s);
-    return el;
-  }));
+    plotChart(canvas, s.candles, true);
+
+    card.append(head, canvas);
+    card.onclick = () => openDetail(s);
+    container.append(card);
+  }
 }
 
-async function loadCandles(s, range = '1d') {
-  const { granularity, limit } = chartRanges[range];
+async function loadCandles(symbol, range = '1d') {
+  const { granularity, limit } = ranges[range];
+
   const response = await fetch(
-    `/api/candles/${s.id}?granularity=${granularity}&limit=${limit}`,
+    `/api/candles/${symbol}?granularity=${granularity}&limit=${limit}`,
     { cache:'no-store' }
   );
 
-  if (!response.ok) throw Error('차트 조회 실패');
-  const data = await response.json();
+  if (!response.ok) throw new Error('Candle API error');
 
-  if (!Array.isArray(data.candles) || !data.candles.length) {
-    throw Error('차트 데이터 없음');
+  const result = await response.json();
+  if (!Array.isArray(result.candles)) {
+    throw new Error('Invalid candle data');
   }
-  return data.candles;
+
+  return result.candles;
 }
-
-async function showDetail(s) {
-  activeSymbol = s;
-  $('detail-name').textContent = s.name;
-  $('detail-price').textContent = s.price == null ?
-    '시세 연결 대기' : `$${format(s.price)}`;
-  $('detail-note').textContent =
-    'Coinbase 시세 기준 · 제공처별 시세 차이가 있을 수 있습니다.';
-  $('detail').hidden = false;
-  await updateDetailChart();
-}
-
-async function updateDetailChart() {
-  const s = activeSymbol, range = activeRange;
-  if (!s) return;
-
-  $('chart-status').textContent = '차트 불러오는 중…';
-
-  try {
-    const candles = range === '1d' && s.candles.length ?
-      s.candles : await loadCandles(s, range);
-
-    if (s !== activeSymbol || range !== activeRange) return;
-
-    plotChart($('detail-chart'), candles);
-    $('chart-status').textContent =
-      `${range === '1h' ? '최근 1시간' :
-         range === '1d' ? '최근 1일' : '최근 1주'} · OHLC 캔들 기준`;
-  } catch {
-    plotChart($('detail-chart'), []);
-    $('chart-status').textContent =
-      '차트를 불러올 수 없습니다. 잠시 후 다시 시도해 주세요.';
-  }
-}
-
-document.querySelectorAll('[data-range]').forEach(b => {
-  b.onclick = () => {
-    activeRange = b.dataset.range;
-    document.querySelectorAll('[data-range]').forEach(x =>
-      x.classList.toggle('selected', x === b)
-    );
-    updateDetailChart();
-  };
-});
-
-$('close').onclick = () => $('detail').hidden = true;
-$('detail').onclick = e => {
-  if (e.target === $('detail')) $('detail').hidden = true;
-};
-
-renderAssets();
 
 async function updatePrices() {
   await Promise.all(symbols.map(async s => {
     try {
-      const response = await fetch(`/api/price/${s.id}`, {
-        cache:'no-store'
-      });
-      if (!response.ok) throw Error();
+      const response = await fetch(
+        `/api/price/${s.id}`,
+        { cache:'no-store' }
+      );
+
+      if (!response.ok) throw new Error('Price error');
 
       const data = await response.json();
-      s.price = Number(data.price);
-      if (!Number.isFinite(s.price)) throw Error();
+      const value = Number(data.price);
+
+      s.price = Number.isFinite(value) ? value : null;
     } catch {
       s.price = null;
     }
@@ -224,14 +346,19 @@ async function updatePrices() {
 
   renderAssets();
   refreshBoard();
+
+  if (activeSymbol) {
+    $('detail-price').textContent =
+      formatPrice(activeSymbol.id, activeSymbol.price);
+  }
 }
 
-async function updateAllCandles() {
+async function updateCandles() {
   await Promise.all(symbols.map(async s => {
     try {
-      s.candles = await loadCandles(s);
-    } catch {
-      s.candles = [];
+      s.candles = await loadCandles(s.id, '1d');
+    } catch (error) {
+      console.warn('Candles:', s.id, error.message);
     }
   }));
 
@@ -243,434 +370,718 @@ async function updateAllCandles() {
   }
 }
 
-updatePrices();
-updateAllCandles();
-setInterval(updatePrices, 15000);
-setInterval(updateAllCandles, 60000);
+function openDetail(s) {
+  activeSymbol = s;
+  activeRange = '1d';
 
-// 3D 메타버스 휴식공간
+  $('detail-name').textContent =
+    `${s.name} (${s.id})`;
+
+  $('detail-price').textContent =
+    formatPrice(s.id, s.price);
+
+  $('detail').hidden = false;
+
+  document.querySelectorAll('[data-range]').forEach(b => {
+    b.classList.toggle(
+      'selected',
+      b.dataset.range === activeRange
+    );
+  });
+
+  updateDetailChart();
+}
+
+async function updateDetailChart() {
+  const symbol = activeSymbol;
+  const range = activeRange;
+  if (!symbol) return;
+
+  $('chart-status').textContent =
+    '캔들 차트를 불러오는 중...';
+
+  try {
+    const candles = range === '1d' && symbol.candles.length
+      ? symbol.candles
+      : await loadCandles(symbol.id, range);
+
+    if (symbol !== activeSymbol || range !== activeRange) {
+      return;
+    }
+
+    plotChart($('detail-chart'), candles);
+
+    $('chart-status').textContent =
+      `${range === '1h' ? '최근 1시간' :
+         range === '1d' ? '최근 1일' : '최근 1주'} · OHLC 캔들`;
+  } catch {
+    plotChart($('detail-chart'), []);
+    $('chart-status').textContent =
+      '차트 연결에 실패했습니다. 잠시 후 다시 시도해주세요.';
+  }
+}
+
+document.querySelectorAll('[data-range]').forEach(button => {
+  button.onclick = () => {
+    activeRange = button.dataset.range;
+
+    document.querySelectorAll('[data-range]').forEach(b => {
+      b.classList.toggle('selected', b === button);
+    });
+
+    updateDetailChart();
+  };
+});
+
+$('close').onclick = () => {
+  $('detail').hidden = true;
+  activeSymbol = null;
+};
+
+$('detail').onclick = e => {
+  if (e.target === $('detail')) {
+    $('detail').hidden = true;
+    activeSymbol = null;
+  }
+};
+
+renderAssets();
+updatePrices();
+updateCandles();
+
+setInterval(updatePrices, 15000);
+setInterval(updateCandles, 60000);
+
+// ------------------------------
+// JMC 3D 메타버스 휴식공간
+// ------------------------------
 const sceneEl = $('scene');
 const scene = new THREE.Scene();
-scene.background = new THREE.Color('#080f1b');
-scene.fog = new THREE.Fog('#080f1b', 20, 75);
 
-const camera = new THREE.PerspectiveCamera(64, 1, .1, 120);
-const renderer = new THREE.WebGLRenderer({ antialias:true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+scene.background = new THREE.Color('#080f1b');
+scene.fog = new THREE.Fog('#080f1b', 25, 80);
+
+const camera = new THREE.PerspectiveCamera(
+  64, 1, .1, 120
+);
+
+const renderer = new THREE.WebGLRenderer({
+  antialias:true
+});
+
+renderer.setPixelRatio(
+  Math.min(window.devicePixelRatio || 1, 2)
+);
+
 sceneEl.appendChild(renderer.domElement);
 
-scene.add(new THREE.HemisphereLight(0x8ebbd7, 0x0b1524, 2));
+scene.add(new THREE.HemisphereLight(
+  0x9bc9e0,
+  0x0b1524,
+  2.2
+));
 
-const lamp = new THREE.PointLight(0x5ee9c8, 85, 30);
-lamp.position.set(0, 8, -9);
-scene.add(lamp);
-
-function box(w, h, d, color, x, y, z, emissive = 0) {
+function makeBox(w, h, d, color, x, y, z) {
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(w, h, d),
     new THREE.MeshStandardMaterial({
       color,
-      metalness:.55,
-      roughness:.4,
-      emissive,
-      emissiveIntensity:.22
+      metalness:.35,
+      roughness:.55
     })
   );
+
   mesh.position.set(x, y, z);
   scene.add(mesh);
   return mesh;
 }
 
-box(42, .4, 42, 0x101c2b, 0, -.25, 0);
+makeBox(42, .4, 42, 0x101c2b, 0, -.25, 0);
 
-const grid = new THREE.GridHelper(42, 42, 0x24435a, 0x182a3e);
+const grid = new THREE.GridHelper(
+  42, 42, 0x24435a, 0x182a3e
+);
+
 grid.position.y = .01;
 scene.add(grid);
 
-for (const x of [-20,20]) {
-  for (const z of [-20,20]) {
-    box(.5, 8, .5, 0x213a51, x, 4, z);
-    const glow = new THREE.PointLight(0x1b9d8c, 12, 8);
-    glow.position.set(x, 6, z);
-    scene.add(glow);
+// 건축물
+makeBox(38, 8, .5, 0x15293a, 0, 4, -19);
+makeBox(.5, 8, 38, 0x14283a, -20, 4, 0);
+makeBox(.5, 8, 38, 0x14283a, 20, 4, 0);
+
+for (const x of [-18, 18]) {
+  for (const z of [-18, 18]) {
+    makeBox(.6, 8, .6, 0x304b5c, x, 4, z);
   }
 }
 
-box(20, 8, .5, 0x14283a, 0, 4, -16);
-box(22, .5, 2, 0x223c52, 0, 8, -15);
-box(11, .25, 1.2, 0x27515d, 0, 1.2, -9);
+// 라운지 소파와 테이블
+for (const x of [-12, 12]) {
+  makeBox(7, .55, 2.5, 0x29495e, x, .35, 4);
+  makeBox(7, 1.15, .6, 0x365c72, x, 1.05, 5.1);
+  makeBox(1.2, .75, 2.4, 0x365c72, x - 3, .65, 4);
+  makeBox(1.2, .75, 2.4, 0x365c72, x + 3, .65, 4);
 
-for (const x of [-9,-5,5,9]) {
-  box(2, .15, 2, 0x213b4e, x, 1, 4);
-  box(.15, 1, .15, 0x4de0bc, x, .5, 4);
-}
-
-const loungeGroup = new THREE.Group();
-scene.add(loungeGroup);
-
-function furniture(w, h, d, color, x, y, z, metal = .2) {
-  const m = new THREE.Mesh(
-    new THREE.BoxGeometry(w, h, d),
-    new THREE.MeshStandardMaterial({
-      color,
-      metalness:metal,
-      roughness:.48
-    })
-  );
-  m.position.set(x, y, z);
-  loungeGroup.add(m);
-  return m;
-}
-
-// 목재 데크와 네온 라인
-furniture(35, .08, 17, 0x1b2833, 0, .03, 6);
-
-for (const x of [-16,16]) {
-  furniture(.15, .18, 17, 0xc6a977, x, .16, 6, .75);
-}
-
-// 소파 및 테이블
-for (const x of [-13,13]) {
-  furniture(7, .48, 2.4, 0x28465b, x, .35, 4);
-  furniture(7, 1.05, .55, 0x365c72, x, 1.04, 5.1);
-  furniture(1.2, .7, 1.4, 0x365c72, x - 3, .65, 4);
-  furniture(1.2, .7, 1.4, 0x365c72, x + 3, .65, 4);
-
-  furniture(3.4, .18, 1.5, 0xd5b68a, x, .73, 1.7, .1);
-  furniture(.2, .65, .2, 0x9b845f, x - 1, .37, 1.7);
-  furniture(.2, .65, .2, 0x9b845f, x + 1, .37, 1.7);
+  makeBox(3.5, .2, 1.5, 0xd5b68a, x, .75, 1.7);
+  makeBox(.25, .65, .25, 0x9b845f, x - 1, .38, 1.7);
+  makeBox(.25, .65, .25, 0x9b845f, x + 1, .38, 1.7);
 }
 
 // 식물 장식
-for (const x of [-17,17]) {
-  for (const z of [-10,11]) {
-    furniture(1.25, .9, 1.25, 0x243c3b, x, .45, z);
+for (const x of [-17, 17]) {
+  for (const z of [-10, 10]) {
+    makeBox(1.2, .9, 1.2, 0x24413e, x, .45, z);
+
     const plant = new THREE.Mesh(
-      new THREE.ConeGeometry(.65, 2.5, 7),
+      new THREE.ConeGeometry(.7, 2.5, 8),
       new THREE.MeshStandardMaterial({
-        color:0x238878,
-        roughness:.85
+        color:0x238878
       })
     );
+
     plant.position.set(x, 2, z);
-    loungeGroup.add(plant);
+    scene.add(plant);
   }
 }
 
-// 라운지 조명
-for (const x of [-10,0,10]) {
-  const light = new THREE.PointLight(0xf6cf9b, 22, 15);
+// 따뜻한 조명
+for (const x of [-12, 0, 12]) {
+  const light = new THREE.PointLight(
+    0xffd49b,
+    25,
+    17
+  );
+
   light.position.set(x, 6, 3);
   scene.add(light);
-  furniture(3, .12, 1.4, 0xc1a06d, x, 7.5, 3, .7);
+
+  makeBox(3, .15, 1.4, 0xc1a06d, x, 7.5, 3);
 }
 
-// 천장 별빛
-const stars = new THREE.BufferGeometry();
-const positions = [];
+// 네온 조명
+const neon = new THREE.PointLight(
+  0x4de0bc,
+  75,
+  30
+);
 
-for (let i = 0; i < 150; i++) {
-  positions.push(
-    (Math.random() - .5) * 38,
-    8.5 + Math.random() * 2,
-    (Math.random() - .5) * 35
+neon.position.set(0, 7, -10);
+scene.add(neon);
+
+// 간판 제작
+function makeTextPanel(text, width, height, x, y, z) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 200;
+
+  const c = canvas.getContext('2d');
+  c.fillStyle = '#0b2030';
+  c.fillRect(0, 0, 1024, 200);
+
+  c.strokeStyle = '#d9bd85';
+  c.lineWidth = 8;
+  c.strokeRect(8, 8, 1008, 184);
+
+  c.fillStyle = '#f5dfb0';
+  c.font = 'bold 68px Arial';
+  c.textAlign = 'center';
+  c.fillText(text, 512, 125);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+
+  const panel = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, height),
+    new THREE.MeshBasicMaterial({
+      map:texture,
+      side:THREE.DoubleSide
+    })
   );
+
+  panel.position.set(x, y, z);
+  scene.add(panel);
+  return panel;
 }
 
-stars.setAttribute(
-  'position',
-  new THREE.Float32BufferAttribute(positions, 3)
-);
+makeTextPanel(
+  'JMC REST LOUNGE',
+  12,
+  2.4,
+  0,
+  5.5,
+  15
+).rotation.y = Math.PI;
 
-scene.add(new THREE.Points(
-  stars,
-  new THREE.PointsMaterial({
-    color:0x9ccde2,
-    size:.075
-  })
-));
-
-// JMC 휴식공간 간판
-const welcomeCanvas = document.createElement('canvas');
-welcomeCanvas.width = 1024;
-welcomeCanvas.height = 180;
-
-const wc = welcomeCanvas.getContext('2d');
-wc.fillStyle = '#0b2030';
-wc.fillRect(0, 0, 1024, 180);
-wc.strokeStyle = '#d9bd85';
-wc.lineWidth = 8;
-wc.strokeRect(8, 8, 1008, 164);
-wc.fillStyle = '#f5dfb0';
-wc.textAlign = 'center';
-wc.font = 'bold 70px Arial';
-wc.fillText('JMC REST LOUNGE', 512, 112);
-
-const wt = new THREE.CanvasTexture(welcomeCanvas);
-wt.colorSpace = THREE.SRGBColorSpace;
-
-const welcome = new THREE.Mesh(
-  new THREE.PlaneGeometry(12, 2.1),
-  new THREE.MeshBasicMaterial({ map:wt })
-);
-welcome.position.set(0, 5.9, 15);
-welcome.rotation.y = Math.PI;
-scene.add(welcome);
-
-// 4종목 3D 대형 전광판
+// ------------------------------
+// 3D 대형 코인 전광판
+// ------------------------------
 const boardCanvas = document.createElement('canvas');
 boardCanvas.width = 1280;
 boardCanvas.height = 620;
 
-const ctx = boardCanvas.getContext('2d');
-const tex = new THREE.CanvasTexture(boardCanvas);
-tex.colorSpace = THREE.SRGBColorSpace;
+const boardCtx = boardCanvas.getContext('2d');
+const boardTexture = new THREE.CanvasTexture(boardCanvas);
+
+boardTexture.colorSpace = THREE.SRGBColorSpace;
 
 const board = new THREE.Mesh(
   new THREE.PlaneGeometry(17, 8.2),
   new THREE.MeshBasicMaterial({
-    map:tex,
+    map:boardTexture,
     side:THREE.DoubleSide
   })
 );
-board.position.set(0, 4.5, -15.65);
+
+board.position.set(0, 4.5, -18.65);
 scene.add(board);
 
 function refreshBoard() {
-  ctx.fillStyle = '#071421';
-  ctx.fillRect(0, 0, 1280, 620);
+  const c = boardCtx;
+  c.fillStyle = '#071421';
+  c.fillRect(0, 0, 1280, 620);
 
-  ctx.fillStyle = '#dfc79a';
-  ctx.font = 'bold 34px Arial';
-  ctx.fillText('JMC  |  INVEST LOUNGE', 40, 56);
+  c.fillStyle = '#dfc79a';
+  c.font = 'bold 34px Arial';
+  c.fillText('JMC INVEST LOUNGE', 40, 55);
 
-  ctx.fillStyle = '#88a5b8';
-  ctx.font = '20px Arial';
-  ctx.fillText('BTC · ETH · SOL · XRP / CANDLE MARKET', 700, 56);
+  c.fillStyle = '#88a5b8';
+  c.font = '20px Arial';
+  c.fillText('BTC · ETH · SOL · XRP', 870, 55);
 
-  symbols.forEach((s, i) => {
-    const col = i % 2;
-    const row = Math.floor(i / 2);
+  symbols.forEach((s, index) => {
+    const col = index % 2;
+    const row = Math.floor(index / 2);
+
     const x = 36 + col * 608;
     const y = 90 + row * 255;
-    const w = 588, h = 240;
+    const w = 588;
+    const h = 240;
 
-    ctx.fillStyle = '#10263a';
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = '#315065';
-    ctx.strokeRect(x, y, w, h);
+    c.fillStyle = '#10263a';
+    c.fillRect(x, y, w, h);
+    c.strokeStyle = '#315065';
+    c.strokeRect(x, y, w, h);
 
-    ctx.fillStyle = '#f0e1c2';
-    ctx.font = 'bold 23px Arial';
-    ctx.fillText(`${s.id} / USD`, x + 18, y + 33);
+    c.fillStyle = '#f0e1c2';
+    c.font = 'bold 23px Arial';
+    c.fillText(`${s.id} / USD`, x + 18, y + 34);
 
-    ctx.fillStyle = '#42dfbd';
-    ctx.font = 'bold 31px Arial';
-    ctx.fillText(
-      s.price == null ? '연결 대기' : `$${format(s.price)}`,
-      x + 180, y + 35
+    c.fillStyle = '#42dfbd';
+    c.font = 'bold 29px Arial';
+    c.fillText(
+      formatPrice(s.id, s.price),
+      x + 180,
+      y + 35
     );
 
-    const data = s.candles.filter(c =>
-      [c.open,c.high,c.low,c.close].every(Number.isFinite)
+    const data = s.candles.filter(candle =>
+      [
+        candle.open,
+        candle.high,
+        candle.low,
+        candle.close
+      ].every(Number.isFinite)
     );
 
-    if (data.length) {
-      const low = Math.min(...data.map(c => c.low));
-      const high = Math.max(...data.map(c => c.high));
-      const span = high - low || 1;
-      const step = 550 / data.length;
-
-      data.forEach((c, j) => {
-        const xx = x + 18 + step * (j + .5);
-        const yy = v => y + 220 - (v - low) / span * 156;
-        const color = c.close >= c.open ? '#42dfbd' : '#f17a98';
-
-        ctx.strokeStyle = color;
-        ctx.fillStyle = color;
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.moveTo(xx, yy(c.high));
-        ctx.lineTo(xx, yy(c.low));
-        ctx.stroke();
-
-        const top = yy(Math.max(c.open, c.close));
-        const bottom = yy(Math.min(c.open, c.close));
-        ctx.fillRect(
-          xx - Math.max(1, step * .3),
-          top,
-          Math.max(2, step * .6),
-          Math.max(2, bottom - top)
-        );
-      });
-    } else {
-      ctx.fillStyle = '#809ab0';
-      ctx.font = '18px Arial';
-      ctx.fillText('캔들 차트 연결 대기', x + 18, y + 155);
+    if (!data.length) {
+      c.fillStyle = '#809ab0';
+      c.font = '18px Arial';
+      c.fillText(
+        '캔들 데이터 연결 대기',
+        x + 20,
+        y + 155
+      );
+      return;
     }
+
+    const low = Math.min(...data.map(d => d.low));
+    const high = Math.max(...data.map(d => d.high));
+    const span = high - low || 1;
+    const step = 550 / data.length;
+
+    data.forEach((d, i) => {
+      const xx = x + 18 + step * (i + .5);
+      const yy = v => y + 220 - (v - low) / span * 156;
+      const color = d.close >= d.open
+        ? '#42dfbd' : '#f17a98';
+
+      c.strokeStyle = color;
+      c.fillStyle = color;
+      c.lineWidth = 1.4;
+
+      c.beginPath();
+      c.moveTo(xx, yy(d.high));
+      c.lineTo(xx, yy(d.low));
+      c.stroke();
+
+      const top = yy(Math.max(d.open, d.close));
+      const bottom = yy(Math.min(d.open, d.close));
+      const bodyW = Math.max(2, step * .6);
+
+      c.fillRect(
+        xx - bodyW / 2,
+        top,
+        bodyW,
+        Math.max(2, bottom - top)
+      );
+    });
   });
 
-  tex.needsUpdate = true;
+  boardTexture.needsUpdate = true;
 }
 
 refreshBoard();
 
-// 내 아바타
-const me = new THREE.Group();
-const body = new THREE.Mesh(
-  new THREE.CapsuleGeometry(.32, .75, 4, 8),
-  new THREE.MeshStandardMaterial({ color:0x4de0bc })
-);
-body.position.y = .85;
-me.add(body);
+// ------------------------------
+// 동물 아바타 10종
+// ------------------------------
+const avatarTextures = new Map();
 
-const head = new THREE.Mesh(
-  new THREE.SphereGeometry(.25, 12, 12),
-  new THREE.MeshStandardMaterial({ color:0xd9b89c })
-);
-head.position.y = 1.63;
-me.add(head);
-scene.add(me);
-me.position.set(0, 0, 9);
+function createAvatarTexture(animalId, name) {
+  const key = animalId + ':' + name;
 
-// 다른 접속자 아바타
-const others = new Map();
+  if (avatarTextures.has(key)) {
+    return avatarTextures.get(key);
+  }
 
-function updatePlayers(players, id) {
+  const animal = animalInfo(animalId);
+  const canvas = document.createElement('canvas');
+
+  canvas.width = 512;
+  canvas.height = 512;
+
+  const c = canvas.getContext('2d');
+
+  c.fillStyle = '#132d3b';
+  c.beginPath();
+  c.arc(256, 210, 170, 0, Math.PI * 2);
+  c.fill();
+
+  c.strokeStyle = '#e6c88f';
+  c.lineWidth = 12;
+  c.stroke();
+
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+
+  c.font = '230px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
+  c.fillText(animal.emoji, 256, 205);
+
+  c.fillStyle = '#102231';
+  c.fillRect(35, 385, 442, 82);
+
+  c.fillStyle = '#f4e5c9';
+  c.font = 'bold 40px sans-serif';
+  c.fillText(
+    name.length > 12 ? name.slice(0, 12) : name,
+    256,
+    425,
+    410
+  );
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+
+  avatarTextures.set(key, texture);
+  return texture;
+}
+
+function createAvatar(animalId, name, isMe = false) {
+  const group = new THREE.Group();
+
+  const baseColor = isMe ? 0x4de0bc : 0x789bff;
+
+  const body = new THREE.Mesh(
+    new THREE.CapsuleGeometry(.35, .7, 4, 10),
+    new THREE.MeshStandardMaterial({
+      color:baseColor,
+      roughness:.5
+    })
+  );
+
+  body.position.y = .85;
+  group.add(body);
+
+  const face = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.4, 2.4),
+    new THREE.MeshBasicMaterial({
+      map:createAvatarTexture(animalId, name),
+      transparent:true,
+      side:THREE.DoubleSide,
+      depthWrite:false
+    })
+  );
+
+  face.position.y = 2.65;
+  group.add(face);
+
+  group.userData.face = face;
+  group.userData.animal = animalId;
+  group.userData.name = name;
+
+  return group;
+}
+
+let myAvatar = null;
+const otherAvatars = new Map();
+
+function updateMyAvatar() {
+  if (!profile) return;
+
+  const position = myAvatar
+    ? myAvatar.position.clone()
+    : new THREE.Vector3(0, 0, 9);
+
+  if (myAvatar) {
+    scene.remove(myAvatar);
+  }
+
+  myAvatar = createAvatar(
+    profile.animal,
+    profile.name,
+    true
+  );
+
+  myAvatar.position.copy(position);
+  scene.add(myAvatar);
+}
+
+function updateOtherAvatars(players) {
   const seen = new Set();
 
   for (const p of players) {
-    if (p.id === id) continue;
+    if (p.id === myId) continue;
+
     seen.add(p.id);
 
-    if (!others.has(p.id)) {
-      const m = new THREE.Mesh(
-        new THREE.CapsuleGeometry(.33, 1, 4, 8),
-        new THREE.MeshStandardMaterial({ color:0x789bff })
+    const existing = otherAvatars.get(p.id);
+
+    if (
+      !existing ||
+      existing.userData.animal !== p.animal ||
+      existing.userData.name !== p.name
+    ) {
+      if (existing) scene.remove(existing);
+
+      const avatar = createAvatar(
+        p.animal,
+        p.name,
+        false
       );
-      scene.add(m);
-      others.set(p.id, m);
+
+      scene.add(avatar);
+      otherAvatars.set(p.id, avatar);
     }
-    others.get(p.id).position.set(p.x, 1, p.z);
+
+    otherAvatars.get(p.id).position.set(
+      Number(p.x) || 0,
+      0,
+      Number(p.z) || 0
+    );
   }
 
-  for (const [id, m] of others) {
+  for (const [id, avatar] of otherAvatars) {
     if (!seen.has(id)) {
-      scene.remove(m);
-      others.delete(id);
+      scene.remove(avatar);
+      otherAvatars.delete(id);
     }
   }
 }
 
-// WASD 이동과 마우스 시점 조절
+if (profile) updateMyAvatar();
+
+// ------------------------------
+// 아바타 이동 및 카메라
+// ------------------------------
 let yaw = 0;
 let dragging = false;
-let lastX = 0;
-
-renderer.domElement.addEventListener('pointerdown', e => {
-  dragging = true;
-  lastX = e.clientX;
-});
-
-window.addEventListener('pointerup', () => dragging = false);
-window.addEventListener('pointermove', e => {
-  if (dragging) {
-    yaw += (e.clientX - lastX) * .005;
-    lastX = e.clientX;
-  }
-});
+let lastPointerX = 0;
 
 const keys = new Set();
 
+renderer.domElement.addEventListener(
+  'pointerdown',
+  e => {
+    dragging = true;
+    lastPointerX = e.clientX;
+  }
+);
+
+window.addEventListener('pointerup', () => {
+  dragging = false;
+});
+
+window.addEventListener('pointermove', e => {
+  if (!dragging) return;
+
+  yaw += (e.clientX - lastPointerX) * .005;
+  lastPointerX = e.clientX;
+});
+
 window.addEventListener('keydown', e => {
-  if (['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
+  if (
+    ['INPUT', 'TEXTAREA'].includes(
+      document.activeElement.tagName
+    )
+  ) return;
+
   keys.add(e.key.toLowerCase());
-  if (e.key.startsWith('Arrow')) e.preventDefault();
+
+  if (e.key.startsWith('Arrow')) {
+    e.preventDefault();
+  }
 });
 
 window.addEventListener('keyup', e => {
   keys.delete(e.key.toLowerCase());
 });
 
-let last = performance.now();
-let lastMove = 0;
+let previousFrame = performance.now();
+let lastMoveSent = 0;
 
 function animate(now) {
   requestAnimationFrame(animate);
 
-  const dt = Math.min((now - last) / 1000, .05);
-  last = now;
+  const dt = Math.min(
+    (now - previousFrame) / 1000,
+    .05
+  );
 
-  const forward =
-    Number(keys.has('w') || keys.has('arrowup')) -
-    Number(keys.has('s') || keys.has('arrowdown'));
+  previousFrame = now;
 
-  const side =
-    Number(keys.has('d') || keys.has('arrowright')) -
-    Number(keys.has('a') || keys.has('arrowleft'));
+  if (myAvatar && $('profile-modal').hidden) {
+    const forward =
+      Number(keys.has('w') || keys.has('arrowup')) -
+      Number(keys.has('s') || keys.has('arrowdown'));
 
-  if (forward || side) {
-    const speed = 5 * dt;
+    const side =
+      Number(keys.has('d') || keys.has('arrowright')) -
+      Number(keys.has('a') || keys.has('arrowleft'));
 
-    me.position.x = Math.max(-18, Math.min(18,
-      me.position.x +
-      (Math.sin(yaw) * forward + Math.cos(yaw) * side) * speed
-    ));
+    if (forward || side) {
+      const speed = 5 * dt;
+      const length = Math.hypot(forward, side) || 1;
 
-    me.position.z = Math.max(-18, Math.min(18,
-      me.position.z +
-      (-Math.cos(yaw) * forward + Math.sin(yaw) * side) * speed
-    ));
+      const f = forward / length;
+      const s = side / length;
 
-    if (now - lastMove > 150) {
-      send({ type:'move', x:me.position.x, z:me.position.z });
-      lastMove = now;
+      myAvatar.position.x = Math.max(
+        -18,
+        Math.min(
+          18,
+          myAvatar.position.x +
+          (Math.sin(yaw) * f + Math.cos(yaw) * s) * speed
+        )
+      );
+
+      myAvatar.position.z = Math.max(
+        -18,
+        Math.min(
+          18,
+          myAvatar.position.z +
+          (-Math.cos(yaw) * f + Math.sin(yaw) * s) * speed
+        )
+      );
+
+      if (now - lastMoveSent > 150) {
+        send({
+          type:'move',
+          x:myAvatar.position.x,
+          z:myAvatar.position.z
+        });
+
+        lastMoveSent = now;
+      }
     }
   }
 
-  const target = new THREE.Vector3(
-    me.position.x + Math.sin(yaw) * 7,
-    5.2,
-    me.position.z + Math.cos(yaw) * 7
+  const target = myAvatar
+    ? myAvatar.position
+    : new THREE.Vector3(0, 0, 9);
+
+  camera.position.lerp(
+    new THREE.Vector3(
+      target.x + Math.sin(yaw) * 7,
+      5.2,
+      target.z + Math.cos(yaw) * 7
+    ),
+    .065
   );
 
-  camera.position.lerp(target, .065);
-  camera.lookAt(me.position.x, 1.5, me.position.z - 4);
+  camera.lookAt(
+    target.x,
+    1.5,
+    target.z - 4
+  );
+
+  // 동물 아이콘이 카메라를 향하도록 회전
+  if (myAvatar) {
+    myAvatar.userData.face.quaternion.copy(
+      camera.quaternion
+    );
+  }
+
+  for (const avatar of otherAvatars.values()) {
+    avatar.userData.face.quaternion.copy(
+      camera.quaternion
+    );
+  }
+
   renderer.render(scene, camera);
 }
 
-function resize() {
+function resizeScene() {
   const w = sceneEl.clientWidth;
   const h = sceneEl.clientHeight;
+
   renderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
 
-new ResizeObserver(resize).observe(sceneEl);
-resize();
+new ResizeObserver(resizeScene).observe(sceneEl);
+resizeScene();
 requestAnimationFrame(animate);
 
-// 실시간 채팅 / 접속자 / 투표
-let socket, id;
+// ------------------------------
+// WebSocket 채팅 및 멀티플레이
+// ------------------------------
+function send(message) {
+  if (socket?.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(message));
+  }
+}
 
-function send(m) {
-  if (socket?.readyState === 1) {
-    socket.send(JSON.stringify(m));
+function sendProfile() {
+  if (!profile) return;
+
+  send({
+    type:'join',
+    name:profile.name,
+    animal:profile.animal
+  });
+
+  if (myAvatar) {
+    send({
+      type:'move',
+      x:myAvatar.position.x,
+      z:myAvatar.position.z
+    });
   }
 }
 
 function connect() {
+  const protocol =
+    location.protocol === 'https:' ? 'wss' : 'ws';
+
   socket = new WebSocket(
-    `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`
+    `${protocol}://${location.host}/ws`
   );
 
   socket.onopen = () => {
     $('connection').textContent = '● 연결됨';
-    send({
-      type:'join',
-      name:localStorage.getItem('mv-name') || '방문자'
-    });
+    sendProfile();
   };
 
   socket.onclose = () => {
@@ -678,68 +1089,113 @@ function connect() {
     setTimeout(connect, 2000);
   };
 
+  socket.onerror = () => {
+    $('connection').textContent = '연결 오류';
+  };
+
   socket.onmessage = e => {
-    const m = JSON.parse(e.data);
+    let message;
 
-    if (m.type === 'welcome') {
-      id = m.id;
-      updateVotes(m.votes);
+    try {
+      message = JSON.parse(e.data);
+    } catch {
+      return;
+    }
+
+    if (message.type === 'welcome') {
+      myId = message.id;
+      updateVotes(message.votes);
+
       $('messages').replaceChildren();
-      m.history.forEach(addMessage);
+
+      for (const item of message.history || []) {
+        addMessage(item);
+      }
+
+      sendProfile();
     }
 
-    if (m.type === 'presence') {
-      $('online').textContent = m.count;
-      updatePlayers(m.players, id);
+    if (message.type === 'presence') {
+      $('online').textContent = message.count;
+      latestPlayers = message.players || [];
+      updateOtherAvatars(latestPlayers);
     }
 
-    if (m.type === 'chat') addMessage(m.item);
-    if (m.type === 'votes') updateVotes(m.votes);
+    if (message.type === 'chat') {
+      addMessage(message.item);
+    }
+
+    if (message.type === 'votes') {
+      updateVotes(message.votes);
+    }
   };
 }
 
-connect();
-
 function addMessage(item) {
-  const p = document.createElement('div');
-  p.className = 'msg';
+  const line = document.createElement('div');
+  line.className = 'msg';
 
-  const b = document.createElement('b');
-  b.textContent = item.name + ': ';
+  const name = document.createElement('b');
+  name.textContent =
+    `${animalInfo(item.animal).emoji} ${item.name}: `;
 
-  p.append(b, document.createTextNode(item.message));
-  $('messages').append(p);
-  $('messages').scrollTop = $('messages').scrollHeight;
+  const text = document.createTextNode(
+    item.message || ''
+  );
+
+  line.append(name, text);
+  $('messages').append(line);
+
+  $('messages').scrollTop =
+    $('messages').scrollHeight;
 }
 
-function updateVotes(v) {
-  const total = v.long + v.short;
-  const pct = total ? Math.round(v.long / total * 100) : 50;
+function updateVotes(votes) {
+  if (!votes) return;
 
-  $('longbar').style.width = pct + '%';
-  $('longpct').textContent = `${pct}% LONG (${v.long})`;
-  $('shortpct').textContent = `${100 - pct}% SHORT (${v.short})`;
+  const total = votes.long + votes.short;
+  const longPct = total
+    ? Math.round(votes.long / total * 100)
+    : 50;
+
+  $('longbar').style.width = longPct + '%';
+
+  $('longpct').textContent =
+    `${longPct}% LONG (${votes.long})`;
+
+  $('shortpct').textContent =
+    `${100 - longPct}% SHORT (${votes.short})`;
 }
 
-$('long').onclick = () => send({ type:'vote', side:'long' });
-$('short').onclick = () => send({ type:'vote', side:'short' });
+$('long').onclick = () => {
+  if (!profile) return showProfileModal(false);
+  send({ type:'vote', side:'long' });
+};
+
+$('short').onclick = () => {
+  if (!profile) return showProfileModal(false);
+  send({ type:'vote', side:'short' });
+};
 
 $('chat-form').onsubmit = e => {
   e.preventDefault();
+
+  if (!profile) {
+    showProfileModal(false);
+    return;
+  }
+
   const input = $('chat-input');
-  send({ type:'chat', message:input.value });
+  const message = input.value.trim();
+
+  if (!message) return;
+
+  send({
+    type:'chat',
+    message
+  });
+
   input.value = '';
 };
 
-$('rename').onclick = () => {
-  const name = prompt(
-    '닉네임 (최대 16자)',
-    localStorage.getItem('mv-name') || ''
-  );
-
-  if (name?.trim()) {
-    const newName = name.trim().slice(0, 16);
-    localStorage.setItem('mv-name', newName);
-    send({ type:'join', name:newName });
-  }
-};
+connect();
