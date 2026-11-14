@@ -3,6 +3,10 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.m
 
 const $ = id => document.getElementById(id);
 
+const START_POSITION = new THREE.Vector3(0, 0, -8);
+const BOARD_Z = -18.65;
+const START_YAW = Math.PI;
+
 const animals = [
   { id:'seal', name:'아기물개', emoji:'🦭' },
   { id:'cat', name:'고양이', emoji:'🐱' },
@@ -31,13 +35,15 @@ const ranges = {
 
 let profile = null;
 let selectedAnimal = 'seal';
-let editingProfile = false;
 let activeSymbol = null;
 let activeRange = '1d';
 let socket = null;
 let myId = null;
-let latestPlayers = [];
+let yaw = START_YAW;
 
+// ==============================
+// 기본 유틸리티
+// ==============================
 function animalInfo(id) {
   return animals.find(a => a.id === id) || animals[0];
 }
@@ -47,48 +53,33 @@ function formatPrice(symbol, value) {
     return '연결 대기';
   }
 
-  const digits = symbol === 'XRP' ? 2 : 2;
-
   return '$' + Number(value).toLocaleString('en-US', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits
+    minimumFractionDigits:2,
+    maximumFractionDigits:2
   });
 }
 
-function safeProfile(value) {
-  if (!value || typeof value !== 'object') return null;
-
-  const name = String(value.name || '').trim().slice(0, 16);
-  const animal = animals.some(a => a.id === value.animal)
-    ? value.animal : 'seal';
-
-  return name ? { name, animal } : null;
-}
-
+// ==============================
+// 최초 입장 팝업
+// ==============================
 function loadProfile() {
   try {
-    return safeProfile(
-      JSON.parse(localStorage.getItem('jmc-profile'))
+    const saved = JSON.parse(
+      localStorage.getItem('jmc-profile')
     );
+
+    if (!saved || !String(saved.name || '').trim()) {
+      return null;
+    }
+
+    return {
+      name:String(saved.name).trim().slice(0, 16),
+      animal:animals.some(a => a.id === saved.animal)
+        ? saved.animal : 'seal'
+    };
   } catch {
     return null;
   }
-}
-
-function showProfileModal(editing = false) {
-  editingProfile = editing;
-  selectedAnimal = profile?.animal || 'seal';
-
-  $('nickname').value = profile?.name || '';
-  $('profile-error').textContent = '';
-  $('cancel-profile').hidden = !editing;
-  $('enter-lounge').textContent = editing
-    ? '설정 저장하기'
-    : 'JMC 라운지 입장하기';
-
-  renderAnimalOptions();
-  $('profile-modal').hidden = false;
-  $('nickname').focus();
 }
 
 function renderAnimalOptions() {
@@ -110,6 +101,7 @@ function renderAnimalOptions() {
     name.textContent = animal.name;
 
     button.append(emoji, name);
+
     button.onclick = () => {
       selectedAnimal = animal.id;
       renderAnimalOptions();
@@ -119,15 +111,32 @@ function renderAnimalOptions() {
   }
 }
 
-$('enter-lounge').onclick = () => {
+function showProfileModal(editing = false) {
+  selectedAnimal = profile?.animal || 'seal';
+
+  $('nickname').value = profile?.name || '';
+  $('profile-error').textContent = '';
+  $('cancel-profile').hidden = !editing;
+
+  $('enter-lounge').textContent = editing
+    ? '설정 저장하기'
+    : 'JMC 라운지 입장하기';
+
+  renderAnimalOptions();
+  $('profile-modal').hidden = false;
+  $('nickname').focus();
+}
+
+function saveProfile() {
   const name = $('nickname').value.trim().slice(0, 16);
 
   if (!name) {
     $('profile-error').textContent =
       '닉네임을 입력해주세요.';
-    $('nickname').focus();
     return;
   }
+
+  const firstEntry = !profile;
 
   profile = { name, animal:selectedAnimal };
 
@@ -142,9 +151,15 @@ $('enter-lounge').onclick = () => {
   $('my-profile').textContent =
     `${animalInfo(profile.animal).emoji} ${profile.name}`;
 
+  if (firstEntry) {
+    resetToMarketBoard();
+  }
+
   updateMyAvatar();
   sendProfile();
-};
+}
+
+$('enter-lounge').onclick = saveProfile;
 
 $('cancel-profile').onclick = () => {
   if (profile) $('profile-modal').hidden = true;
@@ -153,7 +168,7 @@ $('cancel-profile').onclick = () => {
 $('rename').onclick = () => showProfileModal(true);
 
 $('nickname').addEventListener('keydown', e => {
-  if (e.key === 'Enter') $('enter-lounge').click();
+  if (e.key === 'Enter') saveProfile();
 });
 
 profile = loadProfile();
@@ -166,9 +181,9 @@ if (profile) {
   showProfileModal(false);
 }
 
-// ------------------------------
-// 캔들 차트
-// ------------------------------
+// ==============================
+// 차트 그리기
+// ==============================
 function plotChart(canvas, candles, mini = false) {
   const ctx = canvas.getContext('2d');
   const w = canvas.width;
@@ -186,11 +201,7 @@ function plotChart(canvas, candles, mini = false) {
   if (!data.length) {
     ctx.fillStyle = '#8ba4ba';
     ctx.font = mini ? '20px sans-serif' : '16px sans-serif';
-    ctx.fillText(
-      '캔들 데이터 연결 대기',
-      20,
-      h / 2
-    );
+    ctx.fillText('캔들 데이터 연결 대기', 20, h / 2);
     return;
   }
 
@@ -213,7 +224,8 @@ function plotChart(canvas, candles, mini = false) {
     Math.min(step * .65, mini ? 8 : 16)
   );
 
-  const y = v => T + (max - v) / (max - min) * areaH;
+  const y = value =>
+    T + (max - value) / (max - min) * areaH;
 
   ctx.strokeStyle = '#1d3548';
   ctx.lineWidth = 1;
@@ -239,12 +251,11 @@ function plotChart(canvas, candles, mini = false) {
 
   data.forEach((c, i) => {
     const x = L + step * (i + .5);
-    const rising = c.close >= c.open;
-    const color = rising ? '#42dfbd' : '#f17a98';
+    const color = c.close >= c.open
+      ? '#42dfbd' : '#f17a98';
 
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
-    ctx.lineWidth = mini ? 1 : 1.5;
 
     ctx.beginPath();
     ctx.moveTo(x, y(c.high));
@@ -303,6 +314,7 @@ function renderAssets() {
 
     card.append(head, canvas);
     card.onclick = () => openDetail(s);
+
     container.append(card);
   }
 }
@@ -318,6 +330,7 @@ async function loadCandles(symbol, range = '1d') {
   if (!response.ok) throw new Error('Candle API error');
 
   const result = await response.json();
+
   if (!Array.isArray(result.candles)) {
     throw new Error('Invalid candle data');
   }
@@ -356,7 +369,7 @@ async function updatePrices() {
 async function updateCandles() {
   await Promise.all(symbols.map(async s => {
     try {
-      s.candles = await loadCandles(s.id, '1d');
+      s.candles = await loadCandles(s.id);
     } catch (error) {
       console.warn('Candles:', s.id, error.message);
     }
@@ -374,9 +387,7 @@ function openDetail(s) {
   activeSymbol = s;
   activeRange = '1d';
 
-  $('detail-name').textContent =
-    `${s.name} (${s.id})`;
-
+  $('detail-name').textContent = `${s.name} (${s.id})`;
   $('detail-price').textContent =
     formatPrice(s.id, s.price);
 
@@ -395,29 +406,29 @@ function openDetail(s) {
 async function updateDetailChart() {
   const symbol = activeSymbol;
   const range = activeRange;
+
   if (!symbol) return;
 
   $('chart-status').textContent =
     '캔들 차트를 불러오는 중...';
 
   try {
-    const candles = range === '1d' && symbol.candles.length
-      ? symbol.candles
-      : await loadCandles(symbol.id, range);
+    const candles =
+      range === '1d' && symbol.candles.length
+        ? symbol.candles
+        : await loadCandles(symbol.id, range);
 
     if (symbol !== activeSymbol || range !== activeRange) {
       return;
     }
 
     plotChart($('detail-chart'), candles);
-
     $('chart-status').textContent =
-      `${range === '1h' ? '최근 1시간' :
-         range === '1d' ? '최근 1일' : '최근 1주'} · OHLC 캔들`;
+      'Coinbase OHLC 캔들 차트';
   } catch {
     plotChart($('detail-chart'), []);
     $('chart-status').textContent =
-      '차트 연결에 실패했습니다. 잠시 후 다시 시도해주세요.';
+      '차트 연결에 실패했습니다.';
   }
 }
 
@@ -452,9 +463,9 @@ updateCandles();
 setInterval(updatePrices, 15000);
 setInterval(updateCandles, 60000);
 
-// ------------------------------
-// JMC 3D 메타버스 휴식공간
-// ------------------------------
+// ==============================
+// 3D 휴식공간
+// ==============================
 const sceneEl = $('scene');
 const scene = new THREE.Scene();
 
@@ -505,7 +516,6 @@ const grid = new THREE.GridHelper(
 grid.position.y = .01;
 scene.add(grid);
 
-// 건축물
 makeBox(38, 8, .5, 0x15293a, 0, 4, -19);
 makeBox(.5, 8, 38, 0x14283a, -20, 4, 0);
 makeBox(.5, 8, 38, 0x14283a, 20, 4, 0);
@@ -516,28 +526,21 @@ for (const x of [-18, 18]) {
   }
 }
 
-// 라운지 소파와 테이블
 for (const x of [-12, 12]) {
   makeBox(7, .55, 2.5, 0x29495e, x, .35, 4);
   makeBox(7, 1.15, .6, 0x365c72, x, 1.05, 5.1);
   makeBox(1.2, .75, 2.4, 0x365c72, x - 3, .65, 4);
   makeBox(1.2, .75, 2.4, 0x365c72, x + 3, .65, 4);
-
   makeBox(3.5, .2, 1.5, 0xd5b68a, x, .75, 1.7);
-  makeBox(.25, .65, .25, 0x9b845f, x - 1, .38, 1.7);
-  makeBox(.25, .65, .25, 0x9b845f, x + 1, .38, 1.7);
 }
 
-// 식물 장식
 for (const x of [-17, 17]) {
   for (const z of [-10, 10]) {
     makeBox(1.2, .9, 1.2, 0x24413e, x, .45, z);
 
     const plant = new THREE.Mesh(
       new THREE.ConeGeometry(.7, 2.5, 8),
-      new THREE.MeshStandardMaterial({
-        color:0x238878
-      })
+      new THREE.MeshStandardMaterial({ color:0x238878 })
     );
 
     plant.position.set(x, 2, z);
@@ -545,7 +548,6 @@ for (const x of [-17, 17]) {
   }
 }
 
-// 따뜻한 조명
 for (const x of [-12, 0, 12]) {
   const light = new THREE.PointLight(
     0xffd49b,
@@ -555,11 +557,8 @@ for (const x of [-12, 0, 12]) {
 
   light.position.set(x, 6, 3);
   scene.add(light);
-
-  makeBox(3, .15, 1.4, 0xc1a06d, x, 7.5, 3);
 }
 
-// 네온 조명
 const neon = new THREE.PointLight(
   0x4de0bc,
   75,
@@ -569,60 +568,15 @@ const neon = new THREE.PointLight(
 neon.position.set(0, 7, -10);
 scene.add(neon);
 
-// 간판 제작
-function makeTextPanel(text, width, height, x, y, z) {
-  const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 200;
-
-  const c = canvas.getContext('2d');
-  c.fillStyle = '#0b2030';
-  c.fillRect(0, 0, 1024, 200);
-
-  c.strokeStyle = '#d9bd85';
-  c.lineWidth = 8;
-  c.strokeRect(8, 8, 1008, 184);
-
-  c.fillStyle = '#f5dfb0';
-  c.font = 'bold 68px Arial';
-  c.textAlign = 'center';
-  c.fillText(text, 512, 125);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-
-  const panel = new THREE.Mesh(
-    new THREE.PlaneGeometry(width, height),
-    new THREE.MeshBasicMaterial({
-      map:texture,
-      side:THREE.DoubleSide
-    })
-  );
-
-  panel.position.set(x, y, z);
-  scene.add(panel);
-  return panel;
-}
-
-makeTextPanel(
-  'JMC REST LOUNGE',
-  12,
-  2.4,
-  0,
-  5.5,
-  15
-).rotation.y = Math.PI;
-
-// ------------------------------
-// 3D 대형 코인 전광판
-// ------------------------------
+// ==============================
+// 4개 차트 전광판
+// ==============================
 const boardCanvas = document.createElement('canvas');
 boardCanvas.width = 1280;
 boardCanvas.height = 620;
 
 const boardCtx = boardCanvas.getContext('2d');
 const boardTexture = new THREE.CanvasTexture(boardCanvas);
-
 boardTexture.colorSpace = THREE.SRGBColorSpace;
 
 const board = new THREE.Mesh(
@@ -633,11 +587,12 @@ const board = new THREE.Mesh(
   })
 );
 
-board.position.set(0, 4.5, -18.65);
+board.position.set(0, 4.5, BOARD_Z);
 scene.add(board);
 
 function refreshBoard() {
   const c = boardCtx;
+
   c.fillStyle = '#071421';
   c.fillRect(0, 0, 1280, 620);
 
@@ -655,13 +610,12 @@ function refreshBoard() {
 
     const x = 36 + col * 608;
     const y = 90 + row * 255;
-    const w = 588;
-    const h = 240;
 
     c.fillStyle = '#10263a';
-    c.fillRect(x, y, w, h);
+    c.fillRect(x, y, 588, 240);
+
     c.strokeStyle = '#315065';
-    c.strokeRect(x, y, w, h);
+    c.strokeRect(x, y, 588, 240);
 
     c.fillStyle = '#f0e1c2';
     c.font = 'bold 23px Arial';
@@ -675,23 +629,15 @@ function refreshBoard() {
       y + 35
     );
 
-    const data = s.candles.filter(candle =>
-      [
-        candle.open,
-        candle.high,
-        candle.low,
-        candle.close
-      ].every(Number.isFinite)
+    const data = s.candles.filter(d =>
+      [d.open, d.high, d.low, d.close]
+        .every(Number.isFinite)
     );
 
     if (!data.length) {
       c.fillStyle = '#809ab0';
       c.font = '18px Arial';
-      c.fillText(
-        '캔들 데이터 연결 대기',
-        x + 20,
-        y + 155
-      );
+      c.fillText('캔들 데이터 연결 대기', x + 20, y + 155);
       return;
     }
 
@@ -708,7 +654,6 @@ function refreshBoard() {
 
       c.strokeStyle = color;
       c.fillStyle = color;
-      c.lineWidth = 1.4;
 
       c.beginPath();
       c.moveTo(xx, yy(d.high));
@@ -733,9 +678,9 @@ function refreshBoard() {
 
 refreshBoard();
 
-// ------------------------------
-// 동물 아바타 10종
-// ------------------------------
+// ==============================
+// 동물 아바타
+// ==============================
 const avatarTextures = new Map();
 
 function createAvatarTexture(animalId, name) {
@@ -764,7 +709,6 @@ function createAvatarTexture(animalId, name) {
 
   c.textAlign = 'center';
   c.textBaseline = 'middle';
-
   c.font = '230px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
   c.fillText(animal.emoji, 256, 205);
 
@@ -773,12 +717,7 @@ function createAvatarTexture(animalId, name) {
 
   c.fillStyle = '#f4e5c9';
   c.font = 'bold 40px sans-serif';
-  c.fillText(
-    name.length > 12 ? name.slice(0, 12) : name,
-    256,
-    425,
-    410
-  );
+  c.fillText(name, 256, 425, 410);
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -790,13 +729,10 @@ function createAvatarTexture(animalId, name) {
 function createAvatar(animalId, name, isMe = false) {
   const group = new THREE.Group();
 
-  const baseColor = isMe ? 0x4de0bc : 0x789bff;
-
   const body = new THREE.Mesh(
     new THREE.CapsuleGeometry(.35, .7, 4, 10),
     new THREE.MeshStandardMaterial({
-      color:baseColor,
-      roughness:.5
+      color:isMe ? 0x4de0bc : 0x789bff
     })
   );
 
@@ -826,16 +762,30 @@ function createAvatar(animalId, name, isMe = false) {
 let myAvatar = null;
 const otherAvatars = new Map();
 
+function resetToMarketBoard() {
+  yaw = START_YAW;
+
+  if (myAvatar) {
+    myAvatar.position.copy(START_POSITION);
+  }
+
+  camera.position.set(
+    START_POSITION.x,
+    4.2,
+    START_POSITION.z + 6
+  );
+
+  camera.lookAt(0, 4.5, BOARD_Z);
+}
+
 function updateMyAvatar() {
   if (!profile) return;
 
   const position = myAvatar
     ? myAvatar.position.clone()
-    : new THREE.Vector3(0, 0, 9);
+    : START_POSITION.clone();
 
-  if (myAvatar) {
-    scene.remove(myAvatar);
-  }
+  if (myAvatar) scene.remove(myAvatar);
 
   myAvatar = createAvatar(
     profile.animal,
@@ -864,12 +814,7 @@ function updateOtherAvatars(players) {
     ) {
       if (existing) scene.remove(existing);
 
-      const avatar = createAvatar(
-        p.animal,
-        p.name,
-        false
-      );
-
+      const avatar = createAvatar(p.animal, p.name, false);
       scene.add(avatar);
       otherAvatars.set(p.id, avatar);
     }
@@ -889,30 +834,36 @@ function updateOtherAvatars(players) {
   }
 }
 
-if (profile) updateMyAvatar();
+if (profile) {
+  updateMyAvatar();
+  resetToMarketBoard();
+}
 
-// ------------------------------
-// 아바타 이동 및 카메라
-// ------------------------------
-let yaw = 0;
+// ==============================
+// PC 및 모바일 이동
+// ==============================
 let dragging = false;
 let lastPointerX = 0;
-
 const keys = new Set();
 
-renderer.domElement.addEventListener(
-  'pointerdown',
-  e => {
-    dragging = true;
-    lastPointerX = e.clientX;
-  }
-);
+renderer.domElement.addEventListener('pointerdown', e => {
+  dragging = true;
+  lastPointerX = e.clientX;
 
-window.addEventListener('pointerup', () => {
+  if (renderer.domElement.setPointerCapture) {
+    renderer.domElement.setPointerCapture(e.pointerId);
+  }
+});
+
+renderer.domElement.addEventListener('pointerup', () => {
   dragging = false;
 });
 
-window.addEventListener('pointermove', e => {
+renderer.domElement.addEventListener('pointercancel', () => {
+  dragging = false;
+});
+
+renderer.domElement.addEventListener('pointermove', e => {
   if (!dragging) return;
 
   yaw += (e.clientX - lastPointerX) * .005;
@@ -920,13 +871,12 @@ window.addEventListener('pointermove', e => {
 });
 
 window.addEventListener('keydown', e => {
-  if (
-    ['INPUT', 'TEXTAREA'].includes(
-      document.activeElement.tagName
-    )
-  ) return;
+  const tag = document.activeElement?.tagName;
 
-  keys.add(e.key.toLowerCase());
+  if (['INPUT', 'TEXTAREA'].includes(tag)) return;
+
+  const key = e.key.toLowerCase();
+  keys.add(key);
 
   if (e.key.startsWith('Arrow')) {
     e.preventDefault();
@@ -935,6 +885,48 @@ window.addEventListener('keydown', e => {
 
 window.addEventListener('keyup', e => {
   keys.delete(e.key.toLowerCase());
+});
+
+// 모바일 방향키: 길게 누르면 계속 이동
+const mobileControls = $('mobile-controls');
+
+mobileControls.querySelectorAll('.move-btn').forEach(button => {
+  const key = button.dataset.key;
+
+  button.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    button.setPointerCapture(e.pointerId);
+    keys.add(key);
+    button.classList.add('pressed');
+  });
+
+  function release(e) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    keys.delete(key);
+    button.classList.remove('pressed');
+  }
+
+  button.addEventListener('pointerup', release);
+  button.addEventListener('pointercancel', release);
+
+  button.addEventListener('lostpointercapture', () => {
+    keys.delete(key);
+    button.classList.remove('pressed');
+  });
+});
+
+// 화면에서 손을 떼거나 다른 앱으로 전환하면 이동 중지
+window.addEventListener('blur', () => {
+  keys.clear();
+  dragging = false;
+
+  mobileControls.querySelectorAll('.move-btn').forEach(b => {
+    b.classList.remove('pressed');
+  });
 });
 
 let previousFrame = performance.now();
@@ -962,7 +954,6 @@ function animate(now) {
     if (forward || side) {
       const speed = 5 * dt;
       const length = Math.hypot(forward, side) || 1;
-
       const f = forward / length;
       const s = side / length;
 
@@ -980,7 +971,7 @@ function animate(now) {
         Math.min(
           18,
           myAvatar.position.z +
-          (-Math.cos(yaw) * f + Math.sin(yaw) * s) * speed
+          (Math.cos(yaw) * f - Math.sin(yaw) * s) * speed
         )
       );
 
@@ -998,24 +989,22 @@ function animate(now) {
 
   const target = myAvatar
     ? myAvatar.position
-    : new THREE.Vector3(0, 0, 9);
+    : START_POSITION;
 
-  camera.position.lerp(
-    new THREE.Vector3(
-      target.x + Math.sin(yaw) * 7,
-      5.2,
-      target.z + Math.cos(yaw) * 7
-    ),
-    .065
+  const desiredPosition = new THREE.Vector3(
+    target.x - Math.sin(yaw) * 6,
+    4.2,
+    target.z - Math.cos(yaw) * 6
   );
+
+  camera.position.lerp(desiredPosition, .09);
 
   camera.lookAt(
-    target.x,
-    1.5,
-    target.z - 4
+    target.x + Math.sin(yaw) * 8,
+    3.5,
+    target.z + Math.cos(yaw) * 8
   );
 
-  // 동물 아이콘이 카메라를 향하도록 회전
   if (myAvatar) {
     myAvatar.userData.face.quaternion.copy(
       camera.quaternion
@@ -1032,11 +1021,11 @@ function animate(now) {
 }
 
 function resizeScene() {
-  const w = sceneEl.clientWidth;
-  const h = sceneEl.clientHeight;
+  const width = sceneEl.clientWidth;
+  const height = sceneEl.clientHeight;
 
-  renderer.setSize(w, h);
-  camera.aspect = w / h;
+  renderer.setSize(width, height);
+  camera.aspect = width / height;
   camera.updateProjectionMatrix();
 }
 
@@ -1044,9 +1033,9 @@ new ResizeObserver(resizeScene).observe(sceneEl);
 resizeScene();
 requestAnimationFrame(animate);
 
-// ------------------------------
-// WebSocket 채팅 및 멀티플레이
-// ------------------------------
+// ==============================
+// 실시간 채팅 및 접속자
+// ==============================
 function send(message) {
   if (socket?.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify(message));
@@ -1105,7 +1094,6 @@ function connect() {
     if (message.type === 'welcome') {
       myId = message.id;
       updateVotes(message.votes);
-
       $('messages').replaceChildren();
 
       for (const item of message.history || []) {
@@ -1117,8 +1105,7 @@ function connect() {
 
     if (message.type === 'presence') {
       $('online').textContent = message.count;
-      latestPlayers = message.players || [];
-      updateOtherAvatars(latestPlayers);
+      updateOtherAvatars(message.players || []);
     }
 
     if (message.type === 'chat') {
@@ -1139,15 +1126,13 @@ function addMessage(item) {
   name.textContent =
     `${animalInfo(item.animal).emoji} ${item.name}: `;
 
-  const text = document.createTextNode(
-    item.message || ''
+  line.append(
+    name,
+    document.createTextNode(item.message || '')
   );
 
-  line.append(name, text);
   $('messages').append(line);
-
-  $('messages').scrollTop =
-    $('messages').scrollHeight;
+  $('messages').scrollTop = $('messages').scrollHeight;
 }
 
 function updateVotes(votes) {
@@ -1159,10 +1144,8 @@ function updateVotes(votes) {
     : 50;
 
   $('longbar').style.width = longPct + '%';
-
   $('longpct').textContent =
     `${longPct}% LONG (${votes.long})`;
-
   $('shortpct').textContent =
     `${100 - longPct}% SHORT (${votes.short})`;
 }
@@ -1190,11 +1173,7 @@ $('chat-form').onsubmit = e => {
 
   if (!message) return;
 
-  send({
-    type:'chat',
-    message
-  });
-
+  send({ type:'chat', message });
   input.value = '';
 };
 
