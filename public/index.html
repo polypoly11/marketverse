@@ -13,9 +13,10 @@
       ◈ JMC <span>INVEST LOUNGE</span>
       <small>METAVERSE · LIVE CRYPTO</small>
     </div>
+
     <div class="top">
       <span class="live">● LIVE</span>
-      <span>접속자 <b id="online">1</b>명</span>
+      <span>접속자 <b id="online">0</b>명</span>
       <button id="rename" type="button">캐릭터 설정</button>
     </div>
   </header>
@@ -27,12 +28,23 @@
           <span class="eyebrow">JMC METAVERSE REST LOUNGE</span>
           <h1>JMC 휴식공간</h1>
           <p>투자자들이 함께 쉬고 대화하는 가상 라운지</p>
-          <p>WASD 이동 · 마우스 드래그로 시점 회전</p>
+          <p>PC: WASD / 방향키 · 모바일: 화면 방향키</p>
         </div>
         <span class="pill">VIRTUAL LOUNGE</span>
       </div>
 
-      <div id="scene"></div>
+      <div id="scene">
+        <div id="mobile-controls" aria-label="모바일 이동 방향키">
+          <button class="move-btn up" data-key="w"
+            type="button" aria-label="앞으로 이동">▲</button>
+          <button class="move-btn left" data-key="a"
+            type="button" aria-label="왼쪽 이동">◀</button>
+          <button class="move-btn down" data-key="s"
+            type="button" aria-label="뒤로 이동">▼</button>
+          <button class="move-btn right" data-key="d"
+            type="button" aria-label="오른쪽 이동">▶</button>
+        </div>
+      </div>
 
       <div class="scene-bottom">
         <span id="my-profile">캐릭터 설정 대기</span>
@@ -46,7 +58,9 @@
           <h2>LIVE CHAT</h2>
           <span>COMMUNITY</span>
         </div>
+
         <div id="messages"></div>
+
         <form id="chat-form">
           <input
             id="chat-input"
@@ -63,9 +77,11 @@
           <h2>LIVE CANDLE MARKET</h2>
           <span>BTC / ETH / SOL / XRP</span>
         </div>
+
         <div id="assets"></div>
+
         <p class="disclaimer">
-          Coinbase USD 시세 기준 · 가격 및 캔들 데이터는
+          Coinbase USD 시세 기준 · 가격 및 차트 데이터는
           지연되거나 일시적으로 제공되지 않을 수 있습니다.
         </p>
       </section>
@@ -75,12 +91,16 @@
           <h2>MARKET SENTIMENT</h2>
           <span>LONG / SHORT</span>
         </div>
+
         <p class="sub">지금 시장 방향은?</p>
+
         <div class="vote-buttons">
           <button id="long" type="button">▲ LONG</button>
           <button id="short" type="button">▼ SHORT</button>
         </div>
+
         <div class="bar"><div id="longbar"></div></div>
+
         <div class="vote-label">
           <span id="longpct">50% LONG</span>
           <span id="shortpct">50% SHORT</span>
@@ -89,7 +109,6 @@
     </aside>
   </main>
 
-  <!-- 최초 접속 및 캐릭터 변경 팝업 -->
   <div id="profile-modal" class="modal">
     <div class="profile-card">
       <div class="profile-icon">🐾</div>
@@ -110,29 +129,33 @@
       <div id="animal-grid" class="animal-grid"></div>
 
       <div id="profile-error" class="form-error"></div>
+
       <button id="enter-lounge" class="enter-btn" type="button">
         JMC 라운지 입장하기
       </button>
-      <button id="cancel-profile" class="cancel-btn" type="button" hidden>
-        취소
-      </button>
+
+      <button id="cancel-profile" class="cancel-btn"
+        type="button" hidden>취소</button>
     </div>
   </div>
 
-  <!-- 캔들 차트 확대 -->
   <div id="detail" class="modal" hidden>
     <div class="modal-card">
       <button id="close" type="button">✕</button>
       <span class="eyebrow">ASSET DETAIL</span>
       <h2 id="detail-name"></h2>
       <div id="detail-price"></div>
+
       <div class="chart-toolbar">
         <button data-range="1h" type="button">1시간</button>
-        <button data-range="1d" class="selected" type="button">1일</button>
+        <button data-range="1d" class="selected"
+          type="button">1일</button>
         <button data-range="1w" type="button">1주</button>
       </div>
+
       <canvas id="detail-chart" width="760" height="360"></canvas>
       <div id="chart-status"></div>
+
       <p id="detail-note">
         Coinbase OHLC 캔들 데이터 · 투자 참고용
       </p>
