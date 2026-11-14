@@ -1,1 +1,17 @@
-{"name":"investor-metaverse","version":"0.1.0","private":true,"type":"module","scripts":{"start":"node server.js","dev":"node server.js"},"dependencies":{"express":"^4.21.2","ws":"^8.18.0"},"engines":{"node":">=20"}}
+
+{
+  "name": "jmc-invest-lounge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
