@@ -16,11 +16,12 @@ const ANIMALS = [
   'panda', 'bear', 'penguin', 'frog', 'hamster'
 ];
 
+const START = { x: 0, z: -8 };
 const clients = new Map();
 const votes = { long: 0, short: 0 };
 const history = [];
-const candleCache = new Map();
 const priceCache = new Map();
+const candleCache = new Map();
 
 function clean(value, max = 180) {
   return String(value ?? '')
@@ -29,25 +30,22 @@ function clean(value, max = 180) {
     .slice(0, max);
 }
 
-function broadcast(message) {
-  const data = JSON.stringify(message);
-  for (const ws of clients.keys()) {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(data);
-    }
+function send(ws, data) {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(data));
   }
 }
 
-function send(ws, message) {
-  if (ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(message));
+function broadcast(data) {
+  for (const ws of clients.keys()) {
+    send(ws, data);
   }
 }
 
 function presence() {
   broadcast({
     type: 'presence',
-    count: clients.size,
+    count: [...clients.values()].filter(p => p.ready).length,
     players: [...clients.values()]
       .filter(p => p.ready)
       .map(p => ({
@@ -60,19 +58,13 @@ function presence() {
   });
 }
 
-function currentVotes() {
-  broadcast({ type: 'votes', votes });
-}
-
 wss.on('connection', ws => {
-  const id = crypto.randomUUID();
-
   const player = {
-    id,
+    id: crypto.randomUUID(),
     name: '',
     animal: 'seal',
-    x: 0,
-    z: 9,
+    x: START.x,
+    z: START.z,
     ready: false,
     vote: null,
     lastChat: 0,
@@ -83,7 +75,7 @@ wss.on('connection', ws => {
 
   send(ws, {
     type: 'welcome',
-    id,
+    id: player.id,
     votes,
     history
   });
@@ -93,57 +85,59 @@ wss.on('connection', ws => {
   ws.on('message', raw => {
     if (raw.length > 2048) return;
 
-    let m;
+    let message;
     try {
-      m = JSON.parse(raw.toString());
+      message = JSON.parse(raw.toString());
     } catch {
       return;
     }
 
-    if (m.type === 'join') {
-      const name = clean(m.name, 16);
+    if (message.type === 'join') {
+      const name = clean(message.name, 16);
       if (!name) return;
 
       player.name = name;
-      player.animal = ANIMALS.includes(m.animal)
-        ? m.animal : 'seal';
+      player.animal = ANIMALS.includes(message.animal)
+        ? message.animal
+        : 'seal';
       player.ready = true;
-
       presence();
       return;
     }
 
     if (!player.ready) return;
 
-    if (m.type === 'move') {
-      if (Date.now() - player.lastMove < 100) return;
+    if (message.type === 'move') {
+      const now = Date.now();
+      if (now - player.lastMove < 100) return;
 
-      const x = Number(m.x);
-      const z = Number(m.z);
+      const x = Number(message.x);
+      const z = Number(message.z);
 
       if (!Number.isFinite(x) || !Number.isFinite(z)) return;
 
       player.x = Math.max(-18, Math.min(18, x));
       player.z = Math.max(-18, Math.min(18, z));
-      player.lastMove = Date.now();
+      player.lastMove = now;
 
       presence();
       return;
     }
 
-    if (m.type === 'chat') {
-      if (Date.now() - player.lastChat < 1200) return;
+    if (message.type === 'chat') {
+      const now = Date.now();
+      if (now - player.lastChat < 1000) return;
 
-      const message = clean(m.message);
-      if (!message) return;
+      const text = clean(message.message);
+      if (!text) return;
 
-      player.lastChat = Date.now();
+      player.lastChat = now;
 
       const item = {
         name: player.name,
         animal: player.animal,
-        message,
-        time: Date.now()
+        message: text,
+        time: now
       };
 
       history.push(item);
@@ -153,30 +147,31 @@ wss.on('connection', ws => {
       return;
     }
 
-    if (m.type === 'vote') {
-      if (!['long', 'short'].includes(m.side)) return;
-
-      if (player.vote === m.side) return;
+    if (message.type === 'vote') {
+      if (!['long', 'short'].includes(message.side)) return;
+      if (player.vote === message.side) return;
 
       if (player.vote) {
         votes[player.vote] = Math.max(
-          0, votes[player.vote] - 1
+          0,
+          votes[player.vote] - 1
         );
       }
 
-      player.vote = m.side;
-      votes[m.side]++;
+      player.vote = message.side;
+      votes[message.side]++;
 
-      currentVotes();
+      broadcast({ type: 'votes', votes });
     }
   });
 
   ws.on('close', () => {
     if (player.vote) {
       votes[player.vote] = Math.max(
-        0, votes[player.vote] - 1
+        0,
+        votes[player.vote] - 1
       );
-      currentVotes();
+      broadcast({ type: 'votes', votes });
     }
 
     clients.delete(ws);
@@ -188,21 +183,15 @@ wss.on('connection', ws => {
   });
 });
 
-async function cachedFetch(key, ttl, getData) {
-  const now = Date.now();
-  const existing = key.startsWith('price:')
-    ? priceCache.get(key)
-    : candleCache.get(key);
+async function cached(cache, key, ttl, loader) {
+  const existing = cache.get(key);
 
-  if (existing && now - existing.time < ttl) {
+  if (existing && Date.now() - existing.time < ttl) {
     return existing.data;
   }
 
-  const data = await getData();
-  const cache = key.startsWith('price:')
-    ? priceCache : candleCache;
-
-  cache.set(key, { data, time: now });
+  const data = await loader();
+  cache.set(key, { time: Date.now(), data });
   return data;
 }
 
@@ -214,8 +203,9 @@ app.get('/api/price/:symbol', async (req, res) => {
   }
 
   try {
-    const data = await cachedFetch(
-      `price:${symbol}`,
+    const data = await cached(
+      priceCache,
+      symbol,
       10000,
       async () => {
         const response = await fetch(
@@ -223,9 +213,7 @@ app.get('/api/price/:symbol', async (req, res) => {
           { signal: AbortSignal.timeout(9000) }
         );
 
-        if (!response.ok) {
-          throw new Error(`Price HTTP ${response.status}`);
-        }
+        if (!response.ok) throw new Error('Price unavailable');
 
         const json = await response.json();
         const price = Number(json?.data?.amount);
@@ -240,10 +228,8 @@ app.get('/api/price/:symbol', async (req, res) => {
 
     res.set('Cache-Control', 'no-store').json(data);
   } catch (error) {
-    console.error('Price:', symbol, error.message);
-    res.status(502).json({
-      error: 'Price provider unavailable'
-    });
+    console.error(symbol, error.message);
+    res.status(502).json({ error: 'Price unavailable' });
   }
 });
 
@@ -251,102 +237,87 @@ app.get('/api/candles/:symbol', async (req, res) => {
   const symbol = req.params.symbol.toUpperCase();
   const granularity = Number(req.query.granularity);
   const requestedLimit = Number(req.query.limit);
+
   const limit = Number.isFinite(requestedLimit)
-    ? Math.min(300, Math.max(2, Math.floor(requestedLimit)))
+    ? Math.max(2, Math.min(300, Math.floor(requestedLimit)))
     : 96;
 
   if (
     !SYMBOLS.includes(symbol) ||
     ![60, 900, 3600].includes(granularity)
   ) {
-    return res.status(400).json({
-      error: 'Invalid candle request'
-    });
+    return res.status(400).json({ error: 'Invalid request' });
   }
 
-  const key = `candles:${symbol}:${granularity}:${limit}`;
+  const key = `${symbol}:${granularity}:${limit}`;
 
   try {
-    const data = await cachedFetch(key, 45000, async () => {
-      const end = Date.now();
-      const start = end - granularity * limit * 1000;
+    const data = await cached(
+      candleCache,
+      key,
+      45000,
+      async () => {
+        const end = Date.now();
+        const start = end - granularity * limit * 1000;
 
-      const url = new URL(
-        `https://api.exchange.coinbase.com/products/${symbol}-USD/candles`
-      );
+        const url = new URL(
+          `https://api.exchange.coinbase.com/products/${symbol}-USD/candles`
+        );
 
-      url.searchParams.set(
-        'start',
-        new Date(start).toISOString()
-      );
-      url.searchParams.set(
-        'end',
-        new Date(end).toISOString()
-      );
-      url.searchParams.set(
-        'granularity',
-        String(granularity)
-      );
+        url.searchParams.set('start', new Date(start).toISOString());
+        url.searchParams.set('end', new Date(end).toISOString());
+        url.searchParams.set('granularity', String(granularity));
 
-      const response = await fetch(url, {
-        headers: {
-          'User-Agent': 'JMC-Invest-Lounge/1.0'
-        },
-        signal: AbortSignal.timeout(10000)
-      });
+        const response = await fetch(url, {
+          headers: { 'User-Agent': 'JMC-Invest-Lounge/1.0' },
+          signal: AbortSignal.timeout(10000)
+        });
 
-      if (!response.ok) {
-        throw new Error(`Candle HTTP ${response.status}`);
+        if (!response.ok) throw new Error('Candles unavailable');
+
+        const raw = await response.json();
+
+        if (!Array.isArray(raw)) {
+          throw new Error('Invalid candle response');
+        }
+
+        const candles = raw
+          .filter(a => Array.isArray(a) && a.length >= 5)
+          .map(a => ({
+            time: Number(a[0]),
+            low: Number(a[1]),
+            high: Number(a[2]),
+            open: Number(a[3]),
+            close: Number(a[4])
+          }))
+          .filter(c =>
+            [c.time, c.low, c.high, c.open, c.close]
+              .every(Number.isFinite)
+          )
+          .sort((a, b) => a.time - b.time)
+          .slice(-limit);
+
+        if (!candles.length) {
+          throw new Error('Empty candle data');
+        }
+
+        return { candles };
       }
+    );
 
-      const raw = await response.json();
-
-      if (!Array.isArray(raw)) {
-        throw new Error('Invalid candle response');
-      }
-
-      const candles = raw
-        .filter(a => Array.isArray(a) && a.length >= 5)
-        .map(a => ({
-          time: Number(a[0]),
-          low: Number(a[1]),
-          high: Number(a[2]),
-          open: Number(a[3]),
-          close: Number(a[4])
-        }))
-        .filter(c =>
-          [c.time, c.low, c.high, c.open, c.close]
-            .every(Number.isFinite)
-        )
-        .sort((a, b) => a.time - b.time)
-        .slice(-limit);
-
-      if (!candles.length) {
-        throw new Error('Empty candle data');
-      }
-
-      return { candles };
-    });
-
-    res.set('Cache-Control', 'public, max-age=30')
-      .json(data);
+    res.set('Cache-Control', 'public, max-age=30').json(data);
   } catch (error) {
-    console.error('Candles:', symbol, error.message);
-    res.status(502).json({
-      error: 'Chart provider unavailable'
-    });
+    console.error(symbol, error.message);
+    res.status(502).json({ error: 'Candles unavailable' });
   }
 });
 
 app.get('/api/health', (_req, res) => {
-  res.json({
-    ok: true,
-    online: clients.size
-  });
+  res.json({ ok: true, online: clients.size });
 });
 
 const port = Number(process.env.PORT) || 3000;
 
 server.listen(port, '0.0.0.0', () => {
-  console.log(`JMC Lounge listening on port ${port}`);
+  console.log(`JMC Lounge listening on ${port}`);
 });
