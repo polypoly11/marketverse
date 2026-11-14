@@ -1,1180 +1,1100 @@
-
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
 
 const $ = id => document.getElementById(id);
 
-const START_POSITION = new THREE.Vector3(0, 0, -8);
-const BOARD_Z = -18.65;
-const START_YAW = Math.PI;
-
-const animals = [
-  { id:'seal', name:'아기물개', emoji:'🦭' },
-  { id:'cat', name:'고양이', emoji:'🐱' },
-  { id:'dog', name:'강아지', emoji:'🐶' },
-  { id:'rabbit', name:'토끼', emoji:'🐰' },
-  { id:'fox', name:'여우', emoji:'🦊' },
-  { id:'panda', name:'판다', emoji:'🐼' },
-  { id:'bear', name:'곰', emoji:'🐻' },
-  { id:'penguin', name:'펭귄', emoji:'🐧' },
-  { id:'frog', name:'개구리', emoji:'🐸' },
-  { id:'hamster', name:'햄스터', emoji:'🐹' }
-];
-
 const symbols = [
-  { id:'BTC', name:'비트코인', price:null, candles:[] },
-  { id:'ETH', name:'이더리움', price:null, candles:[] },
-  { id:'SOL', name:'솔라나', price:null, candles:[] },
-  { id:'XRP', name:'리플', price:null, candles:[] }
+  {id:'BTC',name:'비트코인',ticker:'BTC / USD',source:'coinbase',price:null},
+  {id:'ETH',name:'이더리움',ticker:'ETH / USD',source:'coinbase',price:null},
+  {id:'005930',name:'삼성전자',ticker:'KRX 005930',currency:'KRW',price:null},
+  {id:'000660',name:'SK하이닉스',ticker:'KRX 000660',currency:'KRW',price:null},
+  {id:'KOSPI',name:'코스피',ticker:'KOSPI INDEX',currency:'points',price:null},
+  {id:'NDX',name:'나스닥100',ticker:'NASDAQ 100',currency:'points',price:null}
 ];
 
-const ranges = {
-  '1h': { granularity:60, limit:60 },
-  '1d': { granularity:900, limit:96 },
-  '1w': { granularity:3600, limit:168 }
-};
+const format = n => n == null ? '연동 대기' : Number(n).toLocaleString('en-US',{maximumFractionDigits:2});
 
-let profile = null;
-let selectedAnimal = 'seal';
-let activeSymbol = null;
-let activeRange = '1d';
-let socket = null;
-let myId = null;
-let yaw = START_YAW;
-
-// ==============================
-// 기본 유틸리티
-// ==============================
-function animalInfo(id) {
-  return animals.find(a => a.id === id) || animals[0];
-}
-
-function formatPrice(symbol, value) {
-  if (value == null || !Number.isFinite(Number(value))) {
-    return '연결 대기';
-  }
-
-  return '$' + Number(value).toLocaleString('en-US', {
-    minimumFractionDigits:2,
-    maximumFractionDigits:2
-  });
-}
-
-// ==============================
-// 최초 입장 팝업
-// ==============================
-function loadProfile() {
-  try {
-    const saved = JSON.parse(
-      localStorage.getItem('jmc-profile')
-    );
-
-    if (!saved || !String(saved.name || '').trim()) {
-      return null;
-    }
-
-    return {
-      name:String(saved.name).trim().slice(0, 16),
-      animal:animals.some(a => a.id === saved.animal)
-        ? saved.animal : 'seal'
-    };
-  } catch {
-    return null;
-  }
-}
-
-function renderAnimalOptions() {
-  const grid = $('animal-grid');
-  grid.replaceChildren();
-
-  for (const animal of animals) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.className = 'animal-option' +
-      (selectedAnimal === animal.id ? ' selected' : '');
-
-    const emoji = document.createElement('span');
-    emoji.className = 'animal-emoji';
-    emoji.textContent = animal.emoji;
-
-    const name = document.createElement('span');
-    name.className = 'animal-name';
-    name.textContent = animal.name;
-
-    button.append(emoji, name);
-
-    button.onclick = () => {
-      selectedAnimal = animal.id;
-      renderAnimalOptions();
-    };
-
-    grid.append(button);
-  }
-}
-
-function showProfileModal(editing = false) {
-  selectedAnimal = profile?.animal || 'seal';
-
-  $('nickname').value = profile?.name || '';
-  $('profile-error').textContent = '';
-  $('cancel-profile').hidden = !editing;
-
-  $('enter-lounge').textContent = editing
-    ? '설정 저장하기'
-    : 'JMC 라운지 입장하기';
-
-  renderAnimalOptions();
-  $('profile-modal').hidden = false;
-  $('nickname').focus();
-}
-
-function saveProfile() {
-  const name = $('nickname').value.trim().slice(0, 16);
-
-  if (!name) {
-    $('profile-error').textContent =
-      '닉네임을 입력해주세요.';
-    return;
-  }
-
-  const firstEntry = !profile;
-
-  profile = { name, animal:selectedAnimal };
-
-  try {
-    localStorage.setItem(
-      'jmc-profile',
-      JSON.stringify(profile)
-    );
-  } catch {}
-
-  $('profile-modal').hidden = true;
-  $('my-profile').textContent =
-    `${animalInfo(profile.animal).emoji} ${profile.name}`;
-
-  if (firstEntry) {
-    resetToMarketBoard();
-  }
-
-  updateMyAvatar();
-  sendProfile();
-}
-
-$('enter-lounge').onclick = saveProfile;
-
-$('cancel-profile').onclick = () => {
-  if (profile) $('profile-modal').hidden = true;
-};
-
-$('rename').onclick = () => showProfileModal(true);
-
-$('nickname').addEventListener('keydown', e => {
-  if (e.key === 'Enter') saveProfile();
-});
-
-profile = loadProfile();
-
-if (profile) {
-  $('profile-modal').hidden = true;
-  $('my-profile').textContent =
-    `${animalInfo(profile.animal).emoji} ${profile.name}`;
-} else {
-  showProfileModal(false);
-}
-
-// ==============================
-// 차트 그리기
-// ==============================
-function plotChart(canvas, candles, mini = false) {
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width;
-  const h = canvas.height;
-
-  ctx.clearRect(0, 0, w, h);
-  ctx.fillStyle = '#081421';
-  ctx.fillRect(0, 0, w, h);
-
-  const data = (candles || []).filter(c =>
-    [c.open, c.high, c.low, c.close]
-      .every(Number.isFinite)
-  );
-
-  if (!data.length) {
-    ctx.fillStyle = '#8ba4ba';
-    ctx.font = mini ? '20px sans-serif' : '16px sans-serif';
-    ctx.fillText('캔들 데이터 연결 대기', 20, h / 2);
-    return;
-  }
-
-  const low = Math.min(...data.map(c => c.low));
-  const high = Math.max(...data.map(c => c.high));
-  const padding = (high - low) * .08 || 1;
-  const min = low - padding;
-  const max = high + padding;
-
-  const L = mini ? 12 : 28;
-  const R = mini ? 12 : 90;
-  const T = mini ? 12 : 24;
-  const B = mini ? 12 : 30;
-
-  const areaW = w - L - R;
-  const areaH = h - T - B;
-  const step = areaW / data.length;
-  const bodyWidth = Math.max(
-    1.5,
-    Math.min(step * .65, mini ? 8 : 16)
-  );
-
-  const y = value =>
-    T + (max - value) / (max - min) * areaH;
-
-  ctx.strokeStyle = '#1d3548';
-  ctx.lineWidth = 1;
-
-  for (let i = 0; i <= 4; i++) {
-    const yy = T + areaH * i / 4;
-
-    ctx.beginPath();
-    ctx.moveTo(L, yy);
-    ctx.lineTo(w - R, yy);
-    ctx.stroke();
-
-    if (!mini) {
-      ctx.fillStyle = '#809ab0';
-      ctx.font = '13px sans-serif';
-      ctx.fillText(
-        (max - (max - min) * i / 4).toFixed(2),
-        w - R + 7,
-        yy + 4
-      );
-    }
-  }
-
-  data.forEach((c, i) => {
-    const x = L + step * (i + .5);
-    const color = c.close >= c.open
-      ? '#42dfbd' : '#f17a98';
-
-    ctx.strokeStyle = color;
-    ctx.fillStyle = color;
-
-    ctx.beginPath();
-    ctx.moveTo(x, y(c.high));
-    ctx.lineTo(x, y(c.low));
-    ctx.stroke();
-
-    const top = y(Math.max(c.open, c.close));
-    const bottom = y(Math.min(c.open, c.close));
-
-    ctx.fillRect(
-      x - bodyWidth / 2,
-      top,
-      bodyWidth,
-      Math.max(1.5, bottom - top)
-    );
-  });
-}
-
-function renderAssets() {
-  const container = $('assets');
-  container.replaceChildren();
-
-  for (const s of symbols) {
-    const card = document.createElement('div');
-    card.className = 'crypto-asset';
-
-    const head = document.createElement('div');
-    head.className = 'crypto-head';
-
-    const left = document.createElement('div');
-    const title = document.createElement('strong');
-    title.textContent = s.name;
-
-    const ticker = document.createElement('small');
-    ticker.textContent = `${s.id} / USD`;
-
-    left.append(title, ticker);
-
-    const right = document.createElement('div');
-    right.className = 'price';
-    right.textContent = formatPrice(s.id, s.price);
-
-    const note = document.createElement('span');
-    note.className = 'change';
-    note.textContent = 'USD · Coinbase';
+function renderAssets(){
+  $('assets').replaceChildren(...symbols.map(s=>{
+    const el=document.createElement('div');
+    el.className='asset';
+    const left=document.createElement('div');
+    const name=document.createElement('strong');
+    name.textContent=s.name;
+    const ticker=document.createElement('small');
+    ticker.textContent=s.ticker;
+    left.append(name,ticker);
+    const right=document.createElement('div');
+    right.className='price';
+    right.textContent=s.price==null?'—':format(s.price);
+    const note=document.createElement('span');
+    note.className='change';
+    note.textContent=s.price==null?'시세 제공처 미연결':`${s.currency||'USD'} · ${s.sourceName||'Coinbase 현물'}`;
     right.append(note);
-
-    head.append(left, right);
-
-    const canvas = document.createElement('canvas');
-    canvas.className = 'spark-chart';
-    canvas.width = 580;
-    canvas.height = 155;
-
-    plotChart(canvas, s.candles, true);
-
-    card.append(head, canvas);
-    card.onclick = () => openDetail(s);
-
-    container.append(card);
-  }
-}
-
-async function loadCandles(symbol, range = '1d') {
-  const { granularity, limit } = ranges[range];
-
-  const response = await fetch(
-    `/api/candles/${symbol}?granularity=${granularity}&limit=${limit}`,
-    { cache:'no-store' }
-  );
-
-  if (!response.ok) throw new Error('Candle API error');
-
-  const result = await response.json();
-
-  if (!Array.isArray(result.candles)) {
-    throw new Error('Invalid candle data');
-  }
-
-  return result.candles;
-}
-
-async function updatePrices() {
-  await Promise.all(symbols.map(async s => {
-    try {
-      const response = await fetch(
-        `/api/price/${s.id}`,
-        { cache:'no-store' }
-      );
-
-      if (!response.ok) throw new Error('Price error');
-
-      const data = await response.json();
-      const value = Number(data.price);
-
-      s.price = Number.isFinite(value) ? value : null;
-    } catch {
-      s.price = null;
-    }
+    el.append(left,right);
+    el.onclick=()=>showDetail(s);
+    return el;
   }));
-
-  renderAssets();
-  refreshBoard();
-
-  if (activeSymbol) {
-    $('detail-price').textContent =
-      formatPrice(activeSymbol.id, activeSymbol.price);
-  }
 }
 
-async function updateCandles() {
-  await Promise.all(symbols.map(async s => {
-    try {
-      s.candles = await loadCandles(s.id);
-    } catch (error) {
-      console.warn('Candles:', s.id, error.message);
-    }
-  }));
-
-  renderAssets();
-  refreshBoard();
-
-  if (activeSymbol && activeRange === '1d') {
-    updateDetailChart();
-  }
+function showDetail(s){
+  $('detail-name').textContent=s.name;
+  $('detail-price').textContent=s.price==null?'시세 연동 대기':`${format(s.price)} ${s.currency||'USD'}`;
+  $('detail-note').textContent=s.price==null?'데모 버전입니다. 실제 시세 데이터 제공처 연결이 필요합니다.':`${s.sourceName||'Coinbase 현물'} 제공 가격입니다. 마지막 수신: ${s.lastUpdated||'확인 중'}`;
+  $('detail').hidden=false;
 }
 
-function openDetail(s) {
-  activeSymbol = s;
-  activeRange = '1d';
-
-  $('detail-name').textContent = `${s.name} (${s.id})`;
-  $('detail-price').textContent =
-    formatPrice(s.id, s.price);
-
-  $('detail').hidden = false;
-
-  document.querySelectorAll('[data-range]').forEach(b => {
-    b.classList.toggle(
-      'selected',
-      b.dataset.range === activeRange
-    );
-  });
-
-  updateDetailChart();
-}
-
-async function updateDetailChart() {
-  const symbol = activeSymbol;
-  const range = activeRange;
-
-  if (!symbol) return;
-
-  $('chart-status').textContent =
-    '캔들 차트를 불러오는 중...';
-
-  try {
-    const candles =
-      range === '1d' && symbol.candles.length
-        ? symbol.candles
-        : await loadCandles(symbol.id, range);
-
-    if (symbol !== activeSymbol || range !== activeRange) {
-      return;
-    }
-
-    plotChart($('detail-chart'), candles);
-    $('chart-status').textContent =
-      'Coinbase OHLC 캔들 차트';
-  } catch {
-    plotChart($('detail-chart'), []);
-    $('chart-status').textContent =
-      '차트 연결에 실패했습니다.';
-  }
-}
-
-document.querySelectorAll('[data-range]').forEach(button => {
-  button.onclick = () => {
-    activeRange = button.dataset.range;
-
-    document.querySelectorAll('[data-range]').forEach(b => {
-      b.classList.toggle('selected', b === button);
-    });
-
-    updateDetailChart();
-  };
-});
-
-$('close').onclick = () => {
-  $('detail').hidden = true;
-  activeSymbol = null;
-};
-
-$('detail').onclick = e => {
-  if (e.target === $('detail')) {
-    $('detail').hidden = true;
-    activeSymbol = null;
-  }
-};
-
+$('close').onclick=()=>$('detail').hidden=true;
+$('detail').onclick=e=>{if(e.target===$('detail'))$('detail').hidden=true};
 renderAssets();
+
+async function updatePrices(){
+  for(const s of symbols.filter(x=>x.source==='coinbase')){
+    try{
+      const response=await fetch(`https://api.coinbase.com/v2/prices/${s.id}-USD/spot`,{cache:'no-store'});
+      if(!response.ok)throw Error();
+      const data=await response.json();
+      s.price=Number(data.data.amount);
+    }catch{
+      s.price=null;
+    }
+  }
+  renderAssets();
+  refreshBoard();
+}
 updatePrices();
-updateCandles();
+setInterval(updatePrices,15000);
 
-setInterval(updatePrices, 15000);
-setInterval(updateCandles, 60000);
-
-// ==============================
-// 3D 휴식공간
-// ==============================
-const sceneEl = $('scene');
-const scene = new THREE.Scene();
-
-scene.background = new THREE.Color('#080f1b');
-scene.fog = new THREE.Fog('#080f1b', 25, 80);
-
-const camera = new THREE.PerspectiveCamera(
-  64, 1, .1, 120
-);
-
-const renderer = new THREE.WebGLRenderer({
-  antialias:true
-});
-
-renderer.setPixelRatio(
-  Math.min(window.devicePixelRatio || 1, 2)
-);
-
+const sceneEl=$('scene');
+const scene=new THREE.Scene();
+scene.background=new THREE.Color('#080f1b');
+scene.fog=new THREE.Fog('#080f1b',20,75);
+const camera=new THREE.PerspectiveCamera(64,1,.1,120);
+const renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
 sceneEl.appendChild(renderer.domElement);
+scene.add(new THREE.HemisphereLight(0x8ebbd7,0x0b1524,2));
+const lamp=new THREE.PointLight(0x5ee9c8,85,30);
+lamp.position.set(0,8,-9);
+scene.add(lamp);
 
-scene.add(new THREE.HemisphereLight(
-  0x9bc9e0,
-  0x0b1524,
-  2.2
-));
-
-function makeBox(w, h, d, color, x, y, z) {
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(w, h, d),
+function box(w,h,d,color,x,y,z,emissive=0){
+  const mesh=new THREE.Mesh(
+    new THREE.BoxGeometry(w,h,d),
     new THREE.MeshStandardMaterial({
-      color,
-      metalness:.35,
-      roughness:.55
+      color,metalness:.55,roughness:.4,emissive,emissiveIntensity:.22
     })
   );
-
-  mesh.position.set(x, y, z);
+  mesh.position.set(x,y,z);
   scene.add(mesh);
   return mesh;
 }
 
-makeBox(42, .4, 42, 0x101c2b, 0, -.25, 0);
-
-const grid = new THREE.GridHelper(
-  42, 42, 0x24435a, 0x182a3e
-);
-
-grid.position.y = .01;
+box(42,.4,42,0x101c2b,0,-.25,0);
+const grid=new THREE.GridHelper(42,42,0x24435a,0x182a3e);
+grid.position.y=.01;
 scene.add(grid);
 
-makeBox(38, 8, .5, 0x15293a, 0, 4, -19);
-makeBox(.5, 8, 38, 0x14283a, -20, 4, 0);
-makeBox(.5, 8, 38, 0x14283a, 20, 4, 0);
-
-for (const x of [-18, 18]) {
-  for (const z of [-18, 18]) {
-    makeBox(.6, 8, .6, 0x304b5c, x, 4, z);
+for(let x of [-20,20]){
+  for(let z of [-20,20]){
+    box(.5,8,.5,0x213a51,x,4,z);
+    const glow=new THREE.PointLight(0x1b9d8c,12,8);
+    glow.position.set(x,6,z);
+    scene.add(glow);
   }
 }
 
-for (const x of [-12, 12]) {
-  makeBox(7, .55, 2.5, 0x29495e, x, .35, 4);
-  makeBox(7, 1.15, .6, 0x365c72, x, 1.05, 5.1);
-  makeBox(1.2, .75, 2.4, 0x365c72, x - 3, .65, 4);
-  makeBox(1.2, .75, 2.4, 0x365c72, x + 3, .65, 4);
-  makeBox(3.5, .2, 1.5, 0xd5b68a, x, .75, 1.7);
+box(20,8,.5,0x14283a,0,4,-16);
+box(22,.5,2,0x223c52,0,8,-15);
+box(11,.25,1.2,0x27515d,0,1.2,-9);
+
+for(const x of [-9,-5,5,9]){
+  box(2,.15,2,0x213b4e,x,1,4);
+  box(.15,1,.15,0x4de0bc,x,.5,4);
 }
 
-for (const x of [-17, 17]) {
-  for (const z of [-10, 10]) {
-    makeBox(1.2, .9, 1.2, 0x24413e, x, .45, z);
-
-    const plant = new THREE.Mesh(
-      new THREE.ConeGeometry(.7, 2.5, 8),
-      new THREE.MeshStandardMaterial({ color:0x238878 })
-    );
-
-    plant.position.set(x, 2, z);
-    scene.add(plant);
-  }
+function screenCanvas(){
+  const c=document.createElement('canvas');
+  c.width=1280;
+  c.height=620;
+  return c;
 }
 
-for (const x of [-12, 0, 12]) {
-  const light = new THREE.PointLight(
-    0xffd49b,
-    25,
-    17
-  );
-
-  light.position.set(x, 6, 3);
-  scene.add(light);
-}
-
-const neon = new THREE.PointLight(
-  0x4de0bc,
-  75,
-  30
+const boardCanvas=screenCanvas();
+const ctx=boardCanvas.getContext('2d');
+const tex=new THREE.CanvasTexture(boardCanvas);
+tex.colorSpace=THREE.SRGBColorSpace;
+const board=new THREE.Mesh(
+  new THREE.PlaneGeometry(17,8.2),
+  new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide})
 );
-
-neon.position.set(0, 7, -10);
-scene.add(neon);
-
-// ==============================
-// 4개 차트 전광판
-// ==============================
-const boardCanvas = document.createElement('canvas');
-boardCanvas.width = 1280;
-boardCanvas.height = 620;
-
-const boardCtx = boardCanvas.getContext('2d');
-const boardTexture = new THREE.CanvasTexture(boardCanvas);
-boardTexture.colorSpace = THREE.SRGBColorSpace;
-
-const board = new THREE.Mesh(
-  new THREE.PlaneGeometry(17, 8.2),
-  new THREE.MeshBasicMaterial({
-    map:boardTexture,
-    side:THREE.DoubleSide
-  })
-);
-
-board.position.set(0, 4.5, BOARD_Z);
+board.position.set(0,4.5,-15.65);
 scene.add(board);
 
-function refreshBoard() {
-  const c = boardCtx;
+function refreshBoard(){
+  ctx.fillStyle='#07131f';
+  ctx.fillRect(0,0,1280,620);
+  ctx.fillStyle='#4de0bc';
+  ctx.font='bold 30px Arial';
+  ctx.fillText('◈ MARKETVERSE / LIVE MARKET',50,60);
+  ctx.fillStyle='#5d8299';
+  ctx.fillRect(50,86,1180,2);
 
-  c.fillStyle = '#071421';
-  c.fillRect(0, 0, 1280, 620);
-
-  c.fillStyle = '#dfc79a';
-  c.font = 'bold 34px Arial';
-  c.fillText('JMC INVEST LOUNGE', 40, 55);
-
-  c.fillStyle = '#88a5b8';
-  c.font = '20px Arial';
-  c.fillText('BTC · ETH · SOL · XRP', 870, 55);
-
-  symbols.forEach((s, index) => {
-    const col = index % 2;
-    const row = Math.floor(index / 2);
-
-    const x = 36 + col * 608;
-    const y = 90 + row * 255;
-
-    c.fillStyle = '#10263a';
-    c.fillRect(x, y, 588, 240);
-
-    c.strokeStyle = '#315065';
-    c.strokeRect(x, y, 588, 240);
-
-    c.fillStyle = '#f0e1c2';
-    c.font = 'bold 23px Arial';
-    c.fillText(`${s.id} / USD`, x + 18, y + 34);
-
-    c.fillStyle = '#42dfbd';
-    c.font = 'bold 29px Arial';
-    c.fillText(
-      formatPrice(s.id, s.price),
-      x + 180,
-      y + 35
+  symbols.forEach((s,i)=>{
+    const x=55+(i%3)*405;
+    const y=155+Math.floor(i/3)*225;
+    ctx.fillStyle='#122638';
+    ctx.fillRect(x,y,375,190);
+    ctx.fillStyle='#98b2c9';
+    ctx.font='bold 24px Arial';
+    ctx.fillText(s.name,x+25,y+48);
+    ctx.fillStyle=s.price==null?'#71889c':'#4de0bc';
+    ctx.font='bold 36px Arial';
+    ctx.fillText(s.price==null?'DATA PENDING':format(s.price),x+25,y+110);
+    ctx.font='18px Arial';
+    ctx.fillText(
+      s.price==null?'PROVIDER NOT CONNECTED':
+      `${s.currency||'USD'} · ${(s.sourceName||'COINBASE SPOT').slice(0,23)}`,
+      x+25,y+153
     );
-
-    const data = s.candles.filter(d =>
-      [d.open, d.high, d.low, d.close]
-        .every(Number.isFinite)
-    );
-
-    if (!data.length) {
-      c.fillStyle = '#809ab0';
-      c.font = '18px Arial';
-      c.fillText('캔들 데이터 연결 대기', x + 20, y + 155);
-      return;
-    }
-
-    const low = Math.min(...data.map(d => d.low));
-    const high = Math.max(...data.map(d => d.high));
-    const span = high - low || 1;
-    const step = 550 / data.length;
-
-    data.forEach((d, i) => {
-      const xx = x + 18 + step * (i + .5);
-      const yy = v => y + 220 - (v - low) / span * 156;
-      const color = d.close >= d.open
-        ? '#42dfbd' : '#f17a98';
-
-      c.strokeStyle = color;
-      c.fillStyle = color;
-
-      c.beginPath();
-      c.moveTo(xx, yy(d.high));
-      c.lineTo(xx, yy(d.low));
-      c.stroke();
-
-      const top = yy(Math.max(d.open, d.close));
-      const bottom = yy(Math.min(d.open, d.close));
-      const bodyW = Math.max(2, step * .6);
-
-      c.fillRect(
-        xx - bodyW / 2,
-        top,
-        bodyW,
-        Math.max(2, bottom - top)
-      );
-    });
   });
-
-  boardTexture.needsUpdate = true;
+  tex.needsUpdate=true;
 }
-
 refreshBoard();
 
-// ==============================
-// 동물 아바타
-// ==============================
-const avatarTextures = new Map();
+const hallRoot=new THREE.Group();
+scene.add(hallRoot);
 
-function createAvatarTexture(animalId, name) {
-  const key = animalId + ':' + name;
-
-  if (avatarTextures.has(key)) {
-    return avatarTextures.get(key);
-  }
-
-  const animal = animalInfo(animalId);
-  const canvas = document.createElement('canvas');
-
-  canvas.width = 512;
-  canvas.height = 512;
-
-  const c = canvas.getContext('2d');
-
-  c.fillStyle = '#132d3b';
-  c.beginPath();
-  c.arc(256, 210, 170, 0, Math.PI * 2);
-  c.fill();
-
-  c.strokeStyle = '#e6c88f';
-  c.lineWidth = 12;
-  c.stroke();
-
-  c.textAlign = 'center';
-  c.textBaseline = 'middle';
-  c.font = '230px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
-  c.fillText(animal.emoji, 256, 205);
-
-  c.fillStyle = '#102231';
-  c.fillRect(35, 385, 442, 82);
-
-  c.fillStyle = '#f4e5c9';
-  c.font = 'bold 40px sans-serif';
-  c.fillText(name, 256, 425, 410);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-
-  avatarTextures.set(key, texture);
-  return texture;
-}
-
-function createAvatar(animalId, name, isMe = false) {
-  const group = new THREE.Group();
-
-  const body = new THREE.Mesh(
-    new THREE.CapsuleGeometry(.35, .7, 4, 10),
-    new THREE.MeshStandardMaterial({
-      color:isMe ? 0x4de0bc : 0x789bff
-    })
+const makeRing=(radius,tube,y,color=0x2bafff)=>{
+  const m=new THREE.Mesh(
+    new THREE.TorusGeometry(radius,tube,7,96),
+    new THREE.MeshBasicMaterial({color})
   );
-
-  body.position.y = .85;
-  group.add(body);
-
-  const face = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.4, 2.4),
-    new THREE.MeshBasicMaterial({
-      map:createAvatarTexture(animalId, name),
-      transparent:true,
-      side:THREE.DoubleSide,
-      depthWrite:false
-    })
-  );
-
-  face.position.y = 2.65;
-  group.add(face);
-
-  group.userData.face = face;
-  group.userData.animal = animalId;
-  group.userData.name = name;
-
-  return group;
-}
-
-let myAvatar = null;
-const otherAvatars = new Map();
-
-function resetToMarketBoard() {
-  yaw = START_YAW;
-
-  if (myAvatar) {
-    myAvatar.position.copy(START_POSITION);
-  }
-
-  camera.position.set(
-    START_POSITION.x,
-    4.2,
-    START_POSITION.z + 6
-  );
-
-  camera.lookAt(0, 4.5, BOARD_Z);
-}
-
-function updateMyAvatar() {
-  if (!profile) return;
-
-  const position = myAvatar
-    ? myAvatar.position.clone()
-    : START_POSITION.clone();
-
-  if (myAvatar) scene.remove(myAvatar);
-
-  myAvatar = createAvatar(
-    profile.animal,
-    profile.name,
-    true
-  );
-
-  myAvatar.position.copy(position);
-  scene.add(myAvatar);
-}
-
-function updateOtherAvatars(players) {
-  const seen = new Set();
-
-  for (const p of players) {
-    if (p.id === myId) continue;
-
-    seen.add(p.id);
-
-    const existing = otherAvatars.get(p.id);
-
-    if (
-      !existing ||
-      existing.userData.animal !== p.animal ||
-      existing.userData.name !== p.name
-    ) {
-      if (existing) scene.remove(existing);
-
-      const avatar = createAvatar(p.animal, p.name, false);
-      scene.add(avatar);
-      otherAvatars.set(p.id, avatar);
-    }
-
-    otherAvatars.get(p.id).position.set(
-      Number(p.x) || 0,
-      0,
-      Number(p.z) || 0
-    );
-  }
-
-  for (const [id, avatar] of otherAvatars) {
-    if (!seen.has(id)) {
-      scene.remove(avatar);
-      otherAvatars.delete(id);
-    }
-  }
-}
-
-if (profile) {
-  updateMyAvatar();
-  resetToMarketBoard();
-}
-
-// ==============================
-// PC 및 모바일 이동
-// ==============================
-let dragging = false;
-let lastPointerX = 0;
-const keys = new Set();
-
-renderer.domElement.addEventListener('pointerdown', e => {
-  dragging = true;
-  lastPointerX = e.clientX;
-
-  if (renderer.domElement.setPointerCapture) {
-    renderer.domElement.setPointerCapture(e.pointerId);
-  }
-});
-
-renderer.domElement.addEventListener('pointerup', () => {
-  dragging = false;
-});
-
-renderer.domElement.addEventListener('pointercancel', () => {
-  dragging = false;
-});
-
-renderer.domElement.addEventListener('pointermove', e => {
-  if (!dragging) return;
-
-  yaw += (e.clientX - lastPointerX) * .005;
-  lastPointerX = e.clientX;
-});
-
-window.addEventListener('keydown', e => {
-  const tag = document.activeElement?.tagName;
-
-  if (['INPUT', 'TEXTAREA'].includes(tag)) return;
-
-  const key = e.key.toLowerCase();
-  keys.add(key);
-
-  if (e.key.startsWith('Arrow')) {
-    e.preventDefault();
-  }
-});
-
-window.addEventListener('keyup', e => {
-  keys.delete(e.key.toLowerCase());
-});
-
-// 모바일 방향키: 길게 누르면 계속 이동
-const mobileControls = $('mobile-controls');
-
-mobileControls.querySelectorAll('.move-btn').forEach(button => {
-  const key = button.dataset.key;
-
-  button.addEventListener('pointerdown', e => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    button.setPointerCapture(e.pointerId);
-    keys.add(key);
-    button.classList.add('pressed');
-  });
-
-  function release(e) {
-    e.preventDefault();
-    e.stopPropagation();
-
-    keys.delete(key);
-    button.classList.remove('pressed');
-  }
-
-  button.addEventListener('pointerup', release);
-  button.addEventListener('pointercancel', release);
-
-  button.addEventListener('lostpointercapture', () => {
-    keys.delete(key);
-    button.classList.remove('pressed');
-  });
-});
-
-// 화면에서 손을 떼거나 다른 앱으로 전환하면 이동 중지
-window.addEventListener('blur', () => {
-  keys.clear();
-  dragging = false;
-
-  mobileControls.querySelectorAll('.move-btn').forEach(b => {
-    b.classList.remove('pressed');
-  });
-});
-
-let previousFrame = performance.now();
-let lastMoveSent = 0;
-
-function animate(now) {
-  requestAnimationFrame(animate);
-
-  const dt = Math.min(
-    (now - previousFrame) / 1000,
-    .05
-  );
-
-  previousFrame = now;
-
-  if (myAvatar && $('profile-modal').hidden) {
-    const forward =
-      Number(keys.has('w') || keys.has('arrowup')) -
-      Number(keys.has('s') || keys.has('arrowdown'));
-
-    const side =
-      Number(keys.has('d') || keys.has('arrowright')) -
-      Number(keys.has('a') || keys.has('arrowleft'));
-
-    if (forward || side) {
-      const speed = 5 * dt;
-      const length = Math.hypot(forward, side) || 1;
-      const f = forward / length;
-      const s = side / length;
-
-      myAvatar.position.x = Math.max(
-        -18,
-        Math.min(
-          18,
-          myAvatar.position.x +
-          (Math.sin(yaw) * f + Math.cos(yaw) * s) * speed
-        )
-      );
-
-      myAvatar.position.z = Math.max(
-        -18,
-        Math.min(
-          18,
-          myAvatar.position.z +
-          (Math.cos(yaw) * f - Math.sin(yaw) * s) * speed
-        )
-      );
-
-      if (now - lastMoveSent > 150) {
-        send({
-          type:'move',
-          x:myAvatar.position.x,
-          z:myAvatar.position.z
-        });
-
-        lastMoveSent = now;
-      }
-    }
-  }
-
-  const target = myAvatar
-    ? myAvatar.position
-    : START_POSITION;
-
-  const desiredPosition = new THREE.Vector3(
-    target.x - Math.sin(yaw) * 6,
-    4.2,
-    target.z - Math.cos(yaw) * 6
-  );
-
-  camera.position.lerp(desiredPosition, .09);
-
-  camera.lookAt(
-    target.x + Math.sin(yaw) * 8,
-    3.5,
-    target.z + Math.cos(yaw) * 8
-  );
-
-  if (myAvatar) {
-    myAvatar.userData.face.quaternion.copy(
-      camera.quaternion
-    );
-  }
-
-  for (const avatar of otherAvatars.values()) {
-    avatar.userData.face.quaternion.copy(
-      camera.quaternion
-    );
-  }
-
-  renderer.render(scene, camera);
-}
-
-function resizeScene() {
-  const width = sceneEl.clientWidth;
-  const height = sceneEl.clientHeight;
-
-  renderer.setSize(width, height);
-  camera.aspect = width / height;
-  camera.updateProjectionMatrix();
-}
-
-new ResizeObserver(resizeScene).observe(sceneEl);
-resizeScene();
-requestAnimationFrame(animate);
-
-// ==============================
-// 실시간 채팅 및 접속자
-// ==============================
-function send(message) {
-  if (socket?.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify(message));
-  }
-}
-
-function sendProfile() {
-  if (!profile) return;
-
-  send({
-    type:'join',
-    name:profile.name,
-    animal:profile.animal
-  });
-
-  if (myAvatar) {
-    send({
-      type:'move',
-      x:myAvatar.position.x,
-      z:myAvatar.position.z
-    });
-  }
-}
-
-function connect() {
-  const protocol =
-    location.protocol === 'https:' ? 'wss' : 'ws';
-
-  socket = new WebSocket(
-    `${protocol}://${location.host}/ws`
-  );
-
-  socket.onopen = () => {
-    $('connection').textContent = '● 연결됨';
-    sendProfile();
-  };
-
-  socket.onclose = () => {
-    $('connection').textContent = '연결 재시도 중';
-    setTimeout(connect, 2000);
-  };
-
-  socket.onerror = () => {
-    $('connection').textContent = '연결 오류';
-  };
-
-  socket.onmessage = e => {
-    let message;
-
-    try {
-      message = JSON.parse(e.data);
-    } catch {
-      return;
-    }
-
-    if (message.type === 'welcome') {
-      myId = message.id;
-      updateVotes(message.votes);
-      $('messages').replaceChildren();
-
-      for (const item of message.history || []) {
-        addMessage(item);
-      }
-
-      sendProfile();
-    }
-
-    if (message.type === 'presence') {
-      $('online').textContent = message.count;
-      updateOtherAvatars(message.players || []);
-    }
-
-    if (message.type === 'chat') {
-      addMessage(message.item);
-    }
-
-    if (message.type === 'votes') {
-      updateVotes(message.votes);
-    }
-  };
-}
-
-function addMessage(item) {
-  const line = document.createElement('div');
-  line.className = 'msg';
-
-  const name = document.createElement('b');
-  name.textContent =
-    `${animalInfo(item.animal).emoji} ${item.name}: `;
-
-  line.append(
-    name,
-    document.createTextNode(item.message || '')
-  );
-
-  $('messages').append(line);
-  $('messages').scrollTop = $('messages').scrollHeight;
-}
-
-function updateVotes(votes) {
-  if (!votes) return;
-
-  const total = votes.long + votes.short;
-  const longPct = total
-    ? Math.round(votes.long / total * 100)
-    : 50;
-
-  $('longbar').style.width = longPct + '%';
-  $('longpct').textContent =
-    `${longPct}% LONG (${votes.long})`;
-  $('shortpct').textContent =
-    `${100 - longPct}% SHORT (${votes.short})`;
-}
-
-$('long').onclick = () => {
-  if (!profile) return showProfileModal(false);
-  send({ type:'vote', side:'long' });
+  m.rotation.x=-Math.PI/2;
+  m.position.set(0,y,-2);
+  hallRoot.add(m);
+  return m;
 };
 
-$('short').onclick = () => {
-  if (!profile) return showProfileModal(false);
-  send({ type:'vote', side:'short' });
-};
+for(const r of [9.2,10.8,13.2,17.5])
+  makeRing(r,.035,.07,r===13.2?0xffbb66:0x168fe3);
 
-$('chat-form').onsubmit = e => {
-  e.preventDefault();
+for(const r of [10.8,16.5,19.5])
+  makeRing(r,.09,9.1,r===16.5?0xffbf72:0x1f95e6);
 
-  if (!profile) {
-    showProfileModal(false);
+for(let i=0;i<24;i++){
+  const a=i*Math.PI*2/24;
+  const x=Math.sin(a)*19;
+  const z=Math.cos(a)*19-2;
+  const pillar=new THREE.Mesh(
+    new THREE.CylinderGeometry(.19,.23,9,10),
+    new THREE.MeshStandardMaterial({color:0x173456,metalness:.8,roughness:.25})
+  );
+  pillar.position.set(x,4.5,z);
+  hallRoot.add(pillar);
+  const strip=new THREE.Mesh(
+    new THREE.CylinderGeometry(.035,.035,8.6,6),
+    new THREE.MeshBasicMaterial({color:i%3===0?0x6ed8ff:0x1767a4})
+  );
+  strip.position.set(x,4.5,z);
+  hallRoot.add(strip);
+}
+
+const hub=new THREE.Mesh(
+  new THREE.CylinderGeometry(2.5,2.8,.26,64),
+  new THREE.MeshStandardMaterial({color:0x153b66,metalness:.8,roughness:.25,emissive:0x06335e})
+);
+hub.position.set(0,.08,-2);
+hallRoot.add(hub);
+makeRing(2.6,.085,.28,0x53dfff);
+
+const boardHeading=document.createElement('canvas');
+boardHeading.width=2048;
+boardHeading.height=220;
+const bh=boardHeading.getContext('2d');
+bh.fillStyle='#07152b';
+bh.fillRect(0,0,2048,220);
+bh.strokeStyle='#2b9de4';
+bh.lineWidth=10;
+bh.strokeRect(8,8,2032,204);
+bh.fillStyle='#d8f4ff';
+bh.textAlign='center';
+bh.font='bold 110px Arial';
+bh.fillText('JMC INVESTOR LOUNGE',1024,143);
+
+const headingTex=new THREE.CanvasTexture(boardHeading);
+headingTex.colorSpace=THREE.SRGBColorSpace;
+const headingMesh=new THREE.Mesh(
+  new THREE.PlaneGeometry(18,2),
+  new THREE.MeshBasicMaterial({map:headingTex,side:THREE.DoubleSide})
+);
+headingMesh.position.set(0,9,-15.4);
+hallRoot.add(headingMesh);
+
+const overhead=new THREE.PointLight(0x159bff,90,40);
+overhead.position.set(0,8,-2);
+hallRoot.add(overhead);
+
+const arenaRoot=new THREE.Group();
+scene.add(arenaRoot);
+arenaRoot.position.set(0,0,-2);
+
+const podium=new THREE.Mesh(
+  new THREE.CylinderGeometry(7.1,7.4,.55,64),
+  new THREE.MeshStandardMaterial({color:0x263b5b,metalness:.5,roughness:.38})
+);
+podium.position.y=.12;
+arenaRoot.add(podium);
+
+const ring=new THREE.Mesh(
+  new THREE.TorusGeometry(6.65,.09,8,80),
+  new THREE.MeshBasicMaterial({color:0x56e3d3})
+);
+ring.rotation.x=-Math.PI/2;
+ring.position.y=.43;
+arenaRoot.add(ring);
+
+for(let i=0;i<14;i++){
+  const a=i*Math.PI*2/14;
+  const seat=new THREE.Mesh(
+    new THREE.BoxGeometry(1.3,.4,.85),
+    new THREE.MeshStandardMaterial({color:0x30445c})
+  );
+  seat.position.set(Math.cos(a)*8,.25,Math.sin(a)*8-2);
+  seat.rotation.y=-a;
+  scene.add(seat);
+}
+
+const gomokuCanvas=document.createElement('canvas');
+gomokuCanvas.width=1024;
+gomokuCanvas.height=1024;
+const gc=gomokuCanvas.getContext('2d');
+const gomokuTexture=new THREE.CanvasTexture(gomokuCanvas);
+gomokuTexture.colorSpace=THREE.SRGBColorSpace;
+const gomokuMesh=new THREE.Mesh(
+  new THREE.PlaneGeometry(8.2,8.2),
+  new THREE.MeshBasicMaterial({map:gomokuTexture,side:THREE.DoubleSide})
+);
+gomokuMesh.rotation.x=-Math.PI/2;
+gomokuMesh.position.y=.55;
+arenaRoot.add(gomokuMesh);
+
+let arenaState={games:[],prize:{}};
+let arenaSelected=null;
+let arenaMyId=null;
+
+function paintGomoku(){
+  gc.fillStyle='#caa875';
+  gc.fillRect(0,0,1024,1024);
+  gc.fillStyle='#9d7849';
+  gc.fillRect(65,65,894,894);
+  gc.fillStyle='#d6b784';
+  gc.fillRect(75,75,874,874);
+  gc.strokeStyle='#6a4a2e';
+  gc.lineWidth=2;
+
+  for(let i=0;i<15;i++){
+    const n=105+i*58;
+    gc.beginPath();
+    gc.moveTo(105,n);
+    gc.lineTo(917,n);
+    gc.moveTo(n,105);
+    gc.lineTo(n,917);
+    gc.stroke();
+  }
+
+  for(let y of [3,7,11]){
+    for(let x of [3,7,11]){
+      gc.beginPath();
+      gc.arc(105+x*58,105+y*58,5,0,Math.PI*2);
+      gc.fillStyle='#68452a';
+      gc.fill();
+    }
+  }
+
+  const game=arenaState.games?.find(g=>g.id===arenaSelected)
+    ||arenaState.games?.find(g=>g.status==='playing')
+    ||arenaState.games?.[0];
+
+  if(game){
+    game.board.forEach((row,y)=>row.forEach((v,x)=>{
+      if(!v)return;
+      const px=105+x*58;
+      const py=105+y*58;
+      gc.beginPath();
+      gc.arc(px,py,25,0,Math.PI*2);
+      const grad=gc.createRadialGradient(px-9,py-10,2,px,py,28);
+      if(v===1){
+        grad.addColorStop(0,'#666');
+        grad.addColorStop(1,'#080808');
+      }else{
+        grad.addColorStop(0,'#fff');
+        grad.addColorStop(1,'#a7a7a7');
+      }
+      gc.fillStyle=grad;
+      gc.fill();
+    }));
+    gc.fillStyle='#30231a';
+    gc.font='bold 28px Arial';
+    gc.textAlign='center';
+    gc.fillText(game.names.join(' VS '),512,45);
+  }else{
+    gc.fillStyle='#46311f';
+    gc.font='bold 38px Arial';
+    gc.textAlign='center';
+    gc.fillText('대결 신청을 하면 이곳에서 경기가 시작됩니다',512,53);
+  }
+  gomokuTexture.needsUpdate=true;
+}
+
+paintGomoku();
+
+window.addEventListener('mv:arena-update',e=>{
+  arenaState=e.detail.state;
+  arenaSelected=e.detail.selected;
+  arenaMyId=e.detail.myId;
+  paintGomoku();
+});
+
+const raycaster=new THREE.Raycaster();
+const pointer=new THREE.Vector2();
+
+renderer.domElement.addEventListener('click',e=>{
+  const bounds=renderer.domElement.getBoundingClientRect();
+  pointer.set(
+    (e.clientX-bounds.left)/bounds.width*2-1,
+    -(e.clientY-bounds.top)/bounds.height*2+1
+  );
+  raycaster.setFromCamera(pointer,camera);
+  const hit=raycaster.intersectObject(gomokuMesh)[0];
+  if(!hit)return;
+
+  const game=arenaState.games?.find(g=>g.id===arenaSelected)
+    ||arenaState.games?.find(g=>g.status==='playing');
+
+  if(!game){
+    document.querySelector('.arena-panel')?.scrollIntoView({behavior:'smooth',block:'center'});
     return;
   }
 
-  const input = $('chat-input');
-  const message = input.value.trim();
+  if(arenaSelected!==game.id)window.mvArenaSelect?.(game.id);
 
-  if (!message) return;
+  const u=hit.uv?.x;
+  const v=hit.uv?.y;
+  if(u==null||v==null)return;
 
-  send({ type:'chat', message });
-  input.value = '';
+  const x=Math.round((u*1024-105)/58);
+  const y=Math.round(((1-v)*1024-105)/58);
+  if(x<0||x>14||y<0||y>14)return;
+
+  if(game.status==='playing'&&game.players[game.turn-1]===arenaMyId)
+    window.mvSend?.({type:'arena-move',id:game.id,x,y});
+});
+
+const ANIMALS=[
+  ['seal','아기물개','🦭',0xf1f5f5],
+  ['lion','사자','🦁',0xdca65b],
+  ['hamster','햄스터','🐹',0xe8b977],
+  ['hedgehog','고슴도치','🦔',0xa17b59],
+  ['wolf','늑대','🐺',0x8996a6],
+  ['whale','고래','🐳',0x649fd3],
+  ['cheetah','치타','🐆',0xe8b85b],
+  ['squid','오징어','🦑',0xe59bb7],
+  ['panda','판다','🐼',0xf1eee7],
+  ['fox','여우','🦊',0xe88a4b],
+  ['bear','곰','🐻',0x9a6d50],
+  ['rabbit','토끼','🐰',0xe7dedf],
+  ['cat','고양이','🐱',0xc7a889],
+  ['dog','강아지','🐶',0xcfa878],
+  ['penguin','펭귄','🐧',0x313d52],
+  ['frog','개구리','🐸',0x76b66d],
+  ['otter','수달','🦦',0x9b7051],
+  ['koala','코알라','🐨',0xa4a8b2],
+  ['tiger','호랑이','🐯',0xe49a4e],
+  ['octopus','문어','🐙',0xc981a8]
+];
+
+const animalIds=new Set(ANIMALS.map(a=>a[0]));
+const themes={mint:0x4de0bc,pink:0xf0a0c6,blue:0x7eafff};
+
+const chosenAvatar=()=>animalIds.has(localStorage.getItem('mv-avatar'))
+  ?localStorage.getItem('mv-avatar'):'seal';
+
+const chosenTheme=()=>Object.hasOwn(themes,localStorage.getItem('mv-theme'))
+  ?localStorage.getItem('mv-theme'):'mint';
+
+function makeAvatar(kind,theme='mint'){
+  const def=ANIMALS.find(a=>a[0]===kind)||ANIMALS[0];
+  kind=def[0];
+  const group=new THREE.Group();
+  const fur=def[3];
+  const accent=themes[theme]||themes.mint;
+  const mat=c=>new THREE.MeshStandardMaterial({color:c,roughness:.83});
+  const main=mat(fur),dark=mat(0x25303a),cream=mat(0xf6e9dc);
+  const pink=mat(0xe8a4a9),white=mat(0xffffff),highlight=mat(accent);
+
+  const add=(geo,m,x,y,z,sx=1,sy=1,sz=1)=>{
+    const o=new THREE.Mesh(geo,m);
+    o.position.set(x,y,z);
+    o.scale.set(sx,sy,sz);
+    group.add(o);
+    return o;
+  };
+
+  const ball=(m,x,y,z,r=.2,sx=1,sy=1,sz=1)=>
+    add(new THREE.SphereGeometry(r,12,10),m,x,y,z,sx,sy,sz);
+  const cone=(m,x,y,z,r=.13,h=.35)=>
+    add(new THREE.ConeGeometry(r,h,8),m,x,y,z);
+  const cylinder=(m,x,y,z,r=.08,h=.5)=>
+    add(new THREE.CylinderGeometry(r,r,h,8),m,x,y,z);
+
+  ball(main,0,.67,.05,.48,1.05,.86,1.25);
+  ball(main,0,1.18,-.23,.43,1.08,1,.98);
+
+  if(['whale','seal','penguin','otter'].includes(kind)){
+    ball(main,-.48,.42,-.04,.23,1.3,.32,.8);
+    ball(main,.48,.42,-.04,.23,1.3,.32,.8);
+  }else if(!['squid','octopus'].includes(kind)){
+    for(const x of [-.29,.29]){
+      ball(main,x,.24,.22,.17,.8,1,.9);
+      ball(main,x,.24,-.2,.15,.8,1,.9);
+    }
+  }
+
+  if(['lion','wolf','fox','cat','cheetah','tiger','bear','panda','koala','rabbit','dog','hamster','hedgehog'].includes(kind)){
+    for(const x of [-.31,.31]){
+      if(['wolf','fox','cat','cheetah','tiger'].includes(kind))
+        cone(main,x,1.57,-.19,.17,.4);
+      else if(kind==='rabbit')
+        ball(main,x,1.77,-.2,.13,.7,2.7,.7);
+      else if(kind==='dog')
+        ball(main,x*1.25,1.38,-.12,.22,.65,1.45,.7);
+      else
+        ball(main,x,1.52,-.2,kind==='koala'?.23:.17);
+    }
+  }
+
+  if(kind==='lion')
+    for(let i=0;i<12;i++){
+      const t=i*Math.PI/6;
+      ball(mat(0x986134),Math.cos(t)*.43,1.18+Math.sin(t)*.43,-.12,.21);
+    }
+
+  if(kind==='hedgehog')
+    for(let i=0;i<18;i++){
+      const t=i*Math.PI*2/18;
+      const spike=cone(dark,Math.cos(t)*.45,1.18+Math.sin(t)*.36,.07,.09,.36);
+      spike.rotation.z=-Math.cos(t)*.75;
+    }
+
+  if(kind==='panda'){
+    for(const x of [-.19,.19])ball(dark,x,1.23,-.58,.16,1,.9,.28);
+    ball(cream,0,.73,-.37,.31,1,1,.25);
+  }
+  if(kind==='penguin')ball(cream,0,.76,-.39,.32,1,1.25,.3);
+  if(kind==='hamster')for(const x of [-.33,.33])ball(cream,x,1.04,-.49,.2);
+  if(kind==='koala')ball(dark,0,1.08,-.65,.18,1,1.35,.8);
+  if(kind==='frog')for(const x of [-.25,.25])ball(main,x,1.54,-.38,.19);
+
+  if(kind==='whale'){
+    ball(main,0,.68,.58,.24,1,.5,1.4);
+    ball(main,0,1.23,.14,.15,.7,1.3,.5);
+  }
+
+  if(kind==='squid'||kind==='octopus'){
+    for(let i=0;i<8;i++){
+      const t=i*Math.PI/4;
+      const tent=cylinder(main,Math.cos(t)*.34,.22,Math.sin(t)*.34,.075,.5);
+      tent.rotation.z=Math.sin(t)*.4;
+    }
+    if(kind==='squid')cone(main,0,1.65,-.05,.37,.65);
+  }
+
+  if(kind==='cheetah')
+    for(let i=0;i<14;i++){
+      const t=i*2.399;
+      ball(dark,Math.sin(t)*.43,.64+Math.cos(t)*.28,-.38,.045);
+    }
+
+  if(kind==='tiger')
+    for(let i=0;i<5;i++){
+      const stripe=add(
+        new THREE.BoxGeometry(.06,.17,.035),
+        dark,-.32+i*.16,1.47-Math.abs(2-i)*.05,-.61
+      );
+      stripe.rotation.z=(i-2)*.2;
+    }
+
+  if(kind==='otter')
+    for(const x of [-.34,.34])
+      for(let i=0;i<2;i++){
+        const w=cylinder(cream,x,1.01-i*.09,-.59,.012,.25);
+        w.rotation.z=x>0?-.8:.8;
+      }
+
+  if(kind==='fox'||kind==='wolf')
+    ball(cream,0,1.02,-.58,.21,1,.6,1.3);
+
+  if(kind==='seal')
+    for(const x of [-.2,.2])ball(pink,x*1.6,1.02,-.59,.085);
+
+  for(const x of [-.19,.19])
+    ball(kind==='panda'?white:dark,x,1.22,-.63,.064);
+
+  ball(kind==='whale'?main:dark,0,1.06,-.67,.085,1,.8,.7);
+
+  const collar=add(
+    new THREE.TorusGeometry(.35,.035,6,20),
+    highlight,0,.91,-.23
+  );
+  collar.rotation.x=Math.PI/2;
+
+  group.userData.kind=kind;
+  group.userData.theme=theme;
+  return group;
+}
+
+let me=makeAvatar(chosenAvatar(),chosenTheme());
+scene.add(me);
+me.position.set(0,0,9);
+const others=new Map();
+
+function replaceSelfAvatar(kind,theme){
+  const pos=me.position.clone();
+  const oldRotation=me.rotation.y;
+  scene.remove(me);
+  me=makeAvatar(kind,theme);
+  me.position.copy(pos);
+  me.rotation.y=oldRotation;
+  scene.add(me);
+}
+
+const speechLayer=document.createElement('div');
+speechLayer.className='speech-layer';
+sceneEl.appendChild(speechLayer);
+
+const bubbles=new Map();
+const bubblePoint=new THREE.Vector3();
+
+function showSpeech(item){
+  if(!item?.id||typeof item.message!=='string')return;
+  const existing=bubbles.get(item.id);
+  if(existing){
+    existing.el.remove();
+    clearTimeout(existing.timer);
+  }
+  const el=document.createElement('div');
+  el.className='speech-bubble';
+  const who=document.createElement('strong');
+  who.textContent=String(item.name||'방문자').slice(0,16);
+  const msg=document.createElement('span');
+  msg.textContent=item.message.slice(0,180);
+  el.append(who,msg);
+  speechLayer.appendChild(el);
+  const timer=setTimeout(()=>{
+    el.remove();
+    bubbles.delete(item.id);
+  },5000);
+  bubbles.set(item.id,{el,timer});
+}
+
+function positionSpeech(){
+  const width=sceneEl.clientWidth;
+  const height=sceneEl.clientHeight;
+  for(const [playerId,bubble] of bubbles){
+    const avatar=playerId===id?me:others.get(playerId);
+    if(!avatar){
+      bubble.el.style.display='none';
+      continue;
+    }
+    bubblePoint.set(
+      avatar.position.x,
+      playerId===id?2.18:2.1,
+      avatar.position.z
+    ).project(camera);
+    const visible=bubblePoint.z>-1&&bubblePoint.z<1
+      &&Math.abs(bubblePoint.x)<1.1
+      &&Math.abs(bubblePoint.y)<1.1;
+    bubble.el.style.display=visible?'flex':'none';
+    if(visible){
+      bubble.el.style.left=((bubblePoint.x+1)*.5*width)+'px';
+      bubble.el.style.top=((-bubblePoint.y+1)*.5*height)+'px';
+    }
+  }
+}
+
+function updatePlayers(players,myId){
+  const seen=new Set();
+  for(const p of players){
+    if(p.id===myId)continue;
+    seen.add(p.id);
+    const kind=animalIds.has(p.avatar)?p.avatar:'seal';
+    const theme=Object.hasOwn(themes,p.theme)?p.theme:'mint';
+    const prev=others.get(p.id);
+    if(!prev||prev.userData.kind!==kind||prev.userData.theme!==theme){
+      if(prev)scene.remove(prev);
+      const m=makeAvatar(kind,theme);
+      scene.add(m);
+      others.set(p.id,m);
+    }
+    others.get(p.id).position.set(p.x,0,p.z);
+    if(Number.isFinite(p.heading))
+      others.get(p.id).rotation.y=p.heading;
+  }
+  for(const [playerId,m] of others)
+    if(!seen.has(playerId)){
+      scene.remove(m);
+      others.delete(playerId);
+    }
+}
+
+let arenaCameraMode=false;
+
+document.getElementById('arena-view-toggle')?.addEventListener('click',()=>{
+  arenaCameraMode=!arenaCameraMode;
+  document.getElementById('arena-view-toggle').textContent=
+    arenaCameraMode?'캐릭터 시점으로 돌아가기':'오목판 크게 보기';
+});
+
+let yaw=0;
+let dragging=false;
+let lastX=0;
+
+renderer.domElement.addEventListener('pointerdown',e=>{
+  if(e.pointerType==='touch'&&e.isPrimary===false)return;
+  dragging=true;
+  lastX=e.clientX;
+});
+
+window.addEventListener('pointerup',()=>dragging=false);
+window.addEventListener('pointercancel',()=>dragging=false);
+
+window.addEventListener('pointermove',e=>{
+  if(dragging){
+    yaw+=(e.clientX-lastX)*.005;
+    lastX=e.clientX;
+  }
+});
+
+const keys=new Set();
+
+window.addEventListener('keydown',e=>{
+  if(['INPUT','TEXTAREA'].includes(document.activeElement.tagName))return;
+  keys.add(e.key.toLowerCase());
+  if(e.key.startsWith('Arrow'))e.preventDefault();
+});
+
+window.addEventListener('keyup',e=>{
+  keys.delete(e.key.toLowerCase());
+});
+
+// PC 및 모바일 방향키
+if(window.matchMedia('(pointer:coarse)').matches){
+  const pad=document.createElement('div');
+  pad.className='mobile-pad';
+  pad.innerHTML=`
+    <button type="button" data-move="arrowup" aria-label="앞으로">▲</button>
+    <div>
+      <button type="button" data-move="arrowleft" aria-label="왼쪽">◀</button>
+      <button type="button" data-move="arrowdown" aria-label="뒤로">▼</button>
+      <button type="button" data-move="arrowright" aria-label="오른쪽">▶</button>
+    </div>
+  `;
+  sceneEl.appendChild(pad);
+
+  const activePointers=new Map();
+
+  const release=e=>{
+    const key=activePointers.get(e.pointerId);
+    if(key){
+      activePointers.delete(e.pointerId);
+      if(![...activePointers.values()].includes(key))
+        keys.delete(key);
+    }
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  pad.querySelectorAll('[data-move]').forEach(b=>{
+    b.addEventListener('pointerdown',e=>{
+      e.preventDefault();
+      e.stopPropagation();
+      const key=b.dataset.move;
+      activePointers.set(e.pointerId,key);
+      keys.add(key);
+      b.classList.add('pressed');
+      try{b.setPointerCapture(e.pointerId)}catch{}
+    });
+
+    for(const ev of ['pointerup','pointercancel','lostpointercapture']){
+      b.addEventListener(ev,e=>{
+        release(e);
+        b.classList.remove('pressed');
+      });
+    }
+
+    b.addEventListener('contextmenu',e=>e.preventDefault());
+  });
+
+  window.addEventListener('blur',()=>{
+    for(const key of activePointers.values())keys.delete(key);
+    activePointers.clear();
+    pad.querySelectorAll('button').forEach(b=>b.classList.remove('pressed'));
+  });
+}
+
+// 이동 방향 수정
+let last=performance.now();
+let lastMove=0;
+
+function animate(now){
+  requestAnimationFrame(animate);
+  const dt=Math.min((now-last)/1000,.05);
+  last=now;
+
+  const forward=
+    Number(keys.has('w')||keys.has('arrowup'))-
+    Number(keys.has('s')||keys.has('arrowdown'));
+
+  const side=
+    Number(keys.has('a')||keys.has('arrowleft'))-
+    Number(keys.has('d')||keys.has('arrowright'));
+
+  if(forward||side){
+    const speed=5*dt;
+    const norm=forward&&side?Math.SQRT1_2:1;
+
+    const dx=(
+      Math.sin(yaw)*forward+
+      Math.cos(yaw)*side
+    )*norm;
+
+    const dz=(
+      -Math.cos(yaw)*forward+
+      Math.sin(yaw)*side
+    )*norm;
+
+    me.position.x=Math.max(-18,Math.min(18,me.position.x+dx*speed));
+    me.position.z=Math.max(-18,Math.min(18,me.position.z+dz*speed));
+
+    const heading=Math.atan2(-dx,-dz);
+    me.rotation.y=heading;
+
+    if(now-lastMove>150){
+      send({
+        type:'move',
+        x:me.position.x,
+        z:me.position.z,
+        heading
+      });
+      lastMove=now;
+    }
+  }
+
+  const target=new THREE.Vector3(
+    me.position.x+Math.sin(yaw)*7,
+    5.2,
+    me.position.z+Math.cos(yaw)*7
+  );
+
+  if(arenaCameraMode){
+    camera.position.lerp(new THREE.Vector3(0,16,10),.12);
+    camera.lookAt(0,0,-2);
+  }else{
+    camera.position.lerp(target,.065);
+    camera.lookAt(me.position.x,1.5,me.position.z-4);
+  }
+
+  positionSpeech();
+  renderer.render(scene,camera);
+}
+
+function resize(){
+  const w=sceneEl.clientWidth;
+  const h=sceneEl.clientHeight;
+  renderer.setSize(w,h);
+  camera.aspect=w/h;
+  camera.updateProjectionMatrix();
+}
+
+new ResizeObserver(resize).observe(sceneEl);
+resize();
+requestAnimationFrame(animate);
+
+let socket,id;
+
+function send(m){
+  if(socket?.readyState===1)
+    socket.send(JSON.stringify(m));
+}
+window.mvSend=send;
+
+function connect(){
+  socket=new WebSocket(
+    `${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`
+  );
+
+  socket.onopen=()=>{
+    $('connection').textContent='● 연결됨';
+    send({
+      type:'join',
+      name:localStorage.getItem('mv-name')||'슈댕'
+    });
+    send({
+      type:'avatar',
+      avatar:chosenAvatar(),
+      theme:chosenTheme()
+    });
+  };
+
+  socket.onclose=()=>{
+    $('connection').textContent='연결 재시도 중';
+    setTimeout(connect,2000);
+  };
+
+  socket.onmessage=e=>{
+    const m=JSON.parse(e.data);
+    window.dispatchEvent(new CustomEvent('mv:socket',{detail:m}));
+
+    if(m.type==='market-quote')applyLicensedQuote(m.quote);
+
+    if(m.type==='welcome'){
+      (m.quotes||[]).forEach(applyLicensedQuote);
+      id=m.id;
+      updateVotes(m.votes);
+      $('messages').replaceChildren();
+      m.history.forEach(addMessage);
+    }
+
+    if(m.type==='presence'){
+      $('online').textContent=m.count;
+      updatePlayers(m.players,id);
+    }
+
+    if(m.type==='chat'){
+      addMessage(m.item);
+      showSpeech(m.item);
+    }
+
+    if(m.type==='greet'){
+      showSpeech({
+        id:m.id,
+        name:m.name,
+        message:'👋 안녕하세요!',
+        time:m.time
+      });
+      if(m.id===id)showGreetingBurst();
+    }
+
+    if(m.type==='votes')updateVotes(m.votes);
+  };
+}
+connect();
+
+function addMessage(item){
+  const p=document.createElement('div');
+  p.className='msg';
+  const b=document.createElement('b');
+  b.textContent=item.name+': ';
+  p.append(b,document.createTextNode(item.message));
+  $('messages').append(p);
+  $('messages').scrollTop=$('messages').scrollHeight;
+}
+
+function updateVotes(v){
+  const total=v.long+v.short;
+  const pct=total?Math.round(v.long/total*100):50;
+  $('longbar').style.width=pct+'%';
+  $('longpct').textContent=`${pct}% LONG (${v.long})`;
+  $('shortpct').textContent=`${100-pct}% SHORT (${v.short})`;
+}
+
+$('long').onclick=()=>send({type:'vote',side:'long'});
+$('short').onclick=()=>send({type:'vote',side:'short'});
+
+$('chat-form').onsubmit=e=>{
+  e.preventDefault();
+  const input=$('chat-input');
+  send({type:'chat',message:input.value});
+  input.value='';
 };
 
-connect();
+$('rename').onclick=()=>{
+  const name=prompt('닉네임 (최대 16자)',localStorage.getItem('mv-name')||'');
+  if(name?.trim()){
+    localStorage.setItem('mv-name',name.trim().slice(0,16));
+    send({type:'join',name:name.trim()});
+  }
+};
+
+function applyLicensedQuote(q){
+  const s=symbols.find(x=>x.id===q.symbol);
+  if(!s)return;
+  const t=Date.parse(q.timestamp);
+  if(!Number.isFinite(t)||!Number.isFinite(Number(q.price))||Number(q.price)<=0)return;
+  s.price=Number(q.price);
+  s.sourceName=q.source+(q.delayed?' · 지연/종가 가능':'');
+  s.lastUpdated=new Date(t).toLocaleString('ko-KR');
+  renderAssets();
+  refreshBoard();
+}
+
+const greetButton=document.createElement('button');
+greetButton.id='greet-button';
+greetButton.type='button';
+greetButton.textContent='👋 인사하기';
+greetButton.title='다른 이용자에게 인사하기 (E)';
+sceneEl.appendChild(greetButton);
+
+greetButton.addEventListener('click',()=>send({type:'greet'}));
+
+window.addEventListener('keydown',e=>{
+  if(e.repeat||e.key.toLowerCase()!=='e'
+    ||['INPUT','TEXTAREA'].includes(document.activeElement?.tagName))return;
+  send({type:'greet'});
+});
+
+function showGreetingBurst(){
+  greetButton.classList.add('greeting-active');
+  setTimeout(()=>greetButton.classList.remove('greeting-active'),700);
+}
+
+const chatPanel=document.querySelector('.chat-panel');
+
+if(chatPanel){
+  const chatToggle=document.createElement('button');
+  chatToggle.id='chat-toggle';
+  chatToggle.type='button';
+  chatToggle.textContent='💬 채팅 접기';
+  chatPanel.insertBefore(chatToggle,chatPanel.firstChild);
+
+  chatToggle.addEventListener('click',()=>{
+    const collapsed=chatPanel.classList.toggle('chat-collapsed');
+    chatToggle.textContent=collapsed?'💬 채팅 열기':'💬 채팅 접기';
+  });
+
+  if(window.matchMedia('(max-width:650px)').matches){
+    chatPanel.classList.add('chat-collapsed');
+    chatToggle.textContent='💬 채팅 열기';
+  }
+}
+
+const celebration=document.createElement('div');
+celebration.id='win-celebration';
+celebration.hidden=true;
+celebration.setAttribute('role','status');
+celebration.innerHTML=`
+  <div class="win-confetti">🎉 🎊 🎉</div>
+  <strong>🏆 오목 승리!</strong>
+  <p></p>
+`;
+document.body.appendChild(celebration);
+
+let celebrationTimeout=null;
+const observedFinishedGames=new Set();
+let arenaStateSeen=false;
+
+function playWinFanfare(){
+  try{
+    const AudioCtx=window.AudioContext||window.webkitAudioContext;
+    if(!AudioCtx)return;
+    const ctx=new AudioCtx();
+    const notes=[523.25,659.25,783.99,1046.5];
+
+    notes.forEach((freq,i)=>{
+      const osc=ctx.createOscillator();
+      const gain=ctx.createGain();
+      osc.type='triangle';
+      osc.frequency.value=freq;
+      const t=ctx.currentTime+i*.15;
+      gain.gain.setValueAtTime(.0001,t);
+      gain.gain.exponentialRampToValueAtTime(.12,t+.025);
+      gain.gain.exponentialRampToValueAtTime(.0001,t+.32);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t+.34);
+    });
+
+    setTimeout(()=>ctx.close().catch(()=>{}),1700);
+  }catch{}
+}
+
+window.addEventListener('mv:arena-update',e=>{
+  const games=e.detail.state?.games||[];
+
+  if(!arenaStateSeen){
+    games.filter(g=>g.status==='finished')
+      .forEach(g=>observedFinishedGames.add(g.id));
+    arenaStateSeen=true;
+    return;
+  }
+
+  for(const g of games){
+    if(g.status!=='finished'||!g.winner
+      ||observedFinishedGames.has(g.id))continue;
+
+    observedFinishedGames.add(g.id);
+    const name=g.names?.[g.players?.indexOf(g.winner)]||'승자';
+    celebration.querySelector('p').textContent=name+'님이 승리했습니다!';
+    celebration.hidden=false;
+    clearTimeout(celebrationTimeout);
+    celebrationTimeout=setTimeout(()=>celebration.hidden=true,4200);
+    playWinFanfare();
+  }
+});
+
+const avatarModal=$('avatar-modal');
+const avatarChoices=$('avatar-choices');
+let pendingAvatar=chosenAvatar();
+let pendingTheme=chosenTheme();
+
+function updateAvatarEditor(){
+  avatarChoices.replaceChildren(...ANIMALS.map(([kind,name,emoji])=>{
+    const button=document.createElement('button');
+    button.type='button';
+    button.className='avatar-option'+(kind===pendingAvatar?' selected':'');
+    button.textContent=`${emoji} ${name}`;
+    button.setAttribute('aria-pressed',String(kind===pendingAvatar));
+    button.onclick=()=>{
+      pendingAvatar=kind;
+      updateAvatarEditor();
+    };
+    return button;
+  }));
+
+  document.querySelectorAll('[data-theme]').forEach(button=>{
+    button.classList.toggle('selected',button.dataset.theme===pendingTheme);
+    button.setAttribute('aria-pressed',String(button.dataset.theme===pendingTheme));
+  });
+}
+
+$('avatar-customize').onclick=()=>{
+  pendingAvatar=chosenAvatar();
+  pendingTheme=chosenTheme();
+  $('avatar-name').value=localStorage.getItem('mv-name')||'슈댕';
+  updateAvatarEditor();
+  avatarModal.hidden=false;
+};
+
+$('avatar-close').onclick=()=>avatarModal.hidden=true;
+
+avatarModal.addEventListener('click',e=>{
+  if(e.target===avatarModal)avatarModal.hidden=true;
+});
+
+document.querySelectorAll('[data-theme]').forEach(button=>{
+  button.onclick=()=>{
+    pendingTheme=button.dataset.theme;
+    updateAvatarEditor();
+  };
+});
+
+$('avatar-save').onclick=()=>{
+  const name=$('avatar-name').value.trim().slice(0,16)||'슈댕';
+  localStorage.setItem('mv-name',name);
+  localStorage.setItem('mv-avatar',pendingAvatar);
+  localStorage.setItem('mv-theme',pendingTheme);
+  replaceSelfAvatar(pendingAvatar,pendingTheme);
+  send({type:'join',name});
+  send({type:'avatar',avatar:pendingAvatar,theme:pendingTheme});
+  avatarModal.hidden=true;
+};
