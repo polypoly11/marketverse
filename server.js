@@ -10,19 +10,37 @@ app.use(express.static('public'));
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
 
+const SYMBOLS = ['BTC', 'ETH', 'SOL', 'XRP'];
+const ANIMALS = [
+  'seal', 'cat', 'dog', 'rabbit', 'fox',
+  'panda', 'bear', 'penguin', 'frog', 'hamster'
+];
+
 const clients = new Map();
 const votes = { long: 0, short: 0 };
 const history = [];
+const candleCache = new Map();
+const priceCache = new Map();
 
-const clean = s => String(s ?? '')
-  .replace(/[<>]/g, '')
-  .trim()
-  .slice(0, 180);
+function clean(value, max = 180) {
+  return String(value ?? '')
+    .replace(/[\u0000-\u001f<>]/g, '')
+    .trim()
+    .slice(0, max);
+}
 
-function broadcast(obj) {
-  const data = JSON.stringify(obj);
+function broadcast(message) {
+  const data = JSON.stringify(message);
   for (const ws of clients.keys()) {
-    if (ws.readyState === WebSocket.OPEN) ws.send(data);
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(data);
+    }
+  }
+}
+
+function send(ws, message) {
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(message));
   }
 }
 
@@ -30,166 +48,305 @@ function presence() {
   broadcast({
     type: 'presence',
     count: clients.size,
-    players: [...clients.values()].map(p => ({
-      id: p.id, name: p.name, x: p.x, z: p.z
-    }))
+    players: [...clients.values()]
+      .filter(p => p.ready)
+      .map(p => ({
+        id: p.id,
+        name: p.name,
+        animal: p.animal,
+        x: p.x,
+        z: p.z
+      }))
   });
+}
+
+function currentVotes() {
+  broadcast({ type: 'votes', votes });
 }
 
 wss.on('connection', ws => {
   const id = crypto.randomUUID();
+
   const player = {
     id,
-    name: '방문자-' + id.slice(0, 4),
+    name: '',
+    animal: 'seal',
     x: 0,
-    z: 0,
-    lastChat: 0
+    z: 9,
+    ready: false,
+    vote: null,
+    lastChat: 0,
+    lastMove: 0
   };
 
   clients.set(ws, player);
-  ws.send(JSON.stringify({ type: 'welcome', id, votes, history }));
+
+  send(ws, {
+    type: 'welcome',
+    id,
+    votes,
+    history
+  });
+
   presence();
 
   ws.on('message', raw => {
     if (raw.length > 2048) return;
 
     let m;
-    try { m = JSON.parse(raw); }
-    catch { return; }
-
-    if (m.type === 'join') {
-      player.name = clean(m.name).slice(0, 16) || player.name;
-      presence();
+    try {
+      m = JSON.parse(raw.toString());
+    } catch {
+      return;
     }
 
+    if (m.type === 'join') {
+      const name = clean(m.name, 16);
+      if (!name) return;
+
+      player.name = name;
+      player.animal = ANIMALS.includes(m.animal)
+        ? m.animal : 'seal';
+      player.ready = true;
+
+      presence();
+      return;
+    }
+
+    if (!player.ready) return;
+
     if (m.type === 'move') {
-      const x = Number(m.x), z = Number(m.z);
-      if (Number.isFinite(x) && Number.isFinite(z)) {
-        player.x = Math.max(-19, Math.min(19, x));
-        player.z = Math.max(-19, Math.min(19, z));
-        presence();
-      }
+      if (Date.now() - player.lastMove < 100) return;
+
+      const x = Number(m.x);
+      const z = Number(m.z);
+
+      if (!Number.isFinite(x) || !Number.isFinite(z)) return;
+
+      player.x = Math.max(-18, Math.min(18, x));
+      player.z = Math.max(-18, Math.min(18, z));
+      player.lastMove = Date.now();
+
+      presence();
+      return;
     }
 
     if (m.type === 'chat') {
       if (Date.now() - player.lastChat < 1200) return;
-      player.lastChat = Date.now();
 
       const message = clean(m.message);
       if (!message) return;
 
+      player.lastChat = Date.now();
+
       const item = {
         name: player.name,
+        animal: player.animal,
         message,
         time: Date.now()
       };
+
       history.push(item);
       if (history.length > 40) history.shift();
+
       broadcast({ type: 'chat', item });
+      return;
     }
 
-    if (m.type === 'vote' && ['long', 'short'].includes(m.side)) {
-      if (player.vote) votes[player.vote]--;
+    if (m.type === 'vote') {
+      if (!['long', 'short'].includes(m.side)) return;
+
+      if (player.vote === m.side) return;
+
+      if (player.vote) {
+        votes[player.vote] = Math.max(
+          0, votes[player.vote] - 1
+        );
+      }
+
       player.vote = m.side;
       votes[m.side]++;
-      broadcast({ type: 'votes', votes });
+
+      currentVotes();
     }
   });
 
   ws.on('close', () => {
-    if (player.vote) votes[player.vote]--;
+    if (player.vote) {
+      votes[player.vote] = Math.max(
+        0, votes[player.vote] - 1
+      );
+      currentVotes();
+    }
+
     clients.delete(ws);
-    broadcast({ type: 'votes', votes });
     presence();
+  });
+
+  ws.on('error', error => {
+    console.error('WebSocket:', error.message);
   });
 });
 
-// 실시간 가격: Coinbase
+async function cachedFetch(key, ttl, getData) {
+  const now = Date.now();
+  const existing = key.startsWith('price:')
+    ? priceCache.get(key)
+    : candleCache.get(key);
+
+  if (existing && now - existing.time < ttl) {
+    return existing.data;
+  }
+
+  const data = await getData();
+  const cache = key.startsWith('price:')
+    ? priceCache : candleCache;
+
+  cache.set(key, { data, time: now });
+  return data;
+}
+
 app.get('/api/price/:symbol', async (req, res) => {
   const symbol = req.params.symbol.toUpperCase();
-  if (!['BTC', 'ETH', 'SOL', 'XRP'].includes(symbol)) {
-    return res.sendStatus(404);
+
+  if (!SYMBOLS.includes(symbol)) {
+    return res.status(404).json({ error: 'Unknown symbol' });
   }
 
   try {
-    const response = await fetch(
-      `https://api.coinbase.com/v2/prices/${symbol}-USD/spot`,
-      { signal: AbortSignal.timeout(9000) }
-    );
-    if (!response.ok) throw Error('Price API error');
+    const data = await cachedFetch(
+      `price:${symbol}`,
+      10000,
+      async () => {
+        const response = await fetch(
+          `https://api.coinbase.com/v2/prices/${symbol}-USD/spot`,
+          { signal: AbortSignal.timeout(9000) }
+        );
 
-    const data = await response.json();
-    res.set('Cache-Control', 'no-store').json({
-      price: data.data.amount
+        if (!response.ok) {
+          throw new Error(`Price HTTP ${response.status}`);
+        }
+
+        const json = await response.json();
+        const price = Number(json?.data?.amount);
+
+        if (!Number.isFinite(price)) {
+          throw new Error('Invalid price');
+        }
+
+        return { price };
+      }
+    );
+
+    res.set('Cache-Control', 'no-store').json(data);
+  } catch (error) {
+    console.error('Price:', symbol, error.message);
+    res.status(502).json({
+      error: 'Price provider unavailable'
     });
-  } catch {
-    res.status(502).json({ error: 'Price provider unavailable' });
   }
 });
 
-// 캔들 차트: Coinbase OHLC
 app.get('/api/candles/:symbol', async (req, res) => {
   const symbol = req.params.symbol.toUpperCase();
   const granularity = Number(req.query.granularity);
-  const limit = Math.min(300, Math.max(2, Number(req.query.limit) || 96));
+  const requestedLimit = Number(req.query.limit);
+  const limit = Number.isFinite(requestedLimit)
+    ? Math.min(300, Math.max(2, Math.floor(requestedLimit)))
+    : 96;
 
   if (
-    !['BTC', 'ETH', 'SOL', 'XRP'].includes(symbol) ||
+    !SYMBOLS.includes(symbol) ||
     ![60, 900, 3600].includes(granularity)
   ) {
-    return res.sendStatus(400);
+    return res.status(400).json({
+      error: 'Invalid candle request'
+    });
   }
 
-  const end = Date.now();
-  const start = end - granularity * limit * 1000;
+  const key = `candles:${symbol}:${granularity}:${limit}`;
 
   try {
-    const url = new URL(
-      `https://api.exchange.coinbase.com/products/${symbol}-USD/candles`
-    );
-    url.searchParams.set('granularity', String(granularity));
-    url.searchParams.set('start', new Date(start).toISOString());
-    url.searchParams.set('end', new Date(end).toISOString());
+    const data = await cachedFetch(key, 45000, async () => {
+      const end = Date.now();
+      const start = end - granularity * limit * 1000;
 
-    const response = await fetch(url, {
-      headers: { 'User-Agent': 'JMC-Invest-Lounge/1.0' },
-      signal: AbortSignal.timeout(10000)
+      const url = new URL(
+        `https://api.exchange.coinbase.com/products/${symbol}-USD/candles`
+      );
+
+      url.searchParams.set(
+        'start',
+        new Date(start).toISOString()
+      );
+      url.searchParams.set(
+        'end',
+        new Date(end).toISOString()
+      );
+      url.searchParams.set(
+        'granularity',
+        String(granularity)
+      );
+
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'JMC-Invest-Lounge/1.0'
+        },
+        signal: AbortSignal.timeout(10000)
+      });
+
+      if (!response.ok) {
+        throw new Error(`Candle HTTP ${response.status}`);
+      }
+
+      const raw = await response.json();
+
+      if (!Array.isArray(raw)) {
+        throw new Error('Invalid candle response');
+      }
+
+      const candles = raw
+        .filter(a => Array.isArray(a) && a.length >= 5)
+        .map(a => ({
+          time: Number(a[0]),
+          low: Number(a[1]),
+          high: Number(a[2]),
+          open: Number(a[3]),
+          close: Number(a[4])
+        }))
+        .filter(c =>
+          [c.time, c.low, c.high, c.open, c.close]
+            .every(Number.isFinite)
+        )
+        .sort((a, b) => a.time - b.time)
+        .slice(-limit);
+
+      if (!candles.length) {
+        throw new Error('Empty candle data');
+      }
+
+      return { candles };
     });
 
-    if (!response.ok) throw Error('Candle API error');
-    const raw = await response.json();
-
-    const candles = raw
-      .filter(a => Array.isArray(a) && a.length >= 5)
-      .map(a => ({
-        time: Number(a[0]),
-        low: Number(a[1]),
-        high: Number(a[2]),
-        open: Number(a[3]),
-        close: Number(a[4])
-      }))
-      .filter(c =>
-        [c.time, c.open, c.high, c.low, c.close]
-          .every(Number.isFinite)
-      )
-      .sort((a, b) => a.time - b.time)
-      .slice(-limit);
-
-    if (!candles.length) throw Error('Empty candles');
-
-    res.set('Cache-Control', 'public, max-age=45')
-      .json({ candles });
+    res.set('Cache-Control', 'public, max-age=30')
+      .json(data);
   } catch (error) {
-    console.error('Candle error:', symbol, error.message);
-    res.status(502).json({ error: 'Chart provider unavailable' });
+    console.error('Candles:', symbol, error.message);
+    res.status(502).json({
+      error: 'Chart provider unavailable'
+    });
   }
 });
 
 app.get('/api/health', (_req, res) => {
-  res.json({ ok: true, online: clients.size });
+  res.json({
+    ok: true,
+    online: clients.size
+  });
 });
 
 const port = Number(process.env.PORT) || 3000;
-server.listen(port, () => {
-  console.log(`http://localhost:${port}`);
+
+server.listen(port, '0.0.0.0', () => {
+  console.log(`JMC Lounge listening on port ${port}`);
 });
