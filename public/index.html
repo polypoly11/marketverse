@@ -59,7 +59,7 @@
     }
   </style>
 
-  <!-- 모바일 마법 / 점프 / 앉기 버튼 스타일 -->
+  <!-- 모바일 마법 / 점프 버튼 스타일 -->
   <style>
     #mobile-actions {
       display: none;
@@ -112,6 +112,11 @@
       font-size: 10px;
       color: #a8bfd2;
       line-height: 1;
+    }
+
+    /* 동적으로 삽입된 버튼이 있어도 모바일 C 버튼은 숨김 */
+    #mobile-actions [data-action="sit"] {
+      display: none !important;
     }
 
     .mobile-action-btn[data-action="magic"] {
@@ -317,17 +322,6 @@
             <strong>SPACE</strong>
             <small>점프</small>
           </button>
-
-<!-- C : 앉기 -->
-<button
-  class="mobile-action-btn"
-  data-action="sit"
-  type="button"
-  aria-label="앉기"
->
-  <strong>C</strong>
-  <small>앉기</small>
-</button>
 
         </div>
 
@@ -639,11 +633,6 @@
         jump: {
           key: ' ',
           code: 'Space'
-        },
-
-        sit: {
-          key: 'c',
-          code: 'KeyC'
         }
       };
 
