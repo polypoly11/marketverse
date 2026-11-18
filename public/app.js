@@ -899,12 +899,12 @@ function installSceneLiveChat() {
   toggle.className = 'jmc-chat-toggle';
   toggle.setAttribute('aria-controls','messages');
   toggle.setAttribute('aria-expanded','false');
-  toggle.textContent = '펼치기 ▾';
+  toggle.textContent = '펼치기 ▲';
   panel.appendChild(toggle);
 
   toggle.addEventListener('click',()=>{
     const collapsed = panel.classList.toggle('jmc-chat-collapsed');
-    toggle.textContent = collapsed ? '펼치기 ▾' : '접기 ▴';
+    toggle.textContent = collapsed ? '펼치기 ▲' : '접기 ▼';
     toggle.setAttribute('aria-expanded',String(!collapsed));
   });
 
