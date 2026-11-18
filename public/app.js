@@ -308,6 +308,83 @@ function makeAnimal(id){
   return root;
 }
 
+// ====================================================
+// 캐릭터 머리 위 HP 바 (본인 및 다른 참가자)
+// ====================================================
+function addCharacterHpBar(avatar,hp=100,maxHp=100){
+  const canvas=document.createElement('canvas');
+  canvas.width=256;
+  canvas.height=80;
+
+  const texture=new THREE.CanvasTexture(canvas);
+  texture.colorSpace=THREE.SRGBColorSpace;
+
+  const sprite=new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map:texture,
+      transparent:true,
+      depthTest:false,
+      depthWrite:false
+    })
+  );
+
+  sprite.position.set(0,3.6,0);
+  sprite.scale.set(2.4,.75,1);
+  sprite.renderOrder=90;
+  avatar.add(sprite);
+
+  avatar.userData.hpBar={
+    canvas,texture,sprite,hp:null,maxHp:null
+  };
+  setCharacterHpBar(avatar,hp,maxHp);
+}
+
+function setCharacterHpBar(avatar,hp,maxHp=100){
+  const bar=avatar?.userData.hpBar;
+  if(!bar)return;
+
+  const max=Math.max(1,Number(maxHp)||100);
+  const current=Math.max(0,
+    Math.min(max,Math.round(Number(hp)||0))
+  );
+  if(bar.hp===current && bar.maxHp===max)return;
+
+  bar.hp=current;
+  bar.maxHp=max;
+
+  const ctx=bar.canvas.getContext('2d');
+  ctx.clearRect(0,0,256,80);
+  ctx.fillStyle='rgba(8,18,30,.88)';
+  ctx.beginPath();
+  ctx.roundRect(8,6,240,68,12);
+  ctx.fill();
+
+  ctx.textAlign='center';
+  ctx.font='bold 24px Arial';
+  ctx.fillStyle='#fff';
+  ctx.fillText(`HP ${current} / ${max}`,128,32);
+
+  ctx.fillStyle='#57323d';
+  ctx.fillRect(20,44,216,18);
+  ctx.fillStyle=current/max>.5?'#43de9a':
+    current/max>.25?'#f0bc52':'#f16c7c';
+  ctx.fillRect(20,44,216*current/max,18);
+  ctx.strokeStyle='rgba(255,255,255,.65)';
+  ctx.lineWidth=1;
+  ctx.strokeRect(20,44,216,18);
+
+  bar.texture.needsUpdate=true;
+}
+
+function removeCharacterHpBar(avatar){
+  const bar=avatar?.userData.hpBar;
+  if(!bar)return;
+  avatar.remove(bar.sprite);
+  bar.sprite.material.dispose();
+  bar.texture.dispose();
+  delete avatar.userData.hpBar;
+}
+
 const previewScene = new THREE.Scene();
 const previewCamera = new THREE.PerspectiveCamera(
   35,1,.1,40
@@ -436,6 +513,14 @@ let activeRange = '1d';
 let socket = null;
 let myId = null;
 let yaw = Math.PI;
+let defeated = false;
+let reentryRequired = false;
+let myHp = 100;
+
+try{
+  reentryRequired =
+    sessionStorage.getItem('jmc-reentry-required')==='1';
+}catch{}
 
 try{
   const p = JSON.parse(
@@ -490,10 +575,14 @@ function saveProfile(){
 
   updateMyAvatar();
 
-  if(first){
+  if(first || reentryRequired){
     resetToBoard();
   }
 
+  reentryRequired=false;
+  try{
+    sessionStorage.removeItem('jmc-reentry-required');
+  }catch{}
   sendProfile();
 }
 
@@ -511,7 +600,7 @@ $('nickname').addEventListener('keydown',e=>{
   if(e.key==='Enter')saveProfile();
 });
 
-if(profile){
+if(profile && !reentryRequired){
   $('profile-modal').hidden = true;
   $('my-profile').textContent =
     `${animal(profile.animal).emoji} ${profile.name}`;
@@ -1136,9 +1225,11 @@ function updateMyAvatar(){
       removeBubble(myId);
     }
     scene.remove(myAvatar);
+    removeCharacterHpBar(myAvatar);
   }
 
   myAvatar = makeAnimal(profile.animal);
+  addCharacterHpBar(myAvatar,myHp);
   myAvatar.position.copy(pos);
   myAvatar.rotation.y = dir;
   myAvatar.userData.targetDirection = dir;
@@ -1160,10 +1251,13 @@ function updateOthers(players){
       avatar.userData.animal!==p.animal
     ){
       if(avatar){
+        removeBubble(p.id);
         scene.remove(avatar);
+        removeCharacterHpBar(avatar);
       }
 
       avatar = makeAnimal(p.animal);
+      addCharacterHpBar(avatar,p.hp ?? 100);
       scene.add(avatar);
       others.set(p.id,avatar);
     }
@@ -1174,6 +1268,7 @@ function updateOthers(players){
       Number(p.z)||0
     );
 
+    setCharacterHpBar(avatar,p.hp ?? 100);
     avatar.userData.seated =
       p.seated===true;
 
@@ -1187,12 +1282,13 @@ function updateOthers(players){
     if(!seen.has(id)){
       removeBubble(id);
       scene.remove(a);
+      removeCharacterHpBar(a);
       others.delete(id);
     }
   }
 }
 
-if(profile){
+if(profile && !reentryRequired){
   updateMyAvatar();
 }
 
@@ -1337,7 +1433,8 @@ function showBubble(item){
 
   const sprite = new THREE.Sprite(material);
 
-  sprite.position.set(0,3.65,0);
+  // HP 바와 겹치지 않도록 채팅 말풍선을 더 위에 배치한다.
+  sprite.position.set(0,5.15,0);
   sprite.scale.set(3.8,1.58,1);
   sprite.renderOrder = 100;
 
@@ -1411,7 +1508,7 @@ window.addEventListener('keydown',e=>{
     ['INPUT','TEXTAREA'].includes(
       document.activeElement?.tagName
     ) ||
-    !$('profile-modal').hidden
+    !$('profile-modal').hidden || defeated || reentryRequired
   ){
     return;
   }
@@ -1512,7 +1609,7 @@ let lastSent = 0;
 let walkTime = 0;
 
 function sendMove(force=false){
-  if(!myAvatar)return;
+  if(!myAvatar || defeated || reentryRequired)return;
 
   const now = performance.now();
   if(!force && now-lastSent<120)return;
@@ -1558,7 +1655,7 @@ function animate(now){
 
   if(
     myAvatar &&
-    $('profile-modal').hidden
+    $('profile-modal').hidden && !defeated && !reentryRequired
   ){
     const f =
       Number(held('w')||held('arrowup'))-
@@ -1715,7 +1812,7 @@ function send(m){
 }
 
 function sendProfile(){
-  if(!profile)return;
+  if(!profile || defeated || reentryRequired)return;
 
   send({
     type:'join',
@@ -1776,6 +1873,7 @@ function updateVotes(v){
 }
 
 function connect(){
+  if(defeated)return;
   const protocol =
     location.protocol==='https:' ? 'wss' : 'ws';
 
@@ -1790,10 +1888,16 @@ function connect(){
     sendProfile();
   };
 
-  socket.onclose = ()=>{
+  socket.onclose = event=>{
+    if(event.code===4001){
+      showDeathPopup();
+    }
+    if(defeated){
+      $('connection').textContent='퇴장';
+      return;
+    }
     $('connection').textContent =
       '연결 재시도 중';
-
     setTimeout(connect,2000);
   };
 
@@ -1831,6 +1935,23 @@ function connect(){
     // PC·모바일 이용자의 마법 공격 동기화
     if(m.type==='magic'){
       spawnRemoteMagic(m);
+      return;
+    }
+
+    if(m.type==='hp'){
+      updateHpHud(m.hp,m.maxHp);
+    }
+
+    if(m.type==='player_hp'){
+      const avatar=m.id===myId
+        ? myAvatar : others.get(m.id);
+      if(avatar){
+        setCharacterHpBar(avatar,m.hp,m.maxHp);
+      }
+    }
+
+    if(m.type==='death'){
+      showDeathPopup();
       return;
     }
 
@@ -1960,7 +2081,7 @@ const MAGIC_LIFETIME = 1100;
 
 // 내 캐릭터가 마법 발사
 function castMagic(){
-  if(!myAvatar)return;
+  if(!myAvatar || defeated || reentryRequired)return;
 
   const direction = new THREE.Vector3(
     Math.sin(myAvatar.rotation.y),
@@ -2092,7 +2213,7 @@ window.addEventListener('keydown',e=>{
     return;
   }
 
-  if(!$('profile-modal').hidden){
+  if(!$('profile-modal').hidden || defeated || reentryRequired){
     return;
   }
 
@@ -2123,7 +2244,7 @@ function updateMagic(now){
   previousMagicFrame = now;
 
   if(
-    magicPressed &&
+    magicPressed && !defeated && !reentryRequired &&
     myAvatar &&
     $('profile-modal').hidden &&
     now-lastMagicTime>=MAGIC_INTERVAL
@@ -2183,3 +2304,102 @@ function updateMagic(now){
 }
 
 requestAnimationFrame(updateMagic);
+
+// ====================================================
+// 전투 HP HUD / 사망 팝업 / 입장 화면으로 자동 복귀
+// 서버가 HP와 명중 판정을 관리하며, 새 입장 시 HP 100으로 시작한다.
+// ====================================================
+const hpHud=document.createElement('div');
+hpHud.id='jmc-hp-hud';
+hpHud.style.cssText=`position:absolute;z-index:20;left:12px;top:12px;
+  padding:9px 12px;width:min(185px,42%);box-sizing:border-box;
+  border:1px solid rgba(212,183,128,.7);border-radius:10px;
+  background:rgba(7,20,33,.91);color:white;pointer-events:none;
+  font:700 14px Arial,sans-serif;`;
+hpHud.innerHTML=`<div style="display:flex;justify-content:space-between;gap:8px">
+  <span>❤️ HP</span><span id="jmc-hp-text">100 / 100</span></div>
+  <div style="height:9px;margin-top:7px;background:#4e2630;border-radius:6px;overflow:hidden">
+  <div id="jmc-hp-fill" style="height:100%;width:100%;background:#43de9a;transition:width .15s"></div></div>`;
+sceneEl.appendChild(hpHud);
+
+function updateHpHud(hp,maxHp=100){
+  const max=Math.max(1,Number(maxHp)||100);
+  const remaining=Math.max(0,Math.min(max,Number(hp)||0));
+  myHp=remaining;
+  const percent=(remaining/max)*100;
+  $('jmc-hp-text').textContent=`${remaining} / ${max}`;
+  $('jmc-hp-fill').style.width=percent+'%';
+  $('jmc-hp-fill').style.background=percent<=25?'#f16c7c':
+    percent<=55?'#f0bc52':'#43de9a';
+  if(myAvatar)setCharacterHpBar(myAvatar,remaining,max);
+}
+
+function showDeathPopup(){
+  if(defeated)return;
+  defeated=true;
+  magicPressed=false;
+  keys.clear();
+  touchCounts.clear();
+  if(myAvatar)myAvatar.visible=false;
+  updateHpHud(0,100);
+  $('connection').textContent='퇴장';
+  if(socket?.readyState===WebSocket.OPEN){
+    socket.close(4001,'HP depleted');
+  }
+
+  const overlay=document.createElement('div');
+  overlay.id='jmc-death-overlay';
+  overlay.style.cssText=`position:fixed;inset:0;z-index:100000;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(2,6,13,.87);padding:20px;box-sizing:border-box;`;
+
+  const dialog=document.createElement('div');
+  dialog.style.cssText=`max-width:390px;width:100%;text-align:center;
+    background:#13253a;border:1px solid #bc7797;border-radius:18px;
+    padding:36px 24px;color:#fff;box-shadow:0 0 50px rgba(155,38,75,.3);
+    font-family:Arial,sans-serif;`;
+  const title=document.createElement('h2');
+  title.textContent='[사망하셨습니다]';
+  title.style.cssText='font-size:28px;color:#ff889d;margin:0 0 15px;';
+  const message=document.createElement('p');
+  message.textContent='HP가 모두 소모되었습니다. 마법 공격을 100회 적중당하면 사망합니다.';
+  message.style.cssText='font-size:15px;line-height:1.65;margin:0 0 18px;color:#d5dfeb;';
+  const countdown=document.createElement('p');
+  countdown.textContent='3초 후 입장 화면으로 이동합니다.';
+  countdown.style.cssText='font-size:14px;margin:0 0 22px;color:#f1c7d1;';
+  const button=document.createElement('button');
+  button.type='button';
+  button.textContent='지금 입장 화면으로 이동';
+  button.style.cssText=`cursor:pointer;border:0;border-radius:10px;
+    background:#dfc18d;color:#182537;font-size:16px;font-weight:700;
+    padding:13px 28px;`;
+
+  let transitioning=false;
+  let seconds=3;
+  let timerId;
+  const returnToEntry=()=>{
+    if(transitioning)return;
+    transitioning=true;
+    clearInterval(timerId);
+    try{
+      sessionStorage.setItem('jmc-reentry-required','1');
+    }catch{
+      // 세션 저장소가 막혀 있으면 프로필 저장을 해제한다.
+      try{localStorage.removeItem('jmc-profile');}catch{}
+    }
+    location.reload();
+  };
+  button.addEventListener('click',returnToEntry);
+  dialog.append(title,message,countdown,button);
+  overlay.append(dialog);
+  document.body.appendChild(overlay);
+
+  timerId=setInterval(()=>{
+    seconds--;
+    if(seconds<=0){
+      returnToEntry();
+    }else{
+      countdown.textContent=`${seconds}초 후 입장 화면으로 이동합니다.`;
+    }
+  },1000);
+}
