@@ -967,7 +967,11 @@ function installSceneLiveChat() {
       margin:0 !important;
       padding:0 !important;
       white-space:nowrap !important;
-      overflow:hidden !important;
+      overflow-x:hidden !important;
+overflow-y:auto !important;
+overscroll-behavior:contain;
+-webkit-overflow-scrolling:touch;
+touch-action:pan-y;
       text-overflow:ellipsis !important;
       overflow-wrap:normal !important;
     }
