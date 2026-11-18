@@ -48,6 +48,19 @@ const votes = {
 const history = [];
 
 // ========================================
+// 실시간 마법 전투 규칙
+// HP 100 / 마법 1회 명중 시 HP -1
+// 명중은 서버에서 판정한다.
+// ========================================
+const MAX_HP = 100;
+const MAGIC_SPEED = 13;               // 초당 이동 거리
+const MAGIC_LIFETIME = 1100;          // 마법탄 유지 시간(ms)
+const MAGIC_FIRE_INTERVAL = 180;      // 최소 발사 간격(ms)
+const MAGIC_HIT_RADIUS = 0.72;        // 명중 범위(수평)
+const magicShots = [];
+
+
+// ========================================
 // 한국시간 자정 채팅 초기화
 // ========================================
 
@@ -140,7 +153,8 @@ function presence() {
       y,
       z,
       direction,
-      seated
+      seated,
+      hp
     }) => ({
       id,
       name,
@@ -149,7 +163,8 @@ function presence() {
       y,
       z,
       direction,
-      seated
+      seated,
+      hp
     }));
 
   broadcast({
@@ -187,8 +202,9 @@ wss.on('connection', (ws, req) => {
     lastChat: 0,
     lastMove: 0,
 
-    // 마법 연속 공격 간격 관리
-    lastMagic: 0
+    // 마법 연속 공격 간격 및 체력
+    lastMagic: 0,
+    hp: MAX_HP
   };
 
   clients.set(ws, p);
@@ -232,6 +248,12 @@ wss.on('connection', (ws, req) => {
 
     if (m.type === 'join') {
 
+      // HP가 0이면 동일 연결에서 부활할 수 없다.
+      // 사망 후 새 WebSocket으로 재입장해야 한다.
+      if (p.hp <= 0) {
+        return;
+      }
+
       const name = clean(m.name, 16);
 
       if (!name) {
@@ -245,6 +267,14 @@ wss.on('connection', (ws, req) => {
         : 'seal';
 
       p.ready = true;
+
+      // 프로필을 수정하거나 join 메시지가 반복돼도
+      // 기존 HP는 초기화하지 않는다.
+      send(ws, {
+        type: 'hp',
+        hp: p.hp,
+        maxHp: MAX_HP
+      });
 
       presence();
 
@@ -323,11 +353,27 @@ wss.on('connection', (ws, req) => {
 
       // 공격 간격 제한
       // A키를 누르고 있으면 약 0.2초마다 발사
-      if (now - p.lastMagic < 180) {
+      if (now - p.lastMagic < MAGIC_FIRE_INTERVAL) {
         return;
       }
 
       p.lastMagic = now;
+
+      // 클라이언트가 보내는 데미지나 명중 결과를 믿지 않는다.
+      // 서버에 저장된 위치와 방향으로 공격을 생성한다.
+      const dirX = Math.sin(p.direction);
+      const dirZ = Math.cos(p.direction);
+
+      magicShots.push({
+        owner: p,
+        x: p.x + dirX * 0.85,
+        z: p.z + dirZ * 0.85,
+        y: p.y + 1.15,
+        dirX,
+        dirZ,
+        born: now,
+        prevTime: now
+      });
 
       // 서버에 저장된 캐릭터 위치와 방향 사용
       // 클라이언트가 임의의 공격자 ID를 지정할 수 없음
@@ -489,6 +535,106 @@ wss.on('connection', (ws, req) => {
   });
 
 });
+
+// ========================================
+// 마법 명중 판정 및 HP 실시간 동기화
+// 서버에서 40ms 간격으로 마법탄을 이동시킨다.
+// 각 마법탄은 최대 1명에게 HP 1 피해를 준다.
+// ========================================
+function updateMagicCollisions() {
+  const now = Date.now();
+  const activePlayers = [...clients.entries()]
+    .filter(([, player]) => player.ready && player.hp > 0);
+
+  for (let i = magicShots.length - 1; i >= 0; i--) {
+    const shot = magicShots[i];
+
+    // 발사자가 퇴장했거나 마법탄 수명이 끝나면 제거한다.
+    if (!shot.owner.ready || now - shot.born > MAGIC_LIFETIME) {
+      magicShots.splice(i, 1);
+      continue;
+    }
+
+    const dt = Math.max(
+      0,
+      Math.min((now - shot.prevTime) / 1000, 0.12)
+    );
+    shot.prevTime = now;
+
+    const previousX = shot.x;
+    const previousZ = shot.z;
+    shot.x += shot.dirX * MAGIC_SPEED * dt;
+    shot.z += shot.dirZ * MAGIC_SPEED * dt;
+
+    const dx = shot.x - previousX;
+    const dz = shot.z - previousZ;
+    const lengthSq = dx * dx + dz * dz;
+    let hit = false;
+
+    for (const [targetWs, target] of activePlayers) {
+      if (!target.ready || target.hp <= 0 || target === shot.owner) {
+        continue;
+      }
+
+      // 지나가는 마법탄과 캐릭터 몸통의 높이를 비교한다.
+      if (Math.abs(shot.y - (target.y + 1.0)) > 0.85) {
+        continue;
+      }
+
+      // 프레임 사이에 마법탄이 상대를 통과하는 현상을 방지한다.
+      const t = lengthSq > 0
+        ? Math.max(0, Math.min(1,
+            ((target.x - previousX) * dx +
+             (target.z - previousZ) * dz) / lengthSq))
+        : 0;
+      const nearestX = previousX + dx * t;
+      const nearestZ = previousZ + dz * t;
+
+      if (Math.hypot(
+        target.x - nearestX,
+        target.z - nearestZ
+      ) > MAGIC_HIT_RADIUS) {
+        continue;
+      }
+
+      // 서버에서 체력을 1 감소시키고 본인에게 HP를 전송한다.
+      target.hp = Math.max(0, target.hp - 1);
+      send(targetWs, {
+        type: 'hp',
+        hp: target.hp,
+        maxHp: MAX_HP
+      });
+
+      // 다른 참가자도 해당 캐릭터 머리 위 HP 바를 갱신한다.
+      broadcast({
+        type: 'player_hp',
+        id: target.id,
+        hp: target.hp,
+        maxHp: MAX_HP
+      });
+      hit = true;
+
+      if (target.hp === 0) {
+        // 사망 즉시 접속 인원에서 제외하고 공격·이동을 차단한다.
+        target.ready = false;
+        send(targetWs, {
+          type: 'death',
+          message: '사망하셨습니다',
+          hp: 0
+        });
+        targetWs.close(4001, 'HP depleted');
+        presence();
+      }
+      break;
+    }
+
+    if (hit) {
+      magicShots.splice(i, 1);
+    }
+  }
+}
+
+setInterval(updateMagicCollisions, 40).unref();
 
 // ========================================
 // API 캐시 함수
