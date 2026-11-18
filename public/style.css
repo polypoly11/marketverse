@@ -135,3 +135,13 @@ aside{display:flex}
 #calendar-scene-button{
 display:none !important;
 }
+
+/* 경제 캘린더 영역 확대 */
+main {
+  grid-template-columns: minmax(0, 1fr) 520px;
+}
+
+.econ-frame {
+  height: 850px;
+  overflow: hidden;
+}
