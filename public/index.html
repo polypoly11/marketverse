@@ -1,73 +1,24 @@
-
 <!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>JMC 인베스트 라운지</title>
-
-  <link rel="stylesheet" href="/style.css?v=mobile-rescue-20261118-3">
-
-  <!-- 모바일 메타버스 표시 보호 설정 -->
-  <style>
-    @media screen and (max-width: 980px) {
-
-      main {
-        display: flex !important;
-        flex-direction: column !important;
-        grid-template-columns: none !important;
-      }
-
-      main > .scene-wrap {
-        display: block !important;
-        flex: none !important;
-        order: 0 !important;
-        width: 100% !important;
-        min-width: 0 !important;
-      }
-
-      main > aside {
-        display: flex !important;
-        flex-direction: column !important;
-        order: 1 !important;
-        width: 100% !important;
-      }
-
-      #scene {
-        display: block !important;
-        width: 100% !important;
-        height: 65dvh !important;
-        min-height: 390px !important;
-        position: relative !important;
-      }
-
-      #scene > canvas {
-        display: block !important;
-        width: 100% !important;
-        height: 100% !important;
-      }
-
-      #mobile-controls {
-        display: block !important;
-      }
-
-      #econ-panel,
-      .econ-panel,
-      #calendar-scene-button {
-        display: none !important;
+  <link rel="stylesheet" href="/style.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
       }
     }
-  </style>
+  </script>
 </head>
-
 <body>
-
   <header>
     <div class="logo">
       ◈ JMC <span>INVEST LOUNGE</span>
       <small>METAVERSE · LIVE CRYPTO</small>
     </div>
-
     <div class="top">
       <span class="live">● LIVE</span>
       <span>접속자 <b id="online">0</b>명</span>
@@ -76,309 +27,135 @@
   </header>
 
   <main>
-
-    <!-- 메타버스 공간 -->
     <section class="scene-wrap">
-
       <div class="scene-head">
         <div>
-          <span class="eyebrow">
-            JMC METAVERSE REST LOUNGE
-          </span>
-
+          <span class="eyebrow">JMC METAVERSE REST LOUNGE</span>
           <h1>JMC 휴식공간</h1>
-
-          <p>
-            투자자들이 함께 쉬고 대화하는 가상 라운지
-          </p>
-
-          <p>
-            PC: WASD / 방향키 · 모바일: 화면 방향키 · 드래그: 시점 회전
-          </p>
+          <p>투자자들이 함께 쉬고 대화하는 가상 라운지</p>
+          <p>PC: WASD / 방향키 · 모바일: 화면 방향키 · 드래그: 시점 회전</p>
         </div>
-
         <span class="pill">VIRTUAL LOUNGE</span>
       </div>
 
       <div id="scene">
-
-        <!-- 모바일 이동 방향키 -->
         <div id="mobile-controls" aria-label="모바일 이동 방향키">
-
-          <button
-            class="move-btn up"
-            data-key="w"
-            type="button"
-            aria-label="앞으로 이동"
-          >▲</button>
-
-          <button
-            class="move-btn left"
-            data-key="a"
-            type="button"
-            aria-label="왼쪽 이동"
-          >◀</button>
-
-          <button
-            class="move-btn down"
-            data-key="s"
-            type="button"
-            aria-label="뒤로 이동"
-          >▼</button>
-
-          <button
-            class="move-btn right"
-            data-key="d"
-            type="button"
-            aria-label="오른쪽 이동"
-          >▶</button>
-
+          <button class="move-btn up" data-key="w" type="button">▲</button>
+          <button class="move-btn left" data-key="a" type="button">◀</button>
+          <button class="move-btn down" data-key="s" type="button">▼</button>
+          <button class="move-btn right" data-key="d" type="button">▶</button>
         </div>
       </div>
-
-      <button
-        id="calendar-scene-button"
-        type="button"
-        aria-label="미국 중요 경제지표 캘린더 보기"
-      >
-        🇺🇸 미국 경제지표 ★★★
-        <span>캘린더 열기</span>
-      </button>
 
       <div class="scene-bottom">
         <span id="my-profile">캐릭터 설정 대기</span>
         <span id="connection">서버 연결 중</span>
       </div>
-
     </section>
 
-    <!-- 커뮤니티 및 시장 정보 -->
     <aside>
-
-      <!-- 경제 캘린더: PC에만 표시 -->
-      <section class="panel econ-panel" id="econ-panel">
-
+      <section class="panel econ-panel">
         <div class="panel-head">
           <h2>🇺🇸 US ECONOMIC CALENDAR</h2>
           <span>HIGH IMPACT ★★★</span>
         </div>
-
-        <p class="econ-desc">
-          인베스팅닷컴 공식 경제 캘린더 · 미국 지표 · 중요도 높음
-        </p>
-
+        <p class="econ-desc">인베스팅닷컴 공식 경제 캘린더 · 미국 지표 · 중요도 높음</p>
         <div class="econ-frame">
           <iframe
             id="investing-calendar"
+            src="https://sslecal2.investing.com?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&importance=3&features=datepicker,timezone&countries=5&calType=week&timeZone=88&lang=18"
             title="인베스팅닷컴 미국 경제 캘린더"
             loading="lazy"
             referrerpolicy="strict-origin-when-cross-origin"
             scrolling="yes"
           ></iframe>
         </div>
-
-        <p class="econ-credit">
-          Real Time Economic Calendar provided by
-          <a
-            href="https://www.investing.com/"
-            target="_blank"
-            rel="noopener noreferrer"
-          >Investing.com</a>.
-        </p>
-
-        <p class="econ-note" id="econ-note">
-          공식 위젯의 표시 여부와 필터 동작은 제공사 설정에 따릅니다.
-        </p>
-
-        <a
-          class="econ-link"
-          href="https://www.investing.com/webmaster-tools/economic-calendar"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          공식 위젯 설정 열기 ↗
-        </a>
-
+        <p class="econ-credit">Real Time Economic Calendar provided by <a href="https://kr.investing.com/" target="_blank" rel="noopener noreferrer">Investing.com</a>.</p>
       </section>
 
-      <!-- 실시간 채팅 -->
       <section class="panel chat-panel">
-
         <div class="panel-head">
           <h2>LIVE CHAT</h2>
           <span>COMMUNITY</span>
         </div>
-
         <div id="messages"></div>
-
         <form id="chat-form">
-          <input
-            id="chat-input"
-            maxlength="180"
-            placeholder="투자자들과 대화해 보세요"
-            autocomplete="off"
-          >
+          <input id="chat-input" maxlength="180" placeholder="투자자들과 대화해 보세요" autocomplete="off" />
           <button type="submit">전송</button>
         </form>
-
       </section>
 
-      <!-- 암호화폐 시세 -->
       <section class="panel">
-
         <div class="panel-head">
           <h2>LIVE CANDLE MARKET</h2>
-          <span>BTC / ETH / SOL / XRP</span>
+          <span>BTC / ETH / SOL</span>
         </div>
-
         <div id="assets"></div>
-
-        <p class="disclaimer">
-          Coinbase USD 시세 기준 · 데이터는 지연되거나 일시적으로 제공되지 않을 수 있습니다.
-        </p>
-
+        <p class="disclaimer">Coinbase USD 시세 기준 · 데이터는 지연되거나 일시적으로 제공되지 않을 수 있습니다.</p>
       </section>
 
-      <!-- 시장 심리 투표 -->
       <section class="panel">
-
         <div class="panel-head">
           <h2>MARKET SENTIMENT</h2>
           <span>LONG / SHORT</span>
         </div>
-
         <p class="sub">지금 시장 방향은?</p>
-
         <div class="vote-buttons">
           <button id="long" type="button">▲ LONG</button>
           <button id="short" type="button">▼ SHORT</button>
         </div>
-
-        <div class="bar">
-          <div id="longbar"></div>
-        </div>
-
+        <div class="bar"><div id="longbar"></div></div>
         <div class="vote-label">
           <span id="longpct">50% LONG</span>
           <span id="shortpct">50% SHORT</span>
         </div>
-
       </section>
-
     </aside>
-
   </main>
 
-  <!-- 캐릭터 선택 화면 -->
   <div id="profile-modal" class="modal">
-
     <div class="profile-card">
-
       <span class="eyebrow">WELCOME TO JMC</span>
-
       <h2>나만의 3D 동물 캐릭터</h2>
-
-      <p>
-        닉네임을 입력하고 15종의 동물 중 하나를 선택하세요.
-        미리보기 캐릭터를 손가락이나 마우스로 돌려볼 수 있습니다.
-      </p>
+      <p>닉네임을 입력하고 15종의 동물 중 하나를 선택하세요.</p>
 
       <label for="nickname">닉네임</label>
-
-      <input
-        id="nickname"
-        type="text"
-        maxlength="16"
-        placeholder="닉네임을 입력하세요"
-        autocomplete="off"
-      >
+      <input id="nickname" type="text" maxlength="16" placeholder="닉네임을 입력하세요" autocomplete="off" />
 
       <div class="preview-wrap">
         <div id="animal-preview"></div>
-        <span class="preview-hint">
-          ↔ 드래그하여 360° 회전
-        </span>
+        <span class="preview-hint">↔ 드래그하여 360° 회전</span>
       </div>
 
       <div id="selected-animal-name">아기물개</div>
 
-      <label class="animal-title">
-        동물 캐릭터 15종
-      </label>
-
+      <label class="animal-title">동물 캐릭터 15종</label>
       <div id="animal-grid" class="animal-grid"></div>
 
       <div id="profile-error" class="form-error"></div>
-
-      <button
-        id="enter-lounge"
-        class="enter-btn"
-        type="button"
-      >
-        JMC 라운지 입장하기
-      </button>
-
-      <button
-        id="cancel-profile"
-        class="cancel-btn"
-        type="button"
-        hidden
-      >
-        취소
-      </button>
-
+      <button id="enter-lounge" class="enter-btn" type="button">JMC 라운지 입장하기</button>
+      <button id="cancel-profile" class="cancel-btn" type="button" hidden>취소</button>
     </div>
   </div>
 
-  <!-- 차트 상세 화면 -->
   <div id="detail" class="modal" hidden>
-
     <div class="modal-card">
-
       <button id="close" type="button">✕</button>
-
       <span class="eyebrow">ASSET DETAIL</span>
-
       <h2 id="detail-name"></h2>
-
       <div id="detail-price"></div>
-
       <div class="chart-toolbar">
-
-        <button data-range="1h" type="button">
-          1시간
-        </button>
-
-        <button data-range="1d" class="selected" type="button">
-          1일
-        </button>
-
-        <button data-range="1w" type="button">
-          1주
-        </button>
-
+        <button data-range="1h" type="button">1시간</button>
+        <button data-range="1d" type="button" class="selected">1일</button>
+        <button data-range="1w" type="button">1주</button>
       </div>
-
-      <canvas
-        id="detail-chart"
-        width="760"
-        height="360"
-      ></canvas>
-
+      <canvas id="detail-chart" width="760" height="360"></canvas>
       <div id="chart-status"></div>
-
-      <p id="detail-note">
-        Coinbase OHLC 캔들 데이터 · 투자 참고용
-      </p>
-
+      <p id="detail-note">Coinbase OHLC 캔들 데이터 · 투자 참고용</p>
     </div>
   </div>
 
-  <script src="/investing-widget.js"></script>
-  <script
-    type="module"
-    src="/app.js?v=mobile-rescue-20261118-3"
-  ></script>
-
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/app.js"></script>
 </body>
 </html>
