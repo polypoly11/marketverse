@@ -1,16 +1,13 @@
 {
   "name": "jmc-invest-lounge",
-  "version": "1.2.0",
-  "private": true,
-  "type": "module",
+  "version": "1.0.0",
+  "description": "JMC Invest Lounge metaverse",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
-  "engines": {
-    "node": ">=20"
-  },
   "dependencies": {
-    "express": "^4.21.2",
-    "ws": "^8.18.0"
+    "express": "^4.19.2",
+    "socket.io": "^4.8.1"
   }
 }
