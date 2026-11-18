@@ -854,7 +854,10 @@ document.querySelectorAll('[data-range]')
 
       document.querySelectorAll('[data-range]')
         .forEach(x=>{
-          x.classList.toggle('selected',x===b);
+          x.classList.toggle(
+            'selected',
+            x===b
+          );
         });
 
       updateDetailChart();
@@ -1938,6 +1941,11 @@ function connect(){
       return;
     }
 
+    if(m.type==='magic_hit'){
+      handleMagicHit(m);
+      return;
+    }
+
     if(m.type==='hp'){
       updateHpHud(m.hp,m.maxHp);
     }
@@ -2079,126 +2087,272 @@ const MAGIC_INTERVAL = 200;
 const MAGIC_SPEED = 13;
 const MAGIC_LIFETIME = 1100;
 
-// 내 캐릭터가 마법 발사
+// 공격 요청은 서버에만 전송한다. 서버가 승인한 마법탄만 생성한다.
+// 이렇게 해야 서버의 명중 지점과 화면의 마법탄을 매칭할 수 있다.
 function castMagic(){
   if(!myAvatar || defeated || reentryRequired)return;
-
-  const direction = new THREE.Vector3(
-    Math.sin(myAvatar.rotation.y),
-    0,
-    Math.cos(myAvatar.rotation.y)
-  ).normalize();
-
-  const projectile = new THREE.Group();
-
-  const core = new THREE.Mesh(
-    new THREE.SphereGeometry(0.18,12,12),
-    new THREE.MeshBasicMaterial({
-      color:0xb9ffff
-    })
-  );
-
-  const aura = new THREE.Mesh(
-    new THREE.SphereGeometry(0.32,12,12),
-    new THREE.MeshBasicMaterial({
-      color:0x9955ff,
-      transparent:true,
-      opacity:0.48,
-      blending:THREE.AdditiveBlending,
-      depthWrite:false
-    })
-  );
-
-  projectile.add(core,aura);
-  projectile.position.copy(myAvatar.position);
-  projectile.position.y += 1.15;
-
-  projectile.position.addScaledVector(
-    direction,
-    0.85
-  );
-
-  scene.add(projectile);
-
-  magicProjectiles.push({
-    object:projectile,
-    direction,
-    born:performance.now(),
-    core,
-    aura
-  });
-
-  // 서버에 공격 알림 전송
   send({type:'magic'});
 }
 
-// 다른 이용자가 쏜 마법탄 표시
+// 서버가 부여한 고유 번호로 발사자 본인과 타인의 마법탄을 생성한다.
 function spawnRemoteMagic(m){
-  if(
-    !m ||
-    !m.senderId ||
-    m.senderId===myId
-  ){
-    return;
-  }
+  if(!m?.shotId || !m.senderId)return;
+  const x=Number(m.x),y=Number(m.y),z=Number(m.z);
+  const facing=Number(m.direction);
+  if(![x,y,z,facing].every(Number.isFinite))return;
+  if(magicProjectiles.some(shot=>shot.id===m.shotId))return;
 
-  const x = Number(m.x);
-  const y = Number(m.y);
-  const z = Number(m.z);
-  const facing = Number(m.direction);
-
-  if(![x,y,z,facing].every(Number.isFinite)){
-    return;
-  }
-
-  const direction = new THREE.Vector3(
-    Math.sin(facing),
-    0,
-    Math.cos(facing)
+  const direction=new THREE.Vector3(
+    Math.sin(facing),0,Math.cos(facing)
   ).normalize();
-
-  const projectile = new THREE.Group();
-
-  const core = new THREE.Mesh(
-    new THREE.SphereGeometry(0.18,12,12),
+  const projectile=new THREE.Group();
+  const core=new THREE.Mesh(
+    new THREE.SphereGeometry(.18,12,12),
+    new THREE.MeshBasicMaterial({color:0xb9ffff})
+  );
+  const aura=new THREE.Mesh(
+    new THREE.SphereGeometry(.32,12,12),
     new THREE.MeshBasicMaterial({
-      color:0xb9ffff
+      color:0x9955ff,transparent:true,opacity:.48,
+      blending:THREE.AdditiveBlending,depthWrite:false
     })
   );
-
-  const aura = new THREE.Mesh(
-    new THREE.SphereGeometry(0.32,12,12),
-    new THREE.MeshBasicMaterial({
-      color:0x9955ff,
-      transparent:true,
-      opacity:0.48,
-      blending:THREE.AdditiveBlending,
-      depthWrite:false
-    })
-  );
-
   projectile.add(core,aura);
-
-  projectile.position.set(
-    x,
-    y+1.15,
-    z
-  );
-
-  projectile.position.addScaledVector(
-    direction,
-    0.85
-  );
-
+  projectile.position.set(x,y+1.15,z);
+  projectile.position.addScaledVector(direction,.85);
   scene.add(projectile);
-
   magicProjectiles.push({
-    object:projectile,
-    direction,
-    born:performance.now(),
-    core,
-    aura
+    id:m.shotId,ownerId:m.senderId,object:projectile,direction,
+    born:performance.now(),core,aura,
+    freezeUntil:0,predictedContact:false
   });
+}
+
+// 시각적 관통 방지: 서버 피격 확정 전에도 탄이 캐릭터 표면에
+// 닿으면 잠깐 정지한다. 실제 데미지는 오직 magic_hit에서만 처리한다.
+function advanceVisibleMagic(shot,dt,now){
+  if(shot.freezeUntil && now<shot.freezeUntil)return;
+  shot.freezeUntil=0;
+  const current=shot.object.position;
+  const dx=shot.direction.x*MAGIC_SPEED*dt;
+  const dz=shot.direction.z*MAGIC_SPEED*dt;
+  const a=dx*dx+dz*dz;
+  let best=null;
+
+  if(!shot.predictedContact && a>0){
+    const candidates=[
+      ...(myAvatar && !defeated && !reentryRequired
+        ? [{id:myId,avatar:myAvatar}] : []),
+      ...[...others.entries()].map(([id,avatar])=>({id,avatar}))
+    ];
+    for(const {id,avatar} of candidates){
+      if(id===shot.ownerId || !avatar?.visible)continue;
+      if(Math.abs(current.y-(avatar.position.y+1.0))>.85)continue;
+
+      const fx=current.x-avatar.position.x;
+      const fz=current.z-avatar.position.z;
+      const b=2*(fx*dx+fz*dz);
+      const c=fx*fx+fz*fz-.72*.72;
+      const discriminant=b*b-4*a*c;
+      if(discriminant<0)continue;
+      const t=c<=0?0:(-b-Math.sqrt(discriminant))/(2*a);
+      if(t<0 || t>1)continue;
+      if(best===null || t<best)best=t;
+    }
+  }
+
+  if(best!==null){
+    current.x+=dx*best;
+    current.z+=dz*best;
+    shot.predictedContact=true;
+    shot.freezeUntil=now+170;
+  }else{
+    current.x+=dx;
+    current.z+=dz;
+  }
+}
+
+function disposeMagicProjectile(shot){
+  scene.remove(shot.object);
+  shot.core.geometry.dispose();
+  shot.core.material.dispose();
+  shot.aura.geometry.dispose();
+  shot.aura.material.dispose();
+}
+
+// ===== 피격: 마법탄 소멸 + 충격파 + 불꽃 + 캐릭터 움찔 =====
+const impactEffects=[];
+const IMPACT_LIFETIME=420;
+const HIT_REACTION_DURATION=340;
+const HIT_FLASH_COLOR=new THREE.Color(0xff758f);
+
+const damageVeil=document.createElement('div');
+damageVeil.style.cssText=`position:absolute;inset:0;z-index:18;
+  pointer-events:none;opacity:0;
+  background:radial-gradient(circle,transparent 40%,rgba(255,44,88,.55));`;
+sceneEl.appendChild(damageVeil);
+let lastSelfHit=-Infinity;
+
+function createMagicImpact(x,y,z){
+  const group=new THREE.Group();
+  group.position.set(x,y,z);
+  scene.add(group);
+
+  const orb=new THREE.Mesh(
+    new THREE.SphereGeometry(.22,12,8),
+    new THREE.MeshBasicMaterial({
+      color:0xeaffff,transparent:true,opacity:1,
+      blending:THREE.AdditiveBlending,depthWrite:false
+    })
+  );
+  group.add(orb);
+
+  const ring=new THREE.Mesh(
+    new THREE.RingGeometry(.18,.27,28),
+    new THREE.MeshBasicMaterial({
+      color:0x9f7bff,transparent:true,opacity:.9,
+      blending:THREE.AdditiveBlending,depthWrite:false,
+      side:THREE.DoubleSide
+    })
+  );
+  group.add(ring);
+
+  const sparkGeo=new THREE.SphereGeometry(.065,6,4);
+  const sparkMat=new THREE.MeshBasicMaterial({
+    color:0x7dffff,transparent:true,opacity:1,
+    blending:THREE.AdditiveBlending,depthWrite:false
+  });
+  const sparks=[];
+  for(let i=0;i<10;i++){
+    const mesh=new THREE.Mesh(sparkGeo,sparkMat);
+    const theta=Math.random()*Math.PI*2;
+    const rise=(Math.random()-.25)*1.5;
+    const speed=1.3+Math.random()*2.2;
+    const velocity=new THREE.Vector3(
+      Math.cos(theta)*speed,rise,Math.sin(theta)*speed
+    );
+    group.add(mesh);
+    sparks.push({mesh,velocity});
+  }
+
+  // 맞는 순간 표시되는 작은 데미지 숫자
+  const canvas=document.createElement('canvas');
+  canvas.width=128;
+  canvas.height=64;
+  const ctx=canvas.getContext('2d');
+  ctx.font='bold 46px Arial';
+  ctx.textAlign='center';
+  ctx.strokeStyle='#502038';
+  ctx.lineWidth=6;
+  ctx.strokeText('-1',64,49);
+  ctx.fillStyle='#ffb5ca';
+  ctx.fillText('-1',64,49);
+  const textTexture=new THREE.CanvasTexture(canvas);
+  const textSprite=new THREE.Sprite(new THREE.SpriteMaterial({
+    map:textTexture,transparent:true,depthTest:false,depthWrite:false
+  }));
+  textSprite.position.y=.45;
+  textSprite.scale.set(.72,.36,1);
+  group.add(textSprite);
+
+  impactEffects.push({
+    born:performance.now(),group,orb,ring,sparks,
+    sparkGeo,sparkMat,textSprite
+  });
+}
+
+function beginHitReaction(avatar,dirX,dirZ){
+  if(!avatar)return;
+  // 연속 피격 시에도 원래 색상으로 돌아가도록 최초 원색을 유지한다.
+  const originals=avatar.userData.hitReaction?.originals || new Map();
+  avatar.userData.bodyGroup.traverse(node=>{
+    const material=node.material;
+    if(material?.isMeshStandardMaterial && !originals.has(material)){
+      originals.set(material,material.color.clone());
+    }
+  });
+  avatar.userData.hitReaction={
+    born:performance.now(),
+    dirX:Number(dirX)||0,
+    dirZ:Number(dirZ)||0,
+    originals
+  };
+}
+
+function handleMagicHit(m){
+  // 맞은 마법탄만 찾아 즉시 제거한다. 더 이상 몸을 통과하지 않는다.
+  const index=magicProjectiles.findIndex(shot=>shot.id===m.shotId);
+  if(index>=0){
+    disposeMagicProjectile(magicProjectiles[index]);
+    magicProjectiles.splice(index,1);
+  }
+
+  const x=Number(m.x),y=Number(m.y),z=Number(m.z);
+  if([x,y,z].every(Number.isFinite))createMagicImpact(x,y,z);
+
+  const victim=m.targetId===myId?myAvatar:others.get(m.targetId);
+  beginHitReaction(victim,m.dirX,m.dirZ);
+  if(m.targetId===myId)lastSelfHit=performance.now();
+}
+
+function updateMagicImpacts(now){
+  for(let i=impactEffects.length-1;i>=0;i--){
+    const effect=impactEffects[i];
+    const age=now-effect.born;
+    const t=Math.min(1,age/IMPACT_LIFETIME);
+    const strength=1-t;
+    effect.orb.scale.setScalar(1+t*1.5);
+    effect.orb.material.opacity=strength;
+    effect.ring.scale.setScalar(1+t*4);
+    effect.ring.material.opacity=strength*.9;
+    effect.ring.quaternion.copy(camera.quaternion);
+    effect.sparkMat.opacity=strength;
+    for(const {mesh,velocity} of effect.sparks){
+      mesh.position.copy(velocity).multiplyScalar(age/1000);
+    }
+    effect.textSprite.position.y=.45+t*.65;
+    effect.textSprite.material.opacity=strength;
+
+    if(age>=IMPACT_LIFETIME){
+      scene.remove(effect.group);
+      effect.orb.geometry.dispose();
+      effect.orb.material.dispose();
+      effect.ring.geometry.dispose();
+      effect.ring.material.dispose();
+      effect.sparkGeo.dispose();
+      effect.sparkMat.dispose();
+      effect.textSprite.material.map.dispose();
+      effect.textSprite.material.dispose();
+      impactEffects.splice(i,1);
+    }
+  }
+
+  const strength=Math.max(0,1-(now-lastSelfHit)/280);
+  damageVeil.style.opacity=String(strength*.6);
+
+  for(const avatar of [myAvatar,...others.values()]){
+    const hit=avatar?.userData.hitReaction;
+    if(!hit)continue;
+    const t=Math.min(1,(now-hit.born)/HIT_REACTION_DURATION);
+    const shake=Math.sin(t*Math.PI)*(.3*(1-t*.4));
+    const body=avatar.userData.bodyGroup;
+    // 루트 위치는 유지하므로 서버 위치 동기화와 충돌하지 않는다.
+    body.rotation.x=-shake;
+    body.rotation.z=shake*(hit.dirX>=0?1:-1);
+    body.position.x=hit.dirX*shake*.65;
+    body.position.z=hit.dirZ*shake*.65;
+    const flash=t<.35?(1-t/.35)*.65:0;
+    for(const [material,original] of hit.originals){
+      material.color.copy(original).lerp(HIT_FLASH_COLOR,flash);
+    }
+    if(t>=1){
+      body.rotation.x=0;
+      body.rotation.z=0;
+      body.position.x=0;
+      body.position.z=0;
+      delete avatar.userData.hitReaction;
+    }
+  }
 }
 
 // PC A키 또는 모바일 A 버튼
@@ -2274,10 +2428,7 @@ function updateMagic(now){
   ){
     const shot = magicProjectiles[i];
 
-    shot.object.position.addScaledVector(
-      shot.direction,
-      MAGIC_SPEED*dt
-    );
+    advanceVisibleMagic(shot,dt,now);
 
     shot.aura.rotation.y += dt*9;
 
@@ -2291,16 +2442,12 @@ function updateMagic(now){
       remaining*0.48;
 
     if(age>=MAGIC_LIFETIME){
-      scene.remove(shot.object);
-
-      shot.core.geometry.dispose();
-      shot.core.material.dispose();
-      shot.aura.geometry.dispose();
-      shot.aura.material.dispose();
-
+      disposeMagicProjectile(shot);
       magicProjectiles.splice(i,1);
     }
   }
+
+  updateMagicImpacts(now);
 }
 
 requestAnimationFrame(updateMagic);
