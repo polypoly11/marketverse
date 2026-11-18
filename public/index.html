@@ -168,6 +168,45 @@
       }
     }
   </style>
+
+  <!-- JMC 휴식공간 옆 한국시간 시계 -->
+  <style>
+    .lounge-title-row {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 18px;
+    }
+
+    .lounge-title-row h1 {
+      margin: 0;
+    }
+
+    #lounge-clock {
+      display: inline-block;
+      padding: 8px 14px;
+      border: 1px solid rgba(212, 183, 128, 0.5);
+      border-radius: 9px;
+      background: rgba(18, 38, 58, 0.9);
+      color: #f0d5a1;
+      font-family: Consolas, 'Courier New', monospace;
+      font-size: 17px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    @media screen and (max-width: 600px) {
+      .lounge-title-row {
+        gap: 10px;
+      }
+
+      #lounge-clock {
+        padding: 6px 10px;
+        font-size: 13px;
+      }
+    }
+  </style>
 </head>
 
 <body>
@@ -197,16 +236,16 @@
           </span>
 
           <div class="lounge-title-row">
-  <h1>JMC 휴식공간</h1>
-  <span id="lounge-clock">00:00:00 KST</span>
-</div>
+            <h1>JMC 휴식공간</h1>
+            <span id="lounge-clock" role="timer" aria-label="한국시간">--:--:-- KST</span>
+          </div>
 
           <p>
             투자자들이 함께 쉬고 대화하는 가상 라운지
           </p>
 
           <p>
-            점프 : 스페이스 / 앉기 C / 마법공격 A</p>
+            점프 : 스페이스 / 앉기 C / 마법공격 A
           </p>
         </div>
 
@@ -726,6 +765,30 @@
 
       });
 
+    })();
+  </script>
+
+  <!-- 한국시간(KST) 실시간 시계: 1초마다 갱신 -->
+  <script>
+    (function () {
+      const clock = document.getElementById('lounge-clock');
+      if (!clock) return;
+
+      const formatter = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Seoul',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hourCycle: 'h23'
+      });
+
+      function updateLoungeClock() {
+        clock.textContent = formatter.format(new Date()) + ' KST';
+      }
+
+      updateLoungeClock();
+      setInterval(updateLoungeClock, 1000);
+      document.addEventListener('visibilitychange', updateLoungeClock);
     })();
   </script>
 
