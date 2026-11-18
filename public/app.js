@@ -1070,12 +1070,12 @@ function installSceneLiveChat() {
       display:none !important;
     }
 
-    @media (max-width:980px),(pointer:coarse) {
-      #scene > .jmc-scene-chat {
-        left:8px !important;
-        bottom:183px !important;
-        width:min(420px,calc(100% - 16px)) !important;
-      }
+@media (max-width:980px),(pointer:coarse) {
+  #scene > .jmc-scene-chat {
+    left:8px !important;
+    bottom:8px !important;
+    width:min(420px,calc(100% - 16px)) !important;
+  }
 
       #scene > .jmc-scene-chat #messages {
         font-size:11px !important;
