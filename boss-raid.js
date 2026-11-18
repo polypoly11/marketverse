@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 const MAX_HP = 10000;
 const BOSS = {x:0,y:1.7,z:-13,radius:2.25};
 const LOOT = {x:0,z:-13,radius:1.6};
+
 const sha = text =>
   crypto.createHash('sha256').update(text).digest('hex');
 
@@ -14,6 +15,7 @@ export async function createBossRaid({clients,send,broadcast}) {
 
   if (process.env.DATABASE_URL) {
     const {Pool} = await import('pg');
+
     pool = new Pool({
       connectionString:process.env.DATABASE_URL
     });
@@ -64,6 +66,7 @@ export async function createBossRaid({clients,send,broadcast}) {
 
     if (result.rows[0]) {
       const r = result.rows[0];
+
       run = {
         id:r.id,
         state:r.state,
@@ -73,6 +76,11 @@ export async function createBossRaid({clients,send,broadcast}) {
       };
     }
   }
+
+  // 연습 모드 당첨 기록 보관
+  // DATABASE_URL이 없어도 관리자 페이지에서 조회할 수 있습니다.
+  // 서버가 재시작되면 초기화됩니다.
+  const testRewards = [];
 
   let claiming = false;
   let lastHpBroadcast = 0;
@@ -113,8 +121,10 @@ export async function createBossRaid({clients,send,broadcast}) {
         SET hp=LEAST(hp,$2)
         WHERE id=$1 AND state='active'
       `,[current.id,current.hp]);
+
     } catch(e) {
       console.error('[RAID] HP save:',e.message);
+
     } finally {
       saving = false;
     }
@@ -227,7 +237,9 @@ export async function createBossRaid({clients,send,broadcast}) {
         y:point.y,
         z:point.z
       });
+
       lastEffect=now;
+
     } else {
       broadcast({
         type:'boss_shot_end',
@@ -241,6 +253,7 @@ export async function createBossRaid({clients,send,broadcast}) {
         hp:run.hp,
         maxHp:MAX_HP
       });
+
       lastHpBroadcast=now;
     }
 
@@ -320,6 +333,7 @@ export async function createBossRaid({clients,send,broadcast}) {
 
           if (update.rowCount!==1) {
             await db.query('ROLLBACK');
+
             return send(ws,{
               type:'raid_notice',
               message:'이미 획득된 아이템입니다.'
@@ -343,15 +357,42 @@ export async function createBossRaid({clients,send,broadcast}) {
         } catch(e) {
           await db.query('ROLLBACK');
           throw e;
+
         } finally {
           db.release();
         }
       }
 
+      // 연습 모드에서도 아이템 획득 내역을 기록합니다.
+      if (!pool) {
+        testRewards.unshift({
+          id:rewardId,
+          run_id:run.id,
+          winner_id:player.id,
+          winner_name:player.name,
+          status:'test',
+          created_at:new Date().toISOString(),
+          paid_at:null
+        });
+
+        // 최근 30건까지만 메모리에 보관
+        if (testRewards.length>30) {
+          testRewards.length=30;
+        }
+
+        console.log(
+          '[RAID TEST REWARD]',
+          'nickname:',player.name,
+          'rewardId:',rewardId,
+          'runId:',run.id
+        );
+      }
+
       run.state='claimed';
       run.winnerName=player.name;
 
-      // 수령 코드는 당첨자에게만 전달한다.
+      // 수령 코드는 당첨자에게만 전달합니다.
+      // 연습 모드에서는 실제 쿠폰 수령 코드를 발급하지 않습니다.
       send(ws,{
         type:'reward_result',
         rewardId,
@@ -359,21 +400,29 @@ export async function createBossRaid({clients,send,broadcast}) {
         testMode:!pool
       });
 
+      // 전체 참가자 및 관리자 상태 업데이트
       publish();
 
     } catch(e) {
       console.error('[RAID] claim failed:',e.message);
+
       send(ws,{
         type:'raid_notice',
         message:'보상 저장에 실패했습니다. 다시 시도하세요.'
       });
+
     } finally {
       claiming=false;
     }
   }
 
+  // 관리자 페이지 당첨 기록 조회
   async function rewards() {
-    if (!pool) return [];
+    // PostgreSQL을 연결하지 않은 연습 모드에서도
+    // 서버 메모리에 기록된 당첨자 목록을 반환합니다.
+    if (!pool) {
+      return testRewards.slice();
+    }
 
     const r=await pool.query(`
       SELECT id,run_id,winner_name,status,created_at,paid_at
@@ -427,6 +476,7 @@ export async function createBossRaid({clients,send,broadcast}) {
     rewards,
     verify,
     markPaid,
+
     get prizeEnabled() {
       return !!pool;
     }
