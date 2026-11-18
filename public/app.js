@@ -876,6 +876,111 @@ $('detail').onclick = e=>{
 };
 
 const sceneEl = $('scene');
+// ========================================
+// 마법 발사 / 피격 효과음 (Web Audio API)
+// 별도 음원 파일이나 server.js 수정은 필요 없다.
+// ========================================
+let sfxEnabled = true;
+let audioCtx = null;
+
+try {
+  sfxEnabled = localStorage.getItem('jmc-sfx-enabled') !== '0';
+} catch {}
+
+function getAudioContext() {
+  if (!sfxEnabled) return null;
+  try {
+    if (!audioCtx) {
+      const AudioClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioClass) return null;
+      audioCtx = new AudioClass();
+    }
+    if (audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
+    }
+    return audioCtx;
+  } catch {
+    return null;
+  }
+}
+
+// 브라우저의 자동 재생 제한은 첫 클릭/키 입력으로 해제한다.
+document.addEventListener('pointerdown', getAudioContext, {passive:true});
+document.addEventListener('keydown', getAudioContext);
+
+function playSfxTone(type, startHz, endHz, duration, volume) {
+  const ctx = getAudioContext();
+  if (!ctx || ctx.state !== 'running' || volume <= 0) return;
+
+  const now = ctx.currentTime;
+  const oscillator = ctx.createOscillator();
+  const gain = ctx.createGain();
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(startHz, now);
+  oscillator.frequency.exponentialRampToValueAtTime(
+    Math.max(1,endHz), now + duration
+  );
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.exponentialRampToValueAtTime(
+    Math.max(0.0002, volume), now + 0.012
+  );
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  oscillator.connect(gain);
+  gain.connect(ctx.destination);
+  oscillator.start(now);
+  oscillator.stop(now + duration + 0.02);
+  oscillator.onended = () => {
+    oscillator.disconnect();
+    gain.disconnect();
+  };
+}
+
+// 발사: 슈웅! 마법 에너지가 날아가는 전자음
+function playMagicCastSfx(volume = 1) {
+  if (!sfxEnabled || volume <= 0) return;
+  playSfxTone('sawtooth', 1000, 260, .20, .040 * volume);
+  playSfxTone('sine', 1450, 680, .14, .024 * volume);
+}
+
+// 피격: 펑! 짧고 묵직한 충돌음
+function playMagicHitSfx(volume = 1) {
+  if (!sfxEnabled || volume <= 0) return;
+  playSfxTone('triangle', 260, 65, .18, .095 * volume);
+  playSfxTone('square', 650, 100, .10, .022 * volume);
+}
+
+// 주변 캐릭터가 멀수록 소리를 작게 재생한다.
+function magicSoundVolume(x, z) {
+  if (!myAvatar || !Number.isFinite(x) || !Number.isFinite(z)) {
+    return .7;
+  }
+  const distance = Math.hypot(
+    x - myAvatar.position.x,
+    z - myAvatar.position.z
+  );
+  return Math.max(0, 1 - distance / 20);
+}
+
+const sfxButton = document.createElement('button');
+sfxButton.type = 'button';
+sfxButton.id = 'jmc-sfx-toggle';
+sfxButton.textContent = sfxEnabled ? '🔊 효과음 ON' : '🔇 효과음 OFF';
+sfxButton.style.cssText = `
+  position:absolute;top:12px;right:12px;z-index:30;
+  padding:9px 13px;background:rgba(7,20,33,.9);
+  color:white;border:1px solid #dfc18d;border-radius:9px;
+  cursor:pointer;font-size:13px;
+`;
+sfxButton.onclick = () => {
+  sfxEnabled = !sfxEnabled;
+  sfxButton.textContent = sfxEnabled ? '🔊 효과음 ON' : '🔇 효과음 OFF';
+  try {
+    localStorage.setItem('jmc-sfx-enabled', sfxEnabled ? '1' : '0');
+  } catch {}
+  if (sfxEnabled) getAudioContext();
+};
+sceneEl.appendChild(sfxButton);
+
 const scene = new THREE.Scene();
 
 scene.background = new THREE.Color('#080f1b');
@@ -2126,6 +2231,9 @@ function spawnRemoteMagic(m){
     born:performance.now(),core,aura,
     freezeUntil:0,predictedContact:false
   });
+
+  // 서버가 발사를 승인한 시점에 발사음을 재생한다.
+  playMagicCastSfx(magicSoundVolume(x,z));
 }
 
 // 시각적 관통 방지: 서버 피격 확정 전에도 탄이 캐릭터 표면에
@@ -2293,6 +2401,11 @@ function handleMagicHit(m){
   const victim=m.targetId===myId?myAvatar:others.get(m.targetId);
   beginHitReaction(victim,m.dirX,m.dirZ);
   if(m.targetId===myId)lastSelfHit=performance.now();
+
+  // 서버 명중 판정이 확정된 경우에만 피격음을 재생한다.
+  playMagicHitSfx(
+    m.targetId===myId ? 1 : magicSoundVolume(x,z)
+  );
 }
 
 function updateMagicImpacts(now){
@@ -2465,7 +2578,7 @@ hpHud.style.cssText=`position:absolute;z-index:20;left:12px;top:12px;
   font:700 14px Arial,sans-serif;`;
 hpHud.innerHTML=`<div style="display:flex;justify-content:space-between;gap:8px">
   <span>❤️ HP</span><span id="jmc-hp-text">100 / 100</span></div>
-  <div style="height:9px;margin-top:7px;background:#4e2630;border-radius:6px;overflow:hidden">
+  <div style="height:9px;margin-top:7px;background:#4e263d;border-radius:6px;overflow:hidden">
   <div id="jmc-hp-fill" style="height:100%;width:100%;background:#43de9a;transition:width .15s"></div></div>`;
 sceneEl.appendChild(hpHud);
 
