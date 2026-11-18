@@ -1,5 +1,6 @@
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
+import {createBossClient} from './boss-client.js';
 
 const $ = id => document.getElementById(id);
 
@@ -1225,6 +1226,33 @@ refreshBoard();
 
 const others = new Map();
 
+const raidClient=createBossClient({
+  THREE,
+  scene,
+  sceneEl,
+
+  getAvatar:()=>myAvatar,
+  getPlayerId:()=>myId,
+  send:msg=>send(msg),
+
+  removeShot:shotId=>{
+    const i=magicProjectiles.findIndex(
+      s=>s.id===shotId
+    );
+
+    if(i>=0){
+      disposeMagicProjectile(
+        magicProjectiles[i]
+      );
+      magicProjectiles.splice(i,1);
+    }
+  },
+
+  playHit:(x,z)=>playMagicHitSfx(
+    magicSoundVolume(x,z)
+  )
+});
+
 function boardFocus(position){
   const facing = THREE.MathUtils.smoothstep(
     (Math.cos(yaw)+1)/2,
@@ -1893,6 +1921,7 @@ function animate(now){
   );
 
   tickBubbles(now);
+  raidClient.update(now,dt);
   renderer.render(scene,camera);
 }
 
@@ -2020,6 +2049,17 @@ function connect(){
     try{
       m = JSON.parse(e.data);
     }catch{
+      return;
+    }
+
+    if(raidClient.onMessage(m))return;
+
+    if(m.type==='position_correct' && myAvatar){
+      myAvatar.position.set(
+        Number(m.x)||0,
+        Number(m.y)||0,
+        Number(m.z)||0
+      );
       return;
     }
 

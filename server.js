@@ -9,6 +9,7 @@ import {
   getClientIP,
   adminState
 } from './admin.js';
+import {createBossRaid} from './boss-raid.js';
 
 const app = express();
 
@@ -182,15 +183,8 @@ function presence() {
 // 어드민 기능 등록
 // ========================================
 
-mountAdmin(app, {
-  clients,
-  votes,
-  history,
-  magicShots,
-  send,
-  broadcast,
-  presence
-});
+const raid = await createBossRaid({clients, send, broadcast});
+mountAdmin(app, {clients, votes, history, magicShots, send, broadcast, presence, raid});
 
 // ========================================
 // WebSocket 멀티플레이 서버
@@ -242,6 +236,7 @@ wss.on('connection', (ws, req) => {
     history
   });
 
+  raid.sendSnapshot(ws);
   presence();
 
   // ======================================
@@ -305,6 +300,11 @@ wss.on('connection', (ws, req) => {
       return;
     }
 
+    if(m.type==='loot_pickup'){
+      void raid.pickup(ws,p);
+      return;
+    }
+
     // ====================================
     // 캐릭터 이동 동기화
     // ====================================
@@ -325,6 +325,25 @@ wss.on('connection', (ws, req) => {
         !Number.isFinite(x) ||
         !Number.isFinite(z)
       ) {
+        return;
+      }
+
+      // 순간이동을 방지하기 위한 서버 좌표 검증
+      const seconds=Math.max(
+        .08,
+        Math.min(1,(now-(p.lastMove||p.joinedAt))/1000)
+      );
+
+      const maxStep=6.5*seconds+.4;
+
+      if(Math.hypot(x-p.x,z-p.z)>maxStep){
+        send(ws,{
+          type:'position_correct',
+          x:p.x,
+          y:p.y,
+          z:p.z
+        });
+        p.lastMove=now;
         return;
       }
 
@@ -659,8 +678,25 @@ function updateMagicCollisions() {
       }
     }
 
+    const bossPoint=raid.collision(
+      shot,
+      startX,
+      startZ,
+      endX,
+      endZ
+    );
+
+    if(
+      bossPoint &&
+      (!nearest || bossPoint.t<nearest.t)
+    ){
+      magicShots.splice(i,1);
+      raid.hit(shot,bossPoint);
+      continue;
+    }
+
     if (!nearest) {
-      shot.x = endX;
+      shot.x=endX;
       shot.z = endZ;
       continue;
     }

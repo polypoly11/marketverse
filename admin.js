@@ -142,7 +142,7 @@ export function mountAdmin(app, context) {
     magicShots,
     send,
     broadcast,
-    presence
+    presence, raid
   } = context;
 
   app.set('trust proxy', 1);
@@ -241,7 +241,8 @@ export function mountAdmin(app, context) {
       settings: {...adminState},
       players,
       history: history.slice(-40),
-      audit: auditTrail.slice(0, 20)
+      audit: auditTrail.slice(0, 20),
+      raid: raid.snapshot()
     });
   });
 
@@ -477,4 +478,98 @@ export function mountAdmin(app, context) {
       res.json({ok: true});
     }
   );
+  // ====== 고래 레이드 관리자 API ======
+
+  app.post(
+    '/api/admin/raid/spawn',
+    safeOrigin,
+    requireAdmin,
+    async(req,res)=>{
+      try{
+        const state=await raid.spawn(
+          req.body?.damage??1
+        );
+        remember('고래 보스 소환');
+        res.json({ok:true,raid:state});
+      }catch(e){
+        res.status(400).json({
+          error:e.message
+        });
+      }
+    }
+  );
+
+  app.post(
+    '/api/admin/raid/cancel',
+    safeOrigin,
+    requireAdmin,
+    async(_req,res)=>{
+      try{
+        const state=await raid.cancel();
+        remember('고래 레이드 취소');
+        res.json({ok:true,raid:state});
+      }catch(e){
+        res.status(400).json({
+          error:e.message
+        });
+      }
+    }
+  );
+
+  app.get(
+    '/api/admin/raid/rewards',
+    requireAdmin,
+    async(_req,res)=>{
+      try{
+        res.json({
+          ok:true,
+          prizeEnabled:raid.prizeEnabled,
+          rewards:await raid.rewards()
+        });
+      }catch(e){
+        res.status(500).json({
+          error:'당첨 기록 조회 실패'
+        });
+      }
+    }
+  );
+
+  app.post(
+    '/api/admin/raid/verify',
+    safeOrigin,
+    requireAdmin,
+    async(req,res)=>{
+      try{
+        const valid=await raid.verify(
+          String(req.body?.rewardId||''),
+          String(req.body?.claimCode||'')
+        );
+        res.json({ok:true,valid});
+      }catch(e){
+        res.status(400).json({
+          error:'증명 코드 검증 실패'
+        });
+      }
+    }
+  );
+
+  app.post(
+    '/api/admin/raid/paid',
+    safeOrigin,
+    requireAdmin,
+    async(req,res)=>{
+      try{
+        await raid.markPaid(
+          String(req.body?.rewardId||'')
+        );
+        remember('쿠폰 지급 완료');
+        res.json({ok:true});
+      }catch(e){
+        res.status(400).json({
+          error:e.message
+        });
+      }
+    }
+  );
+
 }
