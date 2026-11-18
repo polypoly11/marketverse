@@ -37,7 +37,7 @@ app.post('/api/admin/login',sameOrigin,async(req,res)=>{
 app.get('/api/admin/me',requireAdmin,(req,res)=>res.json({email:req.admin.email}));
 app.post('/api/admin/logout',sameOrigin,requireAdmin,(req,res)=>{const sid=cookies(req).jmc_admin;sessions.delete(sid);res.append('Set-Cookie',cookie('jmc_admin','',0,req));res.json({ok:true});});
 app.use('/api/admin', (req,res,next)=>{if(req.method!=='GET')return sameOrigin(req,res,next);next();},requireAdmin);
-app.get('/api/admin/state',(req,res)=>res.json({players:[...clients.values()].filter(p=>p.ready).map(p=>({id:p.id,name:p.name,animal:p.animal,joinedAt:p.joinedAt})),messages:history,notices,audit:audit.slice(0,40)}));
+app.get('/api/admin/state',(req,res)=>{resetChatAtKoreanMidnight();res.json({players:[...clients.values()].filter(p=>p.ready).map(p=>({id:p.id,name:p.name,animal:p.animal,joinedAt:p.joinedAt})),messages:history,notices,audit:audit.slice(0,40)});});
 app.delete('/api/admin/messages/:id',(req,res)=>{const i=history.findIndex(x=>x.id===req.params.id);if(i<0)return res.status(404).json({error:'메시지가 없습니다.'});history.splice(i,1);broadcast({type:'chat_deleted',id:req.params.id});logAction('delete_chat',req.params.id,req.admin.email);res.json({ok:true});});
 app.post('/api/admin/users/:id/kick',(req,res)=>{const entry=[...clients.entries()].find(([,p])=>p.id===req.params.id&&p.ready);if(!entry)return res.status(404).json({error:'접속자가 없습니다.'});const [ws,player]=entry;send(ws,{type:'moderation',message:'관리자에 의해 퇴장 처리되었습니다.'});ws.close(4001,'Kicked');logAction('kick',player.name,req.admin.email);res.json({ok:true});});
 app.post('/api/admin/users/:id/ban',(req,res)=>{const entry=[...clients.entries()].find(([,p])=>p.id===req.params.id&&p.ready);if(!entry)return res.status(404).json({error:'접속자가 없습니다.'});const [ws,player]=entry;bans.set(player.guestId,Date.now()+60*60*1000);send(ws,{type:'moderation',message:'관리자에 의해 1시간 동안 접속이 제한되었습니다.'});ws.close(4003,'Temporarily banned');logAction('ban_1h',player.name,req.admin.email);res.json({ok:true});});
@@ -53,6 +53,24 @@ const ANIMALS = ['seal','cat','dog','rabbit','fox','panda','bear','penguin','fro
 const clients = new Map();
 const votes = { long: 0, short: 0 };
 const history = [];
+// 한국시간(Asia/Seoul) 기준 날짜가 바뀌면 채팅만 초기화한다.
+// 공지(notices)와 관리자 활동 기록(audit)은 건드리지 않는다.
+const seoulDate = () => new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit'
+}).format(new Date());
+let chatDate = seoulDate();
+function resetChatAtKoreanMidnight() {
+  const today = seoulDate();
+  if (today === chatDate) return false;
+  chatDate = today;
+  history.length = 0;
+  broadcast({type:'chat_reset', date:today});
+  console.log(`[JMC] 한국시간 날짜 변경: ${today} / 채팅 및 말풍선 초기화`);
+  return true;
+}
+// 자정 경과 후 최대 1초 내 초기화. 서버가 잠시 멈춰도 다음 요청에서 재검사한다.
+setInterval(resetChatAtKoreanMidnight, 1000).unref();
+
 const priceCache = new Map();
 const candleCache = new Map();
 const clean = (value, max=180) => String(value ?? '').replace(/[\u0000-\u001f<>]/g,'').trim().slice(0,max);
@@ -69,6 +87,7 @@ wss.on('connection', (ws,req) => {
 
   const p = {guestId:guest,joinedAt:Date.now(),id:crypto.randomUUID(),name:'',animal:'seal',x:0,y:0,z:-8,direction:Math.PI,seated:false,ready:false,vote:null,lastChat:0,lastMove:0};
   clients.set(ws,p);
+  resetChatAtKoreanMidnight();
   send(ws,{type:'welcome',id:p.id,votes:{...votes},history,notices});
   presence();
   ws.on('message',raw => {
@@ -91,6 +110,7 @@ wss.on('connection', (ws,req) => {
       p.lastMove=now; presence(); return;
     }
     if (m.type === 'chat') {
+      resetChatAtKoreanMidnight();
       const now=Date.now(); if(now-p.lastChat<700)return;
       const message=clean(m.message); if(!message)return;
       p.lastChat=now; const item={id:crypto.randomUUID(),senderId:p.id,name:p.name,animal:p.animal,message,time:now};
