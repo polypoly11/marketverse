@@ -1198,9 +1198,9 @@ scene.fog=new THREE.Fog('#080f1b',25,80);
 
 const camera=new THREE.PerspectiveCamera(74,1,.1,120);
 
-const renderer=new THREE.WebGLRenderer({
-  antialias:!isMobileDevice,
-  powerPreference:'low-power'
+const renderer = new THREE.WebGLRenderer({
+  antialias:true,
+  powerPreference:'high-performance'
 });
 
 renderer.setPixelRatio(renderPixelRatio);
