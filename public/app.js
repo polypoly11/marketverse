@@ -1,10 +1,7 @@
+
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
 
 const $ = id => document.getElementById(id);
-
-// ========================================
-// 기본 데이터
-// ========================================
 
 const animals = [
   ['seal','아기물개','🦭',0xe9f0ed],
@@ -60,10 +57,6 @@ function turn(current,target,max){
     : current+Math.sign(diff)*max;
 }
 
-// ========================================
-// PC / 모바일 환경
-// ========================================
-
 const isMobileDevice = window.matchMedia(
   '(max-width: 980px), (pointer: coarse)'
 ).matches;
@@ -73,10 +66,8 @@ const renderPixelRatio = Math.min(
   isMobileDevice ? 1 : 2
 );
 
-// PC와 모바일 캐릭터 크기 70%
 const CHARACTER_SCALE = 0.7;
 
-// 카메라 설정
 const CAMERA_BASE_DISTANCE = isMobileDevice ? 7.5 : 6.8;
 const CAMERA_MAX_DISTANCE = isMobileDevice ? 25 : 18;
 const CAMERA_HEIGHT = isMobileDevice ? 3.2 : 3.3;
@@ -84,17 +75,10 @@ const CAMERA_FOLLOW_SPEED = 9;
 
 const BOARD_Z = -18.65;
 const BOARD_WIDTH = 17;
-
-// ========================================
-// 3D 동물 캐릭터
-// ========================================
-
 const sphere = new THREE.SphereGeometry(1,20,14);
 
 function makeAnimal(id){
-
   const a = animal(id);
-
   const root = new THREE.Group();
   const bodyGroup = new THREE.Group();
 
@@ -134,28 +118,22 @@ function makeAnimal(id){
     return m;
   }
 
-  // 몸과 머리
   orb(bodyGroup,0,.91,0,.53,.68,.42,fur);
   orb(bodyGroup,0,1.82,.1,.67,.61,.58,fur);
   orb(bodyGroup,0,.92,.37,.36,.45,.1,light);
 
-  // 다리
   for(const x of [-.31,.31]){
     for(const z of [-.23,.24]){
       orb(bodyGroup,x,.32,z,.18,.32,.2,fur);
     }
   }
 
-  // 귀
   if(['rabbit','deer'].includes(id)){
-
     for(const x of [-.39,.39]){
-
       const e = orb(
         bodyGroup,x,2.48,.04,
         .2,id==='rabbit'?.59:.42,.16,fur
       );
-
       e.rotation.z = x>0 ? -.18 : .18;
 
       if(id==='rabbit'){
@@ -166,19 +144,14 @@ function makeAnimal(id){
         inner.rotation.z = e.rotation.z;
       }
     }
-
   }else if(['seal','penguin','frog'].includes(id)){
-
     if(id==='frog'){
       for(const x of [-.43,.43]){
         orb(bodyGroup,x,2.26,.39,.24,.24,.21,fur);
       }
     }
-
   }else{
-
     for(const x of [-.47,.47]){
-
       if(['cat','fox','tiger','raccoon'].includes(id)){
         cone(
           bodyGroup,x,2.39,.04,
@@ -190,7 +163,6 @@ function makeAnimal(id){
     }
   }
 
-  // 얼굴 무늬
   if(['panda','raccoon'].includes(id)){
     for(const x of [-.29,.29]){
       orb(bodyGroup,x,1.91,.58,.24,.24,.06,dark);
@@ -206,7 +178,6 @@ function makeAnimal(id){
     orb(bodyGroup,0,1.56,.57,.42,.24,.14,light);
   }
 
-  // 눈
   for(const x of [-.26,.26]){
     orb(bodyGroup,x,1.93,.62,.14,.17,.09,white);
     orb(bodyGroup,x,1.93,.695,.09,.12,.05,dark);
@@ -220,7 +191,6 @@ function makeAnimal(id){
     }
   }
 
-  // 코
   if(id==='penguin'){
     cone(
       bodyGroup,0,1.63,.7,
@@ -234,12 +204,10 @@ function makeAnimal(id){
     );
   }
 
-  // 볼
   for(const x of [-.42,.42]){
     orb(bodyGroup,x,1.68,.57,.13,.085,.035,pink);
   }
 
-  // 꼬리
   if(!['seal','penguin','frog'].includes(id)){
     const tail = orb(
       bodyGroup,0,.9,-.52,
@@ -251,7 +219,6 @@ function makeAnimal(id){
     tail.rotation.x = -.35;
   }
 
-  // 아기물개
   if(id==='seal'){
     for(const x of [-.54,.54]){
       const fin = orb(
@@ -262,7 +229,6 @@ function makeAnimal(id){
     orb(bodyGroup,0,.29,-.47,.46,.13,.29,fur);
   }
 
-  // 펭귄
   if(id==='penguin'){
     for(const x of [-.57,.57]){
       const wing = orb(
@@ -272,25 +238,20 @@ function makeAnimal(id){
     }
   }
 
-  // 사자
   if(id==='lion'){
-
     orb(
       bodyGroup,0,1.82,-.05,
       .83,.79,.54,mat(0xa56c31)
     );
-
     orb(bodyGroup,0,1.84,.43,.6,.54,.26,fur);
 
     for(const x of [-.26,.26]){
       orb(bodyGroup,x,1.93,.67,.14,.17,.09,white);
       orb(bodyGroup,x,1.93,.74,.09,.12,.05,dark);
     }
-
     orb(bodyGroup,0,1.65,.73,.15,.1,.1,dark);
   }
 
-  // 호랑이
   if(id==='tiger'){
     for(const x of [-.42,.42]){
       for(const y of [1.65,1.91,2.12]){
@@ -302,7 +263,6 @@ function makeAnimal(id){
     }
   }
 
-  // 사슴
   if(id==='deer'){
     for(const x of [-.34,.34]){
       cone(
@@ -312,7 +272,6 @@ function makeAnimal(id){
     }
   }
 
-  // 코알라
   if(id==='koala'){
     orb(bodyGroup,0,1.68,.72,.22,.29,.16,dark);
     for(const x of [-.65,.65]){
@@ -320,14 +279,12 @@ function makeAnimal(id){
     }
   }
 
-  // 햄스터
   if(id==='hamster'){
     for(const x of [-.46,.46]){
       orb(bodyGroup,x,1.64,.45,.29,.25,.2,light);
     }
   }
 
-  // 그림자
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(.7,24),
     new THREE.MeshBasicMaterial({
@@ -340,7 +297,6 @@ function makeAnimal(id){
 
   shadow.rotation.x = -Math.PI/2;
   shadow.position.y = .02;
-
   root.add(shadow);
 
   root.userData.bodyGroup = bodyGroup;
@@ -349,16 +305,10 @@ function makeAnimal(id){
   root.userData.walk = 0;
   root.userData.seated = false;
   root.userData.jumpHeight = 0;
-
   return root;
 }
 
-// ========================================
-// 동물 캐릭터 미리보기
-// ========================================
-
 const previewScene = new THREE.Scene();
-
 const previewCamera = new THREE.PerspectiveCamera(
   35,1,.1,40
 );
@@ -384,7 +334,6 @@ const previewRenderer = new THREE.WebGLRenderer({
 });
 
 previewRenderer.setPixelRatio(renderPixelRatio);
-
 $('animal-preview').appendChild(
   previewRenderer.domElement
 );
@@ -396,7 +345,6 @@ let previewX = 0;
 let selectedAnimal = 'seal';
 
 function selectAnimal(id){
-
   selectedAnimal = id;
 
   if(previewModel){
@@ -405,7 +353,6 @@ function selectAnimal(id){
 
   previewModel = makeAnimal(id);
   previewScene.add(previewModel);
-
   previewAngle = 0;
 
   $('selected-animal-name').textContent =
@@ -423,7 +370,6 @@ function selectAnimal(id){
 const animalGrid = $('animal-grid');
 
 for(const a of animals){
-
   const b = document.createElement('button');
   b.type = 'button';
   b.className = 'animal-option';
@@ -438,9 +384,7 @@ for(const a of animals){
   n.textContent = a.name;
 
   b.append(e,n);
-
   b.onclick = ()=>selectAnimal(a.id);
-
   animalGrid.append(b);
 }
 
@@ -472,9 +416,7 @@ for(const event of [
 }
 
 function resizePreview(){
-
   const r = previewEl.getBoundingClientRect();
-
   if(!r.width || !r.height)return;
 
   previewRenderer.setSize(
@@ -487,10 +429,6 @@ function resizePreview(){
 
 new ResizeObserver(resizePreview).observe(previewEl);
 
-// ========================================
-// 프로필
-// ========================================
-
 let profile = null;
 let myAvatar = null;
 let activeSymbol = null;
@@ -500,7 +438,6 @@ let myId = null;
 let yaw = Math.PI;
 
 try{
-
   const p = JSON.parse(
     localStorage.getItem('jmc-profile')
   );
@@ -511,30 +448,22 @@ try{
       animal:animal(p.animal).id
     };
   }
-
 }catch{}
 
 function showProfile(editing=false){
-
   selectedAnimal = profile?.animal || 'seal';
-
   selectAnimal(selectedAnimal);
-
   $('nickname').value = profile?.name || '';
   $('profile-error').textContent = '';
-
   $('cancel-profile').hidden = !editing;
-
   $('enter-lounge').textContent =
     editing ? '설정 저장하기' : 'JMC 라운지 입장하기';
 
   $('profile-modal').hidden = false;
-
   resizePreview();
 }
 
 function saveProfile(){
-
   const name = $('nickname').value.trim().slice(0,16);
 
   if(!name){
@@ -543,7 +472,6 @@ function saveProfile(){
   }
 
   const first = !profile;
-
   profile = {
     name,
     animal:selectedAnimal
@@ -557,7 +485,6 @@ function saveProfile(){
   }catch{}
 
   $('profile-modal').hidden = true;
-
   $('my-profile').textContent =
     `${animal(profile.animal).emoji} ${name}`;
 
@@ -585,23 +512,14 @@ $('nickname').addEventListener('keydown',e=>{
 });
 
 if(profile){
-
   $('profile-modal').hidden = true;
-
   $('my-profile').textContent =
     `${animal(profile.animal).emoji} ${profile.name}`;
-
 }else{
-
   showProfile();
 }
 
-// ========================================
-// 캔들 차트
-// ========================================
-
 function plotChart(canvas,candles,mini=false){
-
   const c = canvas.getContext('2d');
   const w = canvas.width;
   const h = canvas.height;
@@ -623,7 +541,6 @@ function plotChart(canvas,candles,mini=false){
   const lo = Math.min(...data.map(d=>d.low));
   const hi = Math.max(...data.map(d=>d.high));
   const pad = (hi-lo)*.08 || 1;
-
   const min = lo-pad;
   const max = hi+pad;
 
@@ -635,14 +552,11 @@ function plotChart(canvas,candles,mini=false){
   const W = w-L-R;
   const H = h-T-B;
   const step = W/data.length;
-
-  const y = v =>
-    T+(max-v)/(max-min)*H;
+  const y = v => T+(max-v)/(max-min)*H;
 
   c.strokeStyle = '#1d3548';
 
   for(let i=0;i<=4;i++){
-
     const yy = T+H*i/4;
 
     c.beginPath();
@@ -662,9 +576,7 @@ function plotChart(canvas,candles,mini=false){
   }
 
   data.forEach((d,i)=>{
-
     const x = L+step*(i+.5);
-
     const color =
       d.close>=d.open ? '#42dfbd' : '#f17a98';
 
@@ -694,12 +606,10 @@ function plotChart(canvas,candles,mini=false){
 }
 
 function renderAssets(){
-
   const parent = $('assets');
   parent.replaceChildren();
 
   for(const s of symbols){
-
     const card = document.createElement('div');
     card.className = 'crypto-asset';
 
@@ -712,7 +622,6 @@ function renderAssets(){
 
     title.textContent = s.name;
     ticker.textContent = s.id+' / USD';
-
     left.append(title,ticker);
 
     const right = document.createElement('div');
@@ -724,7 +633,6 @@ function renderAssets(){
     note.textContent = 'USD · Coinbase';
 
     right.append(note);
-
     head.append(left,right);
 
     const canvas = document.createElement('canvas');
@@ -733,17 +641,13 @@ function renderAssets(){
     canvas.height = 155;
 
     plotChart(canvas,s.candles,true);
-
     card.append(head,canvas);
-
     card.onclick = ()=>openDetail(s);
-
     parent.append(card);
   }
 }
 
 async function loadCandles(id,range='1d'){
-
   const [granularity,limit] = ranges[range];
 
   const r = await fetch(
@@ -758,11 +662,8 @@ async function loadCandles(id,range='1d'){
 }
 
 async function updatePrices(){
-
   await Promise.all(symbols.map(async s=>{
-
     try{
-
       const r = await fetch(
         `/api/price/${s.id}`,
         {cache:'no-store'}
@@ -775,9 +676,7 @@ async function updatePrices(){
       );
 
       s.price = Number.isFinite(v)?v:null;
-
     }catch{
-
       s.price = null;
     }
   }));
@@ -792,9 +691,7 @@ async function updatePrices(){
 }
 
 async function updateCandles(){
-
   await Promise.all(symbols.map(async s=>{
-
     try{
       s.candles = await loadCandles(s.id);
     }catch(e){
@@ -811,7 +708,6 @@ async function updateCandles(){
 }
 
 function openDetail(s){
-
   activeSymbol = s;
   activeRange = '1d';
 
@@ -835,7 +731,6 @@ function openDetail(s){
 }
 
 async function updateDetailChart(){
-
   const s = activeSymbol;
   const r = activeRange;
 
@@ -845,7 +740,6 @@ async function updateDetailChart(){
     '캔들 차트를 불러오는 중...';
 
   try{
-
     const data =
       r==='1d' && s.candles.length
         ? s.candles
@@ -857,11 +751,8 @@ async function updateDetailChart(){
 
     $('chart-status').textContent =
       'Coinbase OHLC 캔들 차트';
-
   }catch{
-
     plotChart($('detail-chart'),[]);
-
     $('chart-status').textContent =
       '차트 연결에 실패했습니다.';
   }
@@ -869,9 +760,7 @@ async function updateDetailChart(){
 
 document.querySelectorAll('[data-range]')
   .forEach(b=>{
-
     b.onclick = ()=>{
-
       activeRange = b.dataset.range;
 
       document.querySelectorAll('[data-range]')
@@ -894,12 +783,7 @@ $('detail').onclick = e=>{
   }
 };
 
-// ========================================
-// 3D 메타버스 공간
-// ========================================
-
 const sceneEl = $('scene');
-
 const scene = new THREE.Scene();
 
 scene.background = new THREE.Color('#080f1b');
@@ -915,15 +799,6 @@ const renderer = new THREE.WebGLRenderer({
 });
 
 renderer.setPixelRatio(renderPixelRatio);
-
-// ========================================
-// 중요 수정: 캔버스 중앙 정렬
-// ========================================
-
-// 캔버스의 실제 화면 크기를 #scene과 일치시킨다.
-// 렌더링 해상도와 CSS 표시 크기를 분리해
-// PC 배율 또는 모바일 해상도에 따른
-// 화면 좌우 치우침을 방지한다.
 
 renderer.domElement.style.display = 'block';
 renderer.domElement.style.position = 'absolute';
@@ -943,7 +818,6 @@ scene.add(
 );
 
 function box(w,h,d,color,x,y,z){
-
   const mesh = new THREE.Mesh(
     new THREE.BoxGeometry(w,h,d),
     new THREE.MeshStandardMaterial({
@@ -955,11 +829,9 @@ function box(w,h,d,color,x,y,z){
 
   mesh.position.set(x,y,z);
   scene.add(mesh);
-
   return mesh;
 }
 
-// 바닥
 box(42,.4,42,0x101c2b,0,-.25,0);
 
 const grid = new THREE.GridHelper(
@@ -969,34 +841,26 @@ const grid = new THREE.GridHelper(
 grid.position.y = .01;
 scene.add(grid);
 
-// 벽
 box(38,8,.5,0x15293a,0,4,-19);
 box(.5,8,38,0x14283a,-20,4,0);
 box(.5,8,38,0x14283a,20,4,0);
 
-// 기둥
 for(const x of [-18,18]){
   for(const z of [-18,18]){
     box(.6,8,.6,0x304b5c,x,4,z);
   }
 }
 
-// 소파
 for(const x of [-12,12]){
-
   box(7,.55,2.5,0x29495e,x,.35,4);
   box(7,1.15,.6,0x365c72,x,1.05,5.1);
-
   box(1.2,.75,2.4,0x365c72,x-3,.65,4);
   box(1.2,.75,2.4,0x365c72,x+3,.65,4);
-
   box(3.5,.2,1.5,0xd5b68a,x,.75,1.7);
 }
 
-// 식물
 for(const x of [-17,17]){
   for(const z of [-10,10]){
-
     box(1.2,.9,1.2,0x24413e,x,.45,z);
 
     const plant = new THREE.Mesh(
@@ -1011,9 +875,7 @@ for(const x of [-17,17]){
   }
 }
 
-// 조명
 for(const x of [-12,0,12]){
-
   const light = new THREE.PointLight(
     0xffd49b,25,17
   );
@@ -1029,17 +891,12 @@ const neon = new THREE.PointLight(
 neon.position.set(0,7,-10);
 scene.add(neon);
 
-// ========================================
-// 실시간 시세 전광판
-// ========================================
-
 const boardCanvas = document.createElement('canvas');
 
 boardCanvas.width = 1280;
 boardCanvas.height = 620;
 
 const boardCtx = boardCanvas.getContext('2d');
-
 const boardTexture = new THREE.CanvasTexture(
   boardCanvas
 );
@@ -1058,7 +915,6 @@ board.position.set(0,4.5,BOARD_Z);
 scene.add(board);
 
 function refreshBoard(){
-
   const c = boardCtx;
 
   c.fillStyle = '#071421';
@@ -1081,7 +937,6 @@ function refreshBoard(){
   );
 
   symbols.forEach((s,i)=>{
-
     const x = 36+(i%2)*608;
     const y = 90+Math.floor(i/2)*255;
 
@@ -1113,7 +968,6 @@ function refreshBoard(){
     );
 
     if(!data.length){
-
       c.fillStyle = '#809ab0';
       c.font = '18px Arial';
 
@@ -1137,9 +991,7 @@ function refreshBoard(){
     const step = 550/data.length;
 
     data.forEach((d,j)=>{
-
       const xx = x+18+step*(j+.5);
-
       const yy = v =>
         y+220-(v-lo)/span*156;
 
@@ -1158,7 +1010,6 @@ function refreshBoard(){
 
       const top = yy(Math.max(d.open,d.close));
       const bottom = yy(Math.min(d.open,d.close));
-
       const bw = Math.max(2,step*.6);
 
       c.fillRect(
@@ -1175,15 +1026,9 @@ function refreshBoard(){
 
 refreshBoard();
 
-// ========================================
-// 3인칭 카메라와 캐릭터
-// ========================================
-
 const others = new Map();
 
-// 전광판을 바라보는 정도를 계산
 function boardFocus(position){
-
   const facing = THREE.MathUtils.smoothstep(
     (Math.cos(yaw)+1)/2,
     .55,
@@ -1200,9 +1045,7 @@ function boardFocus(position){
   return facing*near;
 }
 
-// 전광판 가까이 접근하면 자동 줌아웃
 function cameraDistance(position){
-
   const focus = boardFocus(position);
 
   const tanHalfVertical = Math.tan(
@@ -1232,9 +1075,7 @@ function cameraDistance(position){
   );
 }
 
-// 캐릭터의 실제 위치를 기준으로 카메라 배치
 function cameraPositionFor(position){
-
   const distance = cameraDistance(position);
   const focus = boardFocus(position);
 
@@ -1245,9 +1086,7 @@ function cameraPositionFor(position){
   );
 }
 
-// 항상 내 캐릭터를 화면 중앙에서 바라봄
 function cameraLookAtFor(position){
-
   return new THREE.Vector3(
     position.x,
     position.y+1.15+boardFocus(position)*1.25,
@@ -1255,13 +1094,10 @@ function cameraLookAtFor(position){
   );
 }
 
-// 시작 카메라
 function resetToBoard(){
-
   yaw = Math.PI;
 
   if(myAvatar){
-
     myAvatar.position.set(0,0,-8);
     myAvatar.rotation.y = Math.PI;
     myAvatar.userData.targetDirection = Math.PI;
@@ -1282,7 +1118,6 @@ function resetToBoard(){
 }
 
 function updateMyAvatar(){
-
   if(!profile)return;
 
   const pos = myAvatar
@@ -1297,48 +1132,38 @@ function updateMyAvatar(){
     myAvatar?.userData.seated || false;
 
   if(myAvatar){
-
     if(myId){
       removeBubble(myId);
     }
-
     scene.remove(myAvatar);
   }
 
   myAvatar = makeAnimal(profile.animal);
-
   myAvatar.position.copy(pos);
   myAvatar.rotation.y = dir;
-
   myAvatar.userData.targetDirection = dir;
   myAvatar.userData.seated = wasSeated;
-
   scene.add(myAvatar);
 }
 
 function updateOthers(players){
-
   const seen = new Set();
 
   for(const p of players){
-
     if(p.id===myId)continue;
 
     seen.add(p.id);
-
     let avatar = others.get(p.id);
 
     if(
       !avatar ||
       avatar.userData.animal!==p.animal
     ){
-
       if(avatar){
         scene.remove(avatar);
       }
 
       avatar = makeAnimal(p.animal);
-
       scene.add(avatar);
       others.set(p.id,avatar);
     }
@@ -1359,7 +1184,6 @@ function updateOthers(players){
   }
 
   for(const [id,a] of others){
-
     if(!seen.has(id)){
       removeBubble(id);
       scene.remove(a);
@@ -1374,16 +1198,10 @@ if(profile){
 
 resetToBoard();
 
-// ========================================
-// 캐릭터 채팅 말풍선
-// ========================================
-
 const activeBubbles = new Map();
-
 const BUBBLE_LIFETIME = 6000;
 
 function wrapBubbleText(ctx,text,maxWidth,maxLines=3){
-
   const chars = Array.from(
     String(text).replace(/\s+/g,' ').trim()
   );
@@ -1392,19 +1210,16 @@ function wrapBubbleText(ctx,text,maxWidth,maxLines=3){
   let line = '';
 
   for(const ch of chars){
-
     if(
       ctx.measureText(line+ch).width>maxWidth &&
       line
     ){
-
       lines.push(line);
       line = ch;
 
       if(lines.length===maxLines-1){
         break;
       }
-
     }else{
       line += ch;
     }
@@ -1414,7 +1229,6 @@ function wrapBubbleText(ctx,text,maxWidth,maxLines=3){
     Array.from(lines.join('')).length;
 
   if(lines.length===maxLines-1){
-
     let rest = chars.slice(consumed).join('');
 
     while(
@@ -1429,9 +1243,7 @@ function wrapBubbleText(ctx,text,maxWidth,maxLines=3){
     }
 
     lines.push(rest);
-
   }else if(line){
-
     lines.push(line);
   }
 
@@ -1439,9 +1251,7 @@ function wrapBubbleText(ctx,text,maxWidth,maxLines=3){
 }
 
 function removeBubble(senderId){
-
   const existing = activeBubbles.get(senderId);
-
   if(!existing)return;
 
   existing.sprite.parent?.remove(
@@ -1455,9 +1265,7 @@ function removeBubble(senderId){
 }
 
 function showBubble(item){
-
   const senderId = item?.senderId;
-
   if(!senderId || !item.message)return;
 
   const avatar = senderId===myId
@@ -1465,16 +1273,13 @@ function showBubble(item){
     : others.get(senderId);
 
   if(!avatar)return;
-
   removeBubble(senderId);
 
   const canvas = document.createElement('canvas');
-
   canvas.width = 768;
   canvas.height = 320;
 
   const ctx = canvas.getContext('2d');
-
   ctx.font = 'bold 40px sans-serif';
 
   const lines = wrapBubbleText(
@@ -1482,7 +1287,6 @@ function showBubble(item){
   );
 
   const lineHeight = 52;
-
   const boxH = Math.max(
     118,
     lines.length*lineHeight+48
@@ -1493,7 +1297,6 @@ function showBubble(item){
 
   ctx.shadowColor = 'rgba(0,0,0,.35)';
   ctx.shadowBlur = 18;
-
   ctx.fillStyle = 'rgba(255,255,255,.97)';
 
   ctx.beginPath();
@@ -1501,12 +1304,10 @@ function showBubble(item){
   ctx.fill();
 
   ctx.shadowBlur = 0;
-
   ctx.beginPath();
   ctx.moveTo(352,bottom);
   ctx.lineTo(384,bottom+30);
   ctx.lineTo(416,bottom);
-
   ctx.closePath();
   ctx.fill();
 
@@ -1525,7 +1326,6 @@ function showBubble(item){
   });
 
   const texture = new THREE.CanvasTexture(canvas);
-
   texture.colorSpace = THREE.SRGBColorSpace;
 
   const material = new THREE.SpriteMaterial({
@@ -1551,15 +1351,10 @@ function showBubble(item){
 }
 
 function tickBubbles(now){
-
   for(const [id,bubble] of activeBubbles){
-
     if(now>=bubble.expires){
-
       removeBubble(id);
-
     }else if(now>bubble.expires-900){
-
       bubble.sprite.material.opacity = Math.max(
         0,
         (bubble.expires-now)/900
@@ -1569,18 +1364,12 @@ function tickBubbles(now){
 }
 
 function deleteBubbleByMessage(messageId){
-
   for(const [id,bubble] of activeBubbles){
-
     if(bubble.messageId===messageId){
       removeBubble(id);
     }
   }
 }
-
-// ========================================
-// PC / 모바일 이동 조작
-// ========================================
 
 const keys = new Set();
 const touchCounts = new Map();
@@ -1594,17 +1383,13 @@ let onGround = true;
 const GRAVITY = 19;
 const JUMP_SPEED = 8;
 
-// 화면 드래그: 시점 회전
 renderer.domElement.addEventListener('pointerdown',e=>{
-
   dragging = true;
   lastPointerX = e.clientX;
-
   renderer.domElement.setPointerCapture(e.pointerId);
 });
 
 renderer.domElement.addEventListener('pointermove',e=>{
-
   if(dragging){
     yaw += (e.clientX-lastPointerX)*.005;
     lastPointerX = e.clientX;
@@ -1621,9 +1406,7 @@ for(const type of [
   });
 }
 
-// 키보드 조작
 window.addEventListener('keydown',e=>{
-
   if(
     ['INPUT','TEXTAREA'].includes(
       document.activeElement?.tagName
@@ -1650,29 +1433,22 @@ window.addEventListener('keydown',e=>{
     return;
   }
 
-  // C: 앉기
   if(k==='c' && myAvatar){
-
     if(!onGround)return;
 
     myAvatar.userData.seated =
       !myAvatar.userData.seated;
 
     myAvatar.userData.bodyGroup.position.y = 0;
-
     sendMove(true);
-
-  // Space: 점프
   }else if(
     (k===' '||e.code==='Space') &&
     myAvatar &&
     !myAvatar.userData.seated &&
     onGround
   ){
-
     jumpVelocity = JUMP_SPEED;
     onGround = false;
-
     sendMove(true);
   }
 
@@ -1683,18 +1459,14 @@ window.addEventListener('keyup',e=>{
   keys.delete(e.key.toLowerCase());
 });
 
-// 모바일 방향키
 const controls = $('mobile-controls');
 
 controls.querySelectorAll('.move-btn').forEach(b=>{
-
   const key = b.dataset.key;
 
   b.addEventListener('pointerdown',e=>{
-
     e.preventDefault();
     e.stopPropagation();
-
     b.setPointerCapture(e.pointerId);
 
     touchCounts.set(
@@ -1706,7 +1478,6 @@ controls.querySelectorAll('.move-btn').forEach(b=>{
   });
 
   const release = e=>{
-
     e.preventDefault();
     e.stopPropagation();
 
@@ -1723,7 +1494,6 @@ controls.querySelectorAll('.move-btn').forEach(b=>{
 });
 
 window.addEventListener('blur',()=>{
-
   keys.clear();
   touchCounts.clear();
   dragging = false;
@@ -1741,16 +1511,10 @@ let lastFrame = performance.now();
 let lastSent = 0;
 let walkTime = 0;
 
-// ========================================
-// 캐릭터 위치 서버 전송
-// ========================================
-
 function sendMove(force=false){
-
   if(!myAvatar)return;
 
   const now = performance.now();
-
   if(!force && now-lastSent<120)return;
 
   send({
@@ -1765,12 +1529,7 @@ function sendMove(force=false){
   lastSent = now;
 }
 
-// ========================================
-// 메인 애니메이션
-// ========================================
-
 function animate(now){
-
   requestAnimationFrame(animate);
 
   const dt = Math.min(
@@ -1780,34 +1539,27 @@ function animate(now){
 
   lastFrame = now;
 
-  // 동물 선택 미리보기
   if(
     !$('profile-modal').hidden &&
     previewModel
   ){
-
     previewModel.rotation.y = previewAngle;
-
     previewModel.userData.bodyGroup.position.y =
       Math.sin(now*.002)*.025;
   }
 
   if(!$('profile-modal').hidden){
-
     resizePreview();
-
     previewRenderer.render(
       previewScene,
       previewCamera
     );
   }
 
-  // 내 캐릭터 조작
   if(
     myAvatar &&
     $('profile-modal').hidden
   ){
-
     const f =
       Number(held('w')||held('arrowup'))-
       Number(held('s')||held('arrowdown'));
@@ -1820,9 +1572,7 @@ function animate(now){
       (f||s) &&
       !myAvatar.userData.seated
     ){
-
       const len = Math.hypot(f,s);
-
       const forward = f/len;
       const side = s/len;
 
@@ -1859,21 +1609,15 @@ function animate(now){
         Math.abs(Math.sin(walkTime))*.085;
 
       sendMove();
-
     }else{
-
       myAvatar.userData.bodyGroup.position.y *= .8;
     }
 
-    // 점프
     if(!onGround){
-
       jumpVelocity -= GRAVITY*dt;
-
       myAvatar.position.y += jumpVelocity*dt;
 
       if(myAvatar.position.y<=0){
-
         myAvatar.position.y = 0;
         jumpVelocity = 0;
         onGround = true;
@@ -1882,7 +1626,6 @@ function animate(now){
       sendMove();
     }
 
-    // 앉기 애니메이션
     const body = myAvatar.userData.bodyGroup;
 
     body.scale.y = THREE.MathUtils.damp(
@@ -1902,9 +1645,7 @@ function animate(now){
     );
   }
 
-  // 다른 이용자 캐릭터
   for(const other of others.values()){
-
     const body = other.userData.bodyGroup;
 
     body.scale.y = THREE.MathUtils.damp(
@@ -1915,9 +1656,7 @@ function animate(now){
     );
   }
 
-  // 내 캐릭터 회전
   if(myAvatar){
-
     myAvatar.rotation.y = turn(
       myAvatar.rotation.y,
       myAvatar.userData.targetDirection,
@@ -1925,19 +1664,13 @@ function animate(now){
     );
   }
 
-  // 다른 캐릭터 회전
   for(const a of others.values()){
-
     a.rotation.y = turn(
       a.rotation.y,
       a.userData.targetDirection,
       dt*8
     );
   }
-
-  // ======================================
-  // 중앙 정렬된 3인칭 카메라
-  // ======================================
 
   const target = myAvatar?.position ||
     new THREE.Vector3(0,0,-8);
@@ -1950,30 +1683,19 @@ function animate(now){
     followAlpha
   );
 
-  // 캐릭터를 카메라 광학 중심으로 조준
   camera.lookAt(
     cameraLookAtFor(target)
   );
 
   tickBubbles(now);
-
   renderer.render(scene,camera);
 }
 
-// ========================================
-// 화면 크기 자동 조정
-// ========================================
-
 function resizeScene(){
-
   const w = Math.max(1,sceneEl.clientWidth);
   const h = Math.max(1,sceneEl.clientHeight);
 
-  // 내부 렌더링 해상도 설정
   renderer.setSize(w,h,false);
-
-  // 실제 화면에 표시되는 크기는
-  // 메타버스 영역의 정확히 100%
   renderer.domElement.style.width = '100%';
   renderer.domElement.style.height = '100%';
 
@@ -1984,22 +1706,15 @@ function resizeScene(){
 new ResizeObserver(resizeScene).observe(sceneEl);
 
 resizeScene();
-
 requestAnimationFrame(animate);
 
-// ========================================
-// 서버 연결
-// ========================================
-
 function send(m){
-
   if(socket?.readyState===WebSocket.OPEN){
     socket.send(JSON.stringify(m));
   }
 }
 
 function sendProfile(){
-
   if(!profile)return;
 
   send({
@@ -2009,7 +1724,6 @@ function sendProfile(){
   });
 
   if(myAvatar){
-
     send({
       type:'move',
       x:myAvatar.position.x,
@@ -2021,12 +1735,7 @@ function sendProfile(){
   }
 }
 
-// ========================================
-// 채팅
-// ========================================
-
 function addMessage(item){
-
   const line = document.createElement('div');
   line.className = 'msg';
 
@@ -2045,21 +1754,14 @@ function addMessage(item){
   );
 
   $('messages').append(line);
-
   $('messages').scrollTop =
     $('messages').scrollHeight;
 }
 
-// ========================================
-// 롱·숏 투표
-// ========================================
-
 function updateVotes(v){
-
   if(!v)return;
 
   const total = v.long+v.short;
-
   const pct = total
     ? Math.round(v.long/total*100)
     : 50;
@@ -2073,12 +1775,7 @@ function updateVotes(v){
     `${100-pct}% SHORT (${v.short})`;
 }
 
-// ========================================
-// WebSocket 멀티플레이
-// ========================================
-
 function connect(){
-
   const protocol =
     location.protocol==='https:' ? 'wss' : 'ws';
 
@@ -2087,7 +1784,6 @@ function connect(){
   );
 
   socket.onopen = ()=>{
-
     $('connection').textContent =
       '● 연결됨';
 
@@ -2095,7 +1791,6 @@ function connect(){
   };
 
   socket.onclose = ()=>{
-
     $('connection').textContent =
       '연결 재시도 중';
 
@@ -2103,13 +1798,11 @@ function connect(){
   };
 
   socket.onerror = ()=>{
-
     $('connection').textContent =
       '연결 오류';
   };
 
   socket.onmessage = e=>{
-
     let m;
 
     try{
@@ -2119,11 +1812,8 @@ function connect(){
     }
 
     if(m.type==='welcome'){
-
       myId = m.id;
-
       updateVotes(m.votes);
-
       $('messages').replaceChildren();
 
       for(const item of m.history||[]){
@@ -2134,29 +1824,29 @@ function connect(){
     }
 
     if(m.type==='presence'){
-
       $('online').textContent = m.count;
-
       updateOthers(m.players||[]);
     }
 
-    if(m.type==='chat'){
+    // PC·모바일 이용자의 마법 공격 동기화
+    if(m.type==='magic'){
+      spawnRemoteMagic(m);
+      return;
+    }
 
+    if(m.type==='chat'){
       addMessage(m.item);
       showBubble(m.item);
     }
 
     if(m.type==='votes'){
-
       updateVotes(m.votes);
     }
 
     if(m.type==='chat_deleted'){
-
       document.querySelectorAll(
         '#messages .msg'
       ).forEach(el=>{
-
         if(el.dataset.messageId===m.id){
           el.remove();
         }
@@ -2166,7 +1856,6 @@ function connect(){
     }
 
     if(m.type==='chat_reset'){
-
       $('messages').replaceChildren();
 
       for(const id of [...activeBubbles.keys()]){
@@ -2176,12 +1865,7 @@ function connect(){
   };
 }
 
-// ========================================
-// 투표 버튼
-// ========================================
-
 $('long').onclick = ()=>{
-
   if(!profile)return showProfile();
 
   send({
@@ -2191,7 +1875,6 @@ $('long').onclick = ()=>{
 };
 
 $('short').onclick = ()=>{
-
   if(!profile)return showProfile();
 
   send({
@@ -2200,12 +1883,7 @@ $('short').onclick = ()=>{
   });
 };
 
-// ========================================
-// 채팅 입력
-// ========================================
-
 $('chat-form').onsubmit = e=>{
-
   e.preventDefault();
 
   if(!profile)return showProfile();
@@ -2214,7 +1892,6 @@ $('chat-form').onsubmit = e=>{
   const message = input.value.trim();
 
   if(message){
-
     send({
       type:'chat',
       message
@@ -2224,27 +1901,17 @@ $('chat-form').onsubmit = e=>{
   }
 };
 
-// ========================================
-// 실시간 시세
-// ========================================
-
 renderAssets();
 updatePrices();
 updateCandles();
 
 setInterval(updatePrices,15000);
 setInterval(updateCandles,60000);
-
 connect();
-
-// ========================================
-// 경제 캘린더
-// ========================================
 
 const econFrame = $('investing-calendar');
 
 if(econFrame){
-
   const custom =
     window.INVESTING_WIDGET_URL ||
     window.JMC_INVESTING_WIDGET_URL;
@@ -2262,7 +1929,6 @@ if(econFrame){
 $('calendar-scene-button')?.addEventListener(
   'click',
   ()=>{
-
     const panel = $('econ-panel');
 
     panel?.scrollIntoView({
@@ -2280,7 +1946,7 @@ $('calendar-scene-button')?.addEventListener(
 );
 
 /* ========================================
-   A키 연속 마법 공격
+   A키 연속 마법 공격 + 멀티플레이 동기화
    ======================================== */
 
 let magicPressed = false;
@@ -2292,9 +1958,9 @@ const MAGIC_INTERVAL = 200;
 const MAGIC_SPEED = 13;
 const MAGIC_LIFETIME = 1100;
 
-// 마법탄 생성
-function castMagic() {
-  if (!myAvatar) return;
+// 내 캐릭터가 마법 발사
+function castMagic(){
+  if(!myAvatar)return;
 
   const direction = new THREE.Vector3(
     Math.sin(myAvatar.rotation.y),
@@ -2304,51 +1970,129 @@ function castMagic() {
 
   const projectile = new THREE.Group();
 
-  // 빛나는 마법탄
   const core = new THREE.Mesh(
-    new THREE.SphereGeometry(0.18, 12, 12),
+    new THREE.SphereGeometry(0.18,12,12),
     new THREE.MeshBasicMaterial({
-      color: 0xb9ffff
+      color:0xb9ffff
     })
   );
 
   const aura = new THREE.Mesh(
-    new THREE.SphereGeometry(0.32, 12, 12),
+    new THREE.SphereGeometry(0.32,12,12),
     new THREE.MeshBasicMaterial({
-      color: 0x9955ff,
-      transparent: true,
-      opacity: 0.48,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false
+      color:0x9955ff,
+      transparent:true,
+      opacity:0.48,
+      blending:THREE.AdditiveBlending,
+      depthWrite:false
     })
   );
 
-  projectile.add(core, aura);
-
+  projectile.add(core,aura);
   projectile.position.copy(myAvatar.position);
   projectile.position.y += 1.15;
-  projectile.position.addScaledVector(direction, 0.85);
+
+  projectile.position.addScaledVector(
+    direction,
+    0.85
+  );
 
   scene.add(projectile);
 
   magicProjectiles.push({
-    object: projectile,
+    object:projectile,
     direction,
-    born: performance.now(),
+    born:performance.now(),
+    core,
+    aura
+  });
+
+  // 서버에 공격 알림 전송
+  send({type:'magic'});
+}
+
+// 다른 이용자가 쏜 마법탄 표시
+function spawnRemoteMagic(m){
+  if(
+    !m ||
+    !m.senderId ||
+    m.senderId===myId
+  ){
+    return;
+  }
+
+  const x = Number(m.x);
+  const y = Number(m.y);
+  const z = Number(m.z);
+  const facing = Number(m.direction);
+
+  if(![x,y,z,facing].every(Number.isFinite)){
+    return;
+  }
+
+  const direction = new THREE.Vector3(
+    Math.sin(facing),
+    0,
+    Math.cos(facing)
+  ).normalize();
+
+  const projectile = new THREE.Group();
+
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(0.18,12,12),
+    new THREE.MeshBasicMaterial({
+      color:0xb9ffff
+    })
+  );
+
+  const aura = new THREE.Mesh(
+    new THREE.SphereGeometry(0.32,12,12),
+    new THREE.MeshBasicMaterial({
+      color:0x9955ff,
+      transparent:true,
+      opacity:0.48,
+      blending:THREE.AdditiveBlending,
+      depthWrite:false
+    })
+  );
+
+  projectile.add(core,aura);
+
+  projectile.position.set(
+    x,
+    y+1.15,
+    z
+  );
+
+  projectile.position.addScaledVector(
+    direction,
+    0.85
+  );
+
+  scene.add(projectile);
+
+  magicProjectiles.push({
+    object:projectile,
+    direction,
+    born:performance.now(),
     core,
     aura
   });
 }
 
-// A키 누르기
-window.addEventListener('keydown', (e) => {
-  if (e.key.toLowerCase() !== 'a') return;
+// PC A키 또는 모바일 A 버튼
+window.addEventListener('keydown',e=>{
+  if(e.key.toLowerCase()!=='a')return;
 
-  if (['INPUT', 'TEXTAREA'].includes(
-    document.activeElement?.tagName
-  )) return;
+  if(
+    ['INPUT','TEXTAREA'].includes(
+      document.activeElement?.tagName
+    )
+  ){
+    return;
+  }
 
-  if (!document.getElementById('profile-modal').hidden) {
+  if(!$('profile-modal').hidden){
     return;
   }
 
@@ -2356,76 +2100,84 @@ window.addEventListener('keydown', (e) => {
   magicPressed = true;
 });
 
-// A키 떼기
-window.addEventListener('keyup', (e) => {
-  if (e.key.toLowerCase() === 'a') {
+window.addEventListener('keyup',e=>{
+  if(e.key.toLowerCase()==='a'){
     magicPressed = false;
   }
 });
 
-window.addEventListener('blur', () => {
+window.addEventListener('blur',()=>{
   magicPressed = false;
 });
 
-// 마법탄 이동 및 연속 발사
 let previousMagicFrame = performance.now();
 
-function updateMagic(now) {
+function updateMagic(now){
   requestAnimationFrame(updateMagic);
 
   const dt = Math.min(
-    (now - previousMagicFrame) / 1000,
+    (now-previousMagicFrame)/1000,
     0.05
   );
 
   previousMagicFrame = now;
 
-  if (
+  if(
     magicPressed &&
     myAvatar &&
-    now - lastMagicTime >= MAGIC_INTERVAL
-  ) {
+    $('profile-modal').hidden &&
+    now-lastMagicTime>=MAGIC_INTERVAL
+  ){
     castMagic();
     lastMagicTime = now;
   }
 
-  // 공격 중 캐릭터 마법 시전 모션
-  if (myAvatar?.userData.bodyGroup) {
+  // 캐릭터 마법 시전 모션
+  if(myAvatar?.userData.bodyGroup){
     const body = myAvatar.userData.bodyGroup;
 
     body.rotation.z = magicPressed
-      ? Math.sin(now * 0.018) * 0.12
-      : THREE.MathUtils.lerp(body.rotation.z, 0, 0.2);
+      ? Math.sin(now*0.018)*0.12
+      : THREE.MathUtils.lerp(
+          body.rotation.z,
+          0,
+          0.2
+        );
   }
 
-  for (let i = magicProjectiles.length - 1; i >= 0; i--) {
+  // 모든 이용자의 마법탄 이동
+  for(
+    let i=magicProjectiles.length-1;
+    i>=0;
+    i--
+  ){
     const shot = magicProjectiles[i];
 
     shot.object.position.addScaledVector(
       shot.direction,
-      MAGIC_SPEED * dt
+      MAGIC_SPEED*dt
     );
 
-    shot.aura.rotation.y += dt * 9;
+    shot.aura.rotation.y += dt*9;
 
-    const age = now - shot.born;
+    const age = now-shot.born;
     const remaining = Math.max(
       0,
-      1 - age / MAGIC_LIFETIME
+      1-age/MAGIC_LIFETIME
     );
 
-    shot.aura.material.opacity = remaining * 0.48;
+    shot.aura.material.opacity =
+      remaining*0.48;
 
-    if (age >= MAGIC_LIFETIME) {
+    if(age>=MAGIC_LIFETIME){
       scene.remove(shot.object);
 
       shot.core.geometry.dispose();
       shot.core.material.dispose();
-
       shot.aura.geometry.dispose();
       shot.aura.material.dispose();
 
-      magicProjectiles.splice(i, 1);
+      magicProjectiles.splice(i,1);
     }
   }
 }
