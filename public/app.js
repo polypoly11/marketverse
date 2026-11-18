@@ -168,10 +168,80 @@ function refreshBoard(){const c=boardCtx;c.fillStyle='#071421';c.fillRect(0,0,12
 refreshBoard();
 const others=new Map();
 function resetToBoard(){yaw=Math.PI;if(myAvatar){myAvatar.position.set(0,0,-8);myAvatar.rotation.y=Math.PI;myAvatar.userData.targetDirection=Math.PI;}camera.position.set(0,4.2,-2);camera.lookAt(0,4.5,-18.65);}
-function updateMyAvatar(){if(!profile)return;const pos=myAvatar?myAvatar.position.clone():new THREE.Vector3(0,0,-8),dir=myAvatar?myAvatar.rotation.y:Math.PI;if(myAvatar)scene.remove(myAvatar);myAvatar=makeAnimal(profile.animal);myAvatar.position.copy(pos);myAvatar.rotation.y=dir;myAvatar.userData.targetDirection=dir;scene.add(myAvatar);}
+function updateMyAvatar(){if(!profile)return;const pos=myAvatar?myAvatar.position.clone():new THREE.Vector3(0,0,-8),dir=myAvatar?myAvatar.rotation.y:Math.PI;if(myAvatar){if(myId)removeBubble(myId);scene.remove(myAvatar);}myAvatar=makeAnimal(profile.animal);myAvatar.position.copy(pos);myAvatar.rotation.y=dir;myAvatar.userData.targetDirection=dir;scene.add(myAvatar);}
 function updateOthers(players){const seen=new Set();for(const p of players){if(p.id===myId)continue;seen.add(p.id);let avatar=others.get(p.id);if(!avatar||avatar.userData.animal!==p.animal){if(avatar)scene.remove(avatar);avatar=makeAnimal(p.animal);scene.add(avatar);others.set(p.id,avatar);}avatar.position.set(Number(p.x)||0,0,Number(p.z)||0);if(Number.isFinite(Number(p.direction)))avatar.userData.targetDirection=Number(p.direction);}
- for(const [id,a] of others)if(!seen.has(id)){scene.remove(a);others.delete(id);}}
+ for(const [id,a] of others)if(!seen.has(id)){removeBubble(id);scene.remove(a);others.delete(id);}}
 if(profile){updateMyAvatar();resetToBoard();}
+
+// 3D 말풍선: 채팅을 보낸 캐릭터 머리 위에 6초 동안 표시
+const activeBubbles = new Map();
+const BUBBLE_LIFETIME = 6000;
+function wrapBubbleText(ctx, text, maxWidth, maxLines=3) {
+ const chars=Array.from(String(text).replace(/\\s+/g,' ').trim());
+ const lines=[]; let line='';
+ for (const ch of chars) {
+  if (ctx.measureText(line+ch).width>maxWidth && line) {
+   lines.push(line); line=ch;
+   if (lines.length===maxLines-1) break;
+  } else line+=ch;
+ }
+ const consumed=Array.from(lines.join('')).length;
+ if (lines.length===maxLines-1) {
+  let rest=chars.slice(consumed).join('');
+  while(rest && ctx.measureText(rest).width>maxWidth) rest=rest.slice(0,-1);
+  if(rest.length<chars.length-consumed) rest=rest.slice(0,-1)+'…';
+  lines.push(rest);
+ } else if(line) lines.push(line);
+ return lines;
+}
+function removeBubble(senderId) {
+ const existing=activeBubbles.get(senderId);
+ if(!existing)return;
+ existing.sprite.parent?.remove(existing.sprite);
+ existing.sprite.material.map?.dispose();
+ existing.sprite.material.dispose();
+ activeBubbles.delete(senderId);
+}
+function showBubble(item) {
+ const senderId=item?.senderId;
+ if(!senderId || !item.message)return;
+ const avatar=senderId===myId?myAvatar:others.get(senderId);
+ if(!avatar)return;
+ removeBubble(senderId);
+ const canvas=document.createElement('canvas');
+ canvas.width=768; canvas.height=320;
+ const ctx=canvas.getContext('2d');
+ ctx.font='bold 40px sans-serif';
+ const lines=wrapBubbleText(ctx,item.message,620,3);
+ const lineHeight=52,boxH=Math.max(118,lines.length*lineHeight+48);
+ const top=16,bottom=top+boxH;
+ ctx.shadowColor='rgba(0,0,0,.35)';ctx.shadowBlur=18;
+ ctx.fillStyle='rgba(255,255,255,.97)';
+ ctx.beginPath();ctx.roundRect(20,top,728,boxH,28);ctx.fill();
+ ctx.shadowBlur=0;
+ ctx.beginPath();ctx.moveTo(352,bottom);ctx.lineTo(384,bottom+30);ctx.lineTo(416,bottom);ctx.closePath();ctx.fill();
+ ctx.fillStyle='#172b3b';ctx.textAlign='center';ctx.textBaseline='middle';
+ lines.forEach((line,i)=>ctx.fillText(line,384,top+boxH/2+(i-(lines.length-1)/2)*lineHeight,650));
+ const texture=new THREE.CanvasTexture(canvas);texture.colorSpace=THREE.SRGBColorSpace;
+ const material=new THREE.SpriteMaterial({map:texture,transparent:true,depthTest:false,depthWrite:false});
+ const sprite=new THREE.Sprite(material);
+ sprite.position.set(0,3.65,0);
+ sprite.scale.set(3.8,1.58,1);
+ sprite.renderOrder=100;
+ avatar.add(sprite);
+ activeBubbles.set(senderId,{sprite,expires:performance.now()+BUBBLE_LIFETIME,messageId:item.id});
+}
+function tickBubbles(now) {
+ for(const [id,bubble] of activeBubbles) {
+  if(now>=bubble.expires)removeBubble(id);
+  else if(now>bubble.expires-900)bubble.sprite.material.opacity=Math.max(0,(bubble.expires-now)/900);
+ }
+}
+function deleteBubbleByMessage(messageId) {
+ for(const [id,bubble] of activeBubbles) {
+  if(bubble.messageId===messageId)removeBubble(id);
+ }
+}
 
 // PC 및 모바일 방향키
 const keys=new Set(),touchCounts=new Map();let dragging=false,lastPointerX=0;
@@ -209,6 +279,7 @@ function animate(now){requestAnimationFrame(animate);const dt=Math.min((now-last
  const t=myAvatar?.position||new THREE.Vector3(0,0,-8);
  camera.position.lerp(new THREE.Vector3(t.x-Math.sin(yaw)*6,4.2,t.z-Math.cos(yaw)*6),.09);
  camera.lookAt(t.x+Math.sin(yaw)*8,3.5,t.z+Math.cos(yaw)*8);
+ tickBubbles(now);
  renderer.render(scene,camera);
 }
 function resizeScene(){const w=sceneEl.clientWidth,h=sceneEl.clientHeight;renderer.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}
@@ -217,20 +288,25 @@ new ResizeObserver(resizeScene).observe(sceneEl);resizeScene();requestAnimationF
 // 멀티플레이, 채팅, 투표
 function send(m){if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify(m));}
 function sendProfile(){if(!profile)return;send({type:'join',name:profile.name,animal:profile.animal});if(myAvatar)send({type:'move',x:myAvatar.position.x,z:myAvatar.position.z,direction:myAvatar.userData.targetDirection});}
-function addMessage(item){const line=document.createElement('div');line.className='msg';const b=document.createElement('b');b.textContent=`${animal(item.animal).emoji} ${item.name}: `;line.append(b,document.createTextNode(item.message||''));$('messages').append(line);$('messages').scrollTop=$('messages').scrollHeight;}
+function addMessage(item){const line=document.createElement('div');line.className='msg';if(item.id)line.dataset.messageId=item.id;const b=document.createElement('b');b.textContent=`${animal(item.animal).emoji} ${item.name}: `;line.append(b,document.createTextNode(item.message||''));$('messages').append(line);$('messages').scrollTop=$('messages').scrollHeight;}
 function updateVotes(v){if(!v)return;const total=v.long+v.short,pct=total?Math.round(v.long/total*100):50;$('longbar').style.width=pct+'%';$('longpct').textContent=`${pct}% LONG (${v.long})`;$('shortpct').textContent=`${100-pct}% SHORT (${v.short})`;}
-function connect(){const protocol=location.protocol==='https:'?'wss':'ws';socket=new WebSocket(`${protocol}://${location.host}/ws`);
+let moderationStopped=false;function connect(){if(moderationStopped)return;const protocol=location.protocol==='https:'?'wss':'ws';socket=new WebSocket(`${protocol}://${location.host}/ws`);
  socket.onopen=()=>{$('connection').textContent='● 연결됨';sendProfile();};
- socket.onclose=()=>{$('connection').textContent='연결 재시도 중';setTimeout(connect,2000);};
+ socket.onclose=e=>{if([4001,4002,4003].includes(e.code)){moderationStopped=true;$('connection').textContent='접속 종료';return;}$('connection').textContent='연결 재시도 중';setTimeout(connect,2000);};
  socket.onerror=()=>{$('connection').textContent='연결 오류';};
  socket.onmessage=e=>{let m;try{m=JSON.parse(e.data);}catch{return;}
-  if(m.type==='welcome'){myId=m.id;updateVotes(m.votes);$('messages').replaceChildren();for(const item of m.history||[])addMessage(item);sendProfile();}
+  if(m.type==='welcome'){renderNotices(m.notices||[]);myId=m.id;updateVotes(m.votes);$('messages').replaceChildren();for(const item of m.history||[])addMessage(item);sendProfile();}
   if(m.type==='presence'){$('online').textContent=m.count;updateOthers(m.players||[]);}
-  if(m.type==='chat')addMessage(m.item);
+  if(m.type==='chat'){addMessage(m.item);showBubble(m.item);}
   if(m.type==='votes')updateVotes(m.votes);
+  if(m.type==='chat_deleted'){document.querySelectorAll('#messages .msg').forEach(el=>{if(el.dataset.messageId===m.id)el.remove();});deleteBubbleByMessage(m.id);}
+  if(m.type==='notices')renderNotices(m.notices||[]);
+  if(m.type==='moderation'){moderationStopped=true;alert(m.message||'관리자에 의해 접속이 종료되었습니다.');socket.close();}
  };
 }
 $('long').onclick=()=>{if(!profile)return showProfile();send({type:'vote',side:'long'});};
 $('short').onclick=()=>{if(!profile)return showProfile();send({type:'vote',side:'short'});};
 $('chat-form').onsubmit=e=>{e.preventDefault();if(!profile)return showProfile();const input=$('chat-input'),message=input.value.trim();if(message){send({type:'chat',message});input.value='';}};
 renderAssets();updatePrices();updateCandles();setInterval(updatePrices,15000);setInterval(updateCandles,60000);connect();
+
+function renderNotices(items){const el=$('notices');if(!el)return;el.replaceChildren();for(const item of items){const line=document.createElement('div');line.textContent='📢 '+item.text;el.append(line);}el.hidden=items.length===0;}
