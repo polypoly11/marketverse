@@ -938,9 +938,3 @@ aside {
   }
 }
 
-/* 모바일에서 C 앉기 버튼 숨기기 */
-@media (max-width: 980px), (pointer: coarse) {
-  #mobile-controls [data-key="c"] {
-    display: none !important;
-  }
-}
