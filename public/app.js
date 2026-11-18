@@ -324,24 +324,20 @@ function send(m){if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringi
 function sendProfile(){if(!profile)return;send({type:'join',name:profile.name,animal:profile.animal});if(myAvatar)send({type:'move',x:myAvatar.position.x,z:myAvatar.position.z,direction:myAvatar.userData.targetDirection,y:myAvatar.position.y,seated:myAvatar.userData.seated});}
 function addMessage(item){const line=document.createElement('div');line.className='msg';if(item.id)line.dataset.messageId=item.id;const b=document.createElement('b');b.textContent=`${animal(item.animal).emoji} ${item.name}: `;line.append(b,document.createTextNode(item.message||''));$('messages').append(line);$('messages').scrollTop=$('messages').scrollHeight;}
 function updateVotes(v){if(!v)return;const total=v.long+v.short,pct=total?Math.round(v.long/total*100):50;$('longbar').style.width=pct+'%';$('longpct').textContent=`${pct}% LONG (${v.long})`;$('shortpct').textContent=`${100-pct}% SHORT (${v.short})`;}
-let moderationStopped=false;function connect(){if(moderationStopped)return;const protocol=location.protocol==='https:'?'wss':'ws';socket=new WebSocket(`${protocol}://${location.host}/ws`);
+function connect(){const protocol=location.protocol==='https:'?'wss':'ws';socket=new WebSocket(`${protocol}://${location.host}/ws`);
  socket.onopen=()=>{$('connection').textContent='● 연결됨';sendProfile();};
- socket.onclose=e=>{if([4001,4002,4003].includes(e.code)){moderationStopped=true;$('connection').textContent='접속 종료';return;}$('connection').textContent='연결 재시도 중';setTimeout(connect,2000);};
+ socket.onclose=e=>{$('connection').textContent='연결 재시도 중';setTimeout(connect,2000);};
  socket.onerror=()=>{$('connection').textContent='연결 오류';};
  socket.onmessage=e=>{let m;try{m=JSON.parse(e.data);}catch{return;}
-  if(m.type==='welcome'){renderNotices(m.notices||[]);myId=m.id;updateVotes(m.votes);$('messages').replaceChildren();for(const item of m.history||[])addMessage(item);sendProfile();}
+  if(m.type==='welcome'){myId=m.id;updateVotes(m.votes);$('messages').replaceChildren();for(const item of m.history||[])addMessage(item);sendProfile();}
   if(m.type==='presence'){$('online').textContent=m.count;updateOthers(m.players||[]);}
   if(m.type==='chat'){addMessage(m.item);showBubble(m.item);}
   if(m.type==='votes')updateVotes(m.votes);
   if(m.type==='chat_deleted'){document.querySelectorAll('#messages .msg').forEach(el=>{if(el.dataset.messageId===m.id)el.remove();});deleteBubbleByMessage(m.id);}
   if(m.type==='chat_reset'){$('messages').replaceChildren();for(const id of [...activeBubbles.keys()])removeBubble(id);}
-  if(m.type==='notices')renderNotices(m.notices||[]);
-  if(m.type==='moderation'){moderationStopped=true;alert(m.message||'관리자에 의해 접속이 종료되었습니다.');socket.close();}
  };
 }
 $('long').onclick=()=>{if(!profile)return showProfile();send({type:'vote',side:'long'});};
 $('short').onclick=()=>{if(!profile)return showProfile();send({type:'vote',side:'short'});};
 $('chat-form').onsubmit=e=>{e.preventDefault();if(!profile)return showProfile();const input=$('chat-input'),message=input.value.trim();if(message){send({type:'chat',message});input.value='';}};
 renderAssets();updatePrices();updateCandles();setInterval(updatePrices,15000);setInterval(updateCandles,60000);connect();
-
-function renderNotices(items){const el=$('notices');if(!el)return;el.replaceChildren();for(const item of items){const line=document.createElement('div');line.textContent='📢 '+item.text;el.append(line);}el.hidden=items.length===0;}
