@@ -247,3 +247,25 @@ aside {
     overflow-x: hidden;
   }
 }
+
+ #calendar-scene-button {
+    display: none !important;
+  }
+
+  /* 채팅·시세·투표는 메타버스 아래 배치 */
+  main > aside {
+    display: flex !important;
+    flex-direction: column !important;
+    order: 1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    gap: 12px !important;
+  }
+
+  /* 가로 스크롤 방지 */
+  html,
+  body {
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+  }
+}
