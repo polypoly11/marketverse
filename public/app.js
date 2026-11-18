@@ -341,3 +341,19 @@ $('long').onclick=()=>{if(!profile)return showProfile();send({type:'vote',side:'
 $('short').onclick=()=>{if(!profile)return showProfile();send({type:'vote',side:'short'});};
 $('chat-form').onsubmit=e=>{e.preventDefault();if(!profile)return showProfile();const input=$('chat-input'),message=input.value.trim();if(message){send({type:'chat',message});input.value='';}};
 renderAssets();updatePrices();updateCandles();setInterval(updatePrices,15000);setInterval(updateCandles,60000);connect();
+
+
+// 공식 경제 캘린더는 외부 iframe이므로 WebGL 캔버스에 직접 그릴 수 없습니다.
+// 3D 공간 위 버튼과 옆 전광판 패널을 연결합니다.
+const econFrame=document.getElementById('investing-calendar');
+if(econFrame){
+ const custom=window.JMC_INVESTING_WIDGET_URL;
+ const fallback='https://sslecal2.investing.com/?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&features=datepicker,timezone&countries=5&importance=3&calType=week&lang=1';
+ econFrame.src=typeof custom==='string'&&/^https:\/\/(?:sslecal2\.investing\.com|sslecal2\.forexprostools\.com)(?:\/|\?)/i.test(custom)?custom:fallback;
+}
+document.getElementById('calendar-scene-button')?.addEventListener('click',()=>{
+ const panel=document.getElementById('econ-panel');
+ panel?.scrollIntoView({behavior:'smooth',block:'center'});
+ panel?.classList.add('econ-focus');
+ setTimeout(()=>panel?.classList.remove('econ-focus'),1800);
+});
