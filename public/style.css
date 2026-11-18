@@ -145,3 +145,20 @@ main {
   height: 850px;
   overflow: hidden;
 }
+
+/* 경제 캘린더 상단 현재시간 표시 영역 가리기 */
+.econ-frame {
+  position: relative;
+}
+
+.econ-frame::after {
+  content: "";
+  position: absolute;
+  top: 30px;
+  right: 12px;
+  width: 185px;
+  height: 35px;
+  background: #fff;
+  pointer-events: none;
+  z-index: 5;
+}
