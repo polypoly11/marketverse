@@ -162,3 +162,22 @@ main {
   pointer-events: none;
   z-index: 5;
 }
+
+/* 경제 캘린더 상단 흰색 영역 전체 가리기 */
+.econ-frame {
+  position: relative;
+}
+
+/* 로고, 현재시간, 날짜 선택 영역 덮기 */
+.econ-frame::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: #0b1726;
+  pointer-events: none;
+  z-index: 10;
+  border-radius: 8px 8px 0 0;
+}
