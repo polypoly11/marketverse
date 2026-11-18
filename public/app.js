@@ -877,6 +877,217 @@ $('detail').onclick = e=>{
 };
 
 const sceneEl = $('scene');
+
+// ====================================================
+// JMC 메타버스 내부 라이브 채팅
+// 접힘: 최신 1줄 / 펼침: 최근 3줄
+// ====================================================
+function installSceneLiveChat() {
+  const panel = document.querySelector('.chat-panel');
+  const messages = $('messages');
+  const form = $('chat-form');
+
+  if (!sceneEl || !panel || !messages || !form) return;
+  if (panel.classList.contains('jmc-scene-chat')) return;
+
+  panel.classList.add('jmc-scene-chat','jmc-chat-collapsed');
+  sceneEl.appendChild(panel);
+
+  const toggle = document.createElement('button');
+  toggle.type = 'button';
+  toggle.id = 'jmc-live-chat-toggle';
+  toggle.className = 'jmc-chat-toggle';
+  toggle.setAttribute('aria-controls','messages');
+  toggle.setAttribute('aria-expanded','false');
+  toggle.textContent = '펼치기 ▾';
+  panel.appendChild(toggle);
+
+  toggle.addEventListener('click',()=>{
+    const collapsed = panel.classList.toggle('jmc-chat-collapsed');
+    toggle.textContent = collapsed ? '펼치기 ▾' : '접기 ▴';
+    toggle.setAttribute('aria-expanded',String(!collapsed));
+  });
+
+  const style = document.createElement('style');
+  style.id = 'jmc-scene-chat-style';
+  style.textContent = `
+    #scene > .jmc-scene-chat {
+      position:absolute !important;
+      left:14px !important;
+      bottom:15px !important;
+      right:auto !important;
+      top:auto !important;
+      z-index:45 !important;
+      width:min(450px,calc(100% - 28px)) !important;
+      height:auto !important;
+      min-height:0 !important;
+      max-height:none !important;
+      margin:0 !important;
+      padding:0 !important;
+      border:0 !important;
+      border-radius:13px !important;
+      background:transparent !important;
+      box-shadow:none !important;
+      display:flex !important;
+      flex-direction:column !important;
+      gap:6px !important;
+      overflow:visible !important;
+      box-sizing:border-box;
+    }
+
+    #scene > .jmc-scene-chat .panel-head {
+      display:none !important;
+    }
+
+    #scene > .jmc-scene-chat #messages {
+      display:block !important;
+      flex:none !important;
+      box-sizing:border-box !important;
+      height:83px !important;
+      min-height:83px !important;
+      max-height:83px !important;
+      margin:0 !important;
+      padding:8px 84px 8px 10px !important;
+      overflow:hidden !important;
+      border:1px solid rgba(214,231,248,.2) !important;
+      border-radius:12px !important;
+      background:rgba(9,15,27,.76) !important;
+      color:#f0f4fa !important;
+      backdrop-filter:blur(8px);
+      -webkit-backdrop-filter:blur(8px);
+      font-size:12px !important;
+      line-height:22px !important;
+    }
+
+    #scene > .jmc-scene-chat #messages > .msg {
+      display:block !important;
+      box-sizing:border-box !important;
+      height:22px !important;
+      line-height:22px !important;
+      margin:0 !important;
+      padding:0 !important;
+      white-space:nowrap !important;
+      overflow:hidden !important;
+      text-overflow:ellipsis !important;
+      overflow-wrap:normal !important;
+    }
+
+    #scene > .jmc-scene-chat #messages > .msg:nth-last-child(n+4) {
+      display:none !important;
+    }
+
+    #scene > .jmc-scene-chat #messages > .msg b {
+      color:#9ce8ca !important;
+    }
+
+    #scene > .jmc-scene-chat #messages:empty::before {
+      content:'실시간 채팅을 기다리는 중...';
+      color:#b0c0d0;
+      font-size:12px;
+      line-height:22px;
+    }
+
+    #scene > .jmc-scene-chat #chat-form {
+      display:flex !important;
+      flex:none !important;
+      align-items:center !important;
+      gap:6px !important;
+      width:100% !important;
+      margin:0 !important;
+      padding:5px 6px !important;
+      box-sizing:border-box !important;
+      border:1px solid rgba(214,231,248,.17) !important;
+      border-radius:24px !important;
+      background:rgba(9,15,27,.88) !important;
+      backdrop-filter:blur(8px);
+      -webkit-backdrop-filter:blur(8px);
+    }
+
+    #scene > .jmc-scene-chat #chat-input {
+      flex:1 !important;
+      min-width:0 !important;
+      width:auto !important;
+      height:36px !important;
+      margin:0 !important;
+      padding:0 12px !important;
+      border:0 !important;
+      outline:none !important;
+      border-radius:18px !important;
+      background:transparent !important;
+      color:#fff !important;
+      font-size:13px !important;
+    }
+
+    #scene > .jmc-scene-chat #chat-form button {
+      flex:none !important;
+      min-width:55px;
+      height:36px;
+      padding:0 13px !important;
+      border:0 !important;
+      border-radius:18px !important;
+      background:#e4c58d !important;
+      color:#172334 !important;
+      font-size:12px;
+      font-weight:800;
+      cursor:pointer;
+    }
+
+    #scene > .jmc-scene-chat .jmc-chat-toggle {
+      position:absolute !important;
+      top:5px !important;
+      right:6px !important;
+      z-index:4 !important;
+      height:26px !important;
+      min-width:66px !important;
+      padding:0 8px !important;
+      border:1px solid rgba(255,255,255,.18) !important;
+      border-radius:14px !important;
+      background:rgba(37,48,65,.96) !important;
+      color:white !important;
+      font-size:11px !important;
+      font-weight:700 !important;
+      cursor:pointer;
+    }
+
+    #scene > .jmc-scene-chat.jmc-chat-collapsed {
+      gap:0 !important;
+    }
+
+    #scene > .jmc-scene-chat.jmc-chat-collapsed #messages {
+      height:36px !important;
+      min-height:36px !important;
+      max-height:36px !important;
+      padding-top:6px !important;
+      padding-bottom:6px !important;
+    }
+
+    #scene > .jmc-scene-chat.jmc-chat-collapsed
+    #messages > .msg:not(:last-child) {
+      display:none !important;
+    }
+
+    #scene > .jmc-scene-chat.jmc-chat-collapsed #chat-form {
+      display:none !important;
+    }
+
+    @media (max-width:980px),(pointer:coarse) {
+      #scene > .jmc-scene-chat {
+        left:8px !important;
+        bottom:183px !important;
+        width:min(420px,calc(100% - 16px)) !important;
+      }
+
+      #scene > .jmc-scene-chat #messages {
+        font-size:11px !important;
+      }
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
+installSceneLiveChat();
+
 // ========================================
 // 마법 발사 / 피격 효과음 (Web Audio API)
 // 별도 음원 파일이나 server.js 수정은 필요 없다.
@@ -905,107 +1116,102 @@ function getAudioContext() {
   }
 }
 
-// 브라우저의 자동 재생 제한은 첫 클릭/키 입력으로 해제한다.
-document.addEventListener('pointerdown', getAudioContext, {passive:true});
-document.addEventListener('keydown', getAudioContext);
+document.addEventListener('pointerdown',getAudioContext,{passive:true});
+document.addEventListener('keydown',getAudioContext);
 
-function playSfxTone(type, startHz, endHz, duration, volume) {
+function playSfxTone(type,startHz,endHz,duration,volume) {
   const ctx = getAudioContext();
   if (!ctx || ctx.state !== 'running' || volume <= 0) return;
 
   const now = ctx.currentTime;
   const oscillator = ctx.createOscillator();
   const gain = ctx.createGain();
+
   oscillator.type = type;
-  oscillator.frequency.setValueAtTime(startHz, now);
+  oscillator.frequency.setValueAtTime(startHz,now);
   oscillator.frequency.exponentialRampToValueAtTime(
-    Math.max(1,endHz), now + duration
+    Math.max(1,endHz),now+duration
   );
-  gain.gain.setValueAtTime(0.0001, now);
+
+  gain.gain.setValueAtTime(.0001,now);
   gain.gain.exponentialRampToValueAtTime(
-    Math.max(0.0002, volume), now + 0.012
+    Math.max(.0002,volume),now+.012
   );
-  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  gain.gain.exponentialRampToValueAtTime(.0001,now+duration);
+
   oscillator.connect(gain);
   gain.connect(ctx.destination);
   oscillator.start(now);
-  oscillator.stop(now + duration + 0.02);
-  oscillator.onended = () => {
+  oscillator.stop(now+duration+.02);
+  oscillator.onended=()=>{
     oscillator.disconnect();
     gain.disconnect();
   };
 }
 
-// 발사: 슈웅! 마법 에너지가 날아가는 전자음
-function playMagicCastSfx(volume = 1) {
-  if (!sfxEnabled || volume <= 0) return;
-  playSfxTone('sawtooth', 1000, 260, .20, .040 * volume);
-  playSfxTone('sine', 1450, 680, .14, .024 * volume);
+function playMagicCastSfx(volume=1) {
+  if(!sfxEnabled || volume<=0)return;
+  playSfxTone('sawtooth',1000,260,.20,.040*volume);
+  playSfxTone('sine',1450,680,.14,.024*volume);
 }
 
-// 피격: 펑! 짧고 묵직한 충돌음
-function playMagicHitSfx(volume = 1) {
-  if (!sfxEnabled || volume <= 0) return;
-  playSfxTone('triangle', 260, 65, .18, .095 * volume);
-  playSfxTone('square', 650, 100, .10, .022 * volume);
+function playMagicHitSfx(volume=1) {
+  if(!sfxEnabled || volume<=0)return;
+  playSfxTone('triangle',260,65,.18,.095*volume);
+  playSfxTone('square',650,100,.10,.022*volume);
 }
 
-// 주변 캐릭터가 멀수록 소리를 작게 재생한다.
-function magicSoundVolume(x, z) {
-  if (!myAvatar || !Number.isFinite(x) || !Number.isFinite(z)) {
+function magicSoundVolume(x,z) {
+  if(!myAvatar || !Number.isFinite(x) || !Number.isFinite(z)){
     return .7;
   }
-  const distance = Math.hypot(
-    x - myAvatar.position.x,
-    z - myAvatar.position.z
+  const distance=Math.hypot(
+    x-myAvatar.position.x,
+    z-myAvatar.position.z
   );
-  return Math.max(0, 1 - distance / 20);
+  return Math.max(0,1-distance/20);
 }
 
-const sfxButton = document.createElement('button');
-sfxButton.type = 'button';
-sfxButton.id = 'jmc-sfx-toggle';
-sfxButton.textContent = sfxEnabled ? '🔊 효과음 ON' : '🔇 효과음 OFF';
-sfxButton.style.cssText = `
+const sfxButton=document.createElement('button');
+sfxButton.type='button';
+sfxButton.id='jmc-sfx-toggle';
+sfxButton.textContent=sfxEnabled?'🔊 효과음 ON':'🔇 효과음 OFF';
+sfxButton.style.cssText=`
   position:absolute;top:12px;right:12px;z-index:30;
   padding:9px 13px;background:rgba(7,20,33,.9);
   color:white;border:1px solid #dfc18d;border-radius:9px;
   cursor:pointer;font-size:13px;
 `;
-sfxButton.onclick = () => {
-  sfxEnabled = !sfxEnabled;
-  sfxButton.textContent = sfxEnabled ? '🔊 효과음 ON' : '🔇 효과음 OFF';
+sfxButton.onclick=()=>{
+  sfxEnabled=!sfxEnabled;
+  sfxButton.textContent=sfxEnabled?'🔊 효과음 ON':'🔇 효과음 OFF';
   try {
-    localStorage.setItem('jmc-sfx-enabled', sfxEnabled ? '1' : '0');
-  } catch {}
-  if (sfxEnabled) getAudioContext();
+    localStorage.setItem('jmc-sfx-enabled',sfxEnabled?'1':'0');
+  }catch{}
+  if(sfxEnabled)getAudioContext();
 };
 sceneEl.appendChild(sfxButton);
 
-const scene = new THREE.Scene();
+const scene=new THREE.Scene();
+scene.background=new THREE.Color('#080f1b');
+scene.fog=new THREE.Fog('#080f1b',25,80);
 
-scene.background = new THREE.Color('#080f1b');
-scene.fog = new THREE.Fog('#080f1b',25,80);
+const camera=new THREE.PerspectiveCamera(74,1,.1,120);
 
-const camera = new THREE.PerspectiveCamera(
-  74,1,.1,120
-);
-
-const renderer = new THREE.WebGLRenderer({
+const renderer=new THREE.WebGLRenderer({
   antialias:!isMobileDevice,
   powerPreference:'low-power'
 });
 
 renderer.setPixelRatio(renderPixelRatio);
-
-renderer.domElement.style.display = 'block';
-renderer.domElement.style.position = 'absolute';
-renderer.domElement.style.left = '0';
-renderer.domElement.style.top = '0';
-renderer.domElement.style.width = '100%';
-renderer.domElement.style.height = '100%';
-renderer.domElement.style.touchAction = 'none';
-renderer.domElement.style.zIndex = '0';
+renderer.domElement.style.display='block';
+renderer.domElement.style.position='absolute';
+renderer.domElement.style.left='0';
+renderer.domElement.style.top='0';
+renderer.domElement.style.width='100%';
+renderer.domElement.style.height='100%';
+renderer.domElement.style.touchAction='none';
+renderer.domElement.style.zIndex='0';
 
 sceneEl.appendChild(renderer.domElement);
 
@@ -1016,7 +1222,7 @@ scene.add(
 );
 
 function box(w,h,d,color,x,y,z){
-  const mesh = new THREE.Mesh(
+  const mesh=new THREE.Mesh(
     new THREE.BoxGeometry(w,h,d),
     new THREE.MeshStandardMaterial({
       color,
@@ -1024,7 +1230,6 @@ function box(w,h,d,color,x,y,z){
       roughness:.55
     })
   );
-
   mesh.position.set(x,y,z);
   scene.add(mesh);
   return mesh;
@@ -1032,11 +1237,10 @@ function box(w,h,d,color,x,y,z){
 
 box(42,.4,42,0x101c2b,0,-.25,0);
 
-const grid = new THREE.GridHelper(
+const grid=new THREE.GridHelper(
   42,42,0x24435a,0x182a3e
 );
-
-grid.position.y = .01;
+grid.position.y=.01;
 scene.add(grid);
 
 box(38,8,.5,0x15293a,0,4,-19);
@@ -1061,189 +1265,131 @@ for(const x of [-17,17]){
   for(const z of [-10,10]){
     box(1.2,.9,1.2,0x24413e,x,.45,z);
 
-    const plant = new THREE.Mesh(
+    const plant=new THREE.Mesh(
       new THREE.ConeGeometry(.7,2.5,8),
       new THREE.MeshStandardMaterial({
         color:0x238878
       })
     );
-
     plant.position.set(x,2,z);
     scene.add(plant);
   }
 }
 
 for(const x of [-12,0,12]){
-  const light = new THREE.PointLight(
-    0xffd49b,25,17
-  );
-
+  const light=new THREE.PointLight(0xffd49b,25,17);
   light.position.set(x,6,3);
   scene.add(light);
 }
 
-const neon = new THREE.PointLight(
-  0x4de0bc,75,30
-);
-
+const neon=new THREE.PointLight(0x4de0bc,75,30);
 neon.position.set(0,7,-10);
 scene.add(neon);
 
-const boardCanvas = document.createElement('canvas');
+const boardCanvas=document.createElement('canvas');
+boardCanvas.width=1280;
+boardCanvas.height=620;
 
-boardCanvas.width = 1280;
-boardCanvas.height = 620;
+const boardCtx=boardCanvas.getContext('2d');
+const boardTexture=new THREE.CanvasTexture(boardCanvas);
+boardTexture.colorSpace=THREE.SRGBColorSpace;
 
-const boardCtx = boardCanvas.getContext('2d');
-const boardTexture = new THREE.CanvasTexture(
-  boardCanvas
-);
-
-boardTexture.colorSpace = THREE.SRGBColorSpace;
-
-const board = new THREE.Mesh(
+const board=new THREE.Mesh(
   new THREE.PlaneGeometry(17,8.2),
   new THREE.MeshBasicMaterial({
     map:boardTexture,
     side:THREE.DoubleSide
   })
 );
-
 board.position.set(0,4.5,BOARD_Z);
 scene.add(board);
 
 function refreshBoard(){
-  const c = boardCtx;
+  const c=boardCtx;
 
-  c.fillStyle = '#071421';
+  c.fillStyle='#071421';
   c.fillRect(0,0,1280,620);
 
-  c.fillStyle = '#dfc79a';
-  c.font = 'bold 34px Arial';
+  c.fillStyle='#dfc79a';
+  c.font='bold 34px Arial';
+  c.fillText('JMC INVEST LOUNGE',40,55);
 
-  c.fillText(
-    'JMC INVEST LOUNGE',
-    40,55
-  );
-
-  c.fillStyle = '#88a5b8';
-  c.font = '20px Arial';
-
-  c.fillText(
-    'BTC · ETH · SOL · XRP',
-    870,55
-  );
+  c.fillStyle='#88a5b8';
+  c.font='20px Arial';
+  c.fillText('BTC · ETH · SOL · XRP',870,55);
 
   symbols.forEach((s,i)=>{
-    const x = 36+(i%2)*608;
-    const y = 90+Math.floor(i/2)*255;
+    const x=36+(i%2)*608;
+    const y=90+Math.floor(i/2)*255;
 
-    c.fillStyle = '#10263a';
+    c.fillStyle='#10263a';
     c.fillRect(x,y,588,240);
-
-    c.strokeStyle = '#315065';
+    c.strokeStyle='#315065';
     c.strokeRect(x,y,588,240);
 
-    c.fillStyle = '#f0e1c2';
-    c.font = 'bold 23px Arial';
+    c.fillStyle='#f0e1c2';
+    c.font='bold 23px Arial';
+    c.fillText(s.id+' / USD',x+18,y+34);
 
-    c.fillText(
-      s.id+' / USD',
-      x+18,y+34
-    );
+    c.fillStyle='#42dfbd';
+    c.font='bold 29px Arial';
+    c.fillText(money(s.price),x+180,y+35);
 
-    c.fillStyle = '#42dfbd';
-    c.font = 'bold 29px Arial';
-
-    c.fillText(
-      money(s.price),
-      x+180,y+35
-    );
-
-    const data = s.candles.filter(d=>
-      [d.open,d.high,d.low,d.close]
-        .every(Number.isFinite)
+    const data=s.candles.filter(d=>
+      [d.open,d.high,d.low,d.close].every(Number.isFinite)
     );
 
     if(!data.length){
-      c.fillStyle = '#809ab0';
-      c.font = '18px Arial';
-
-      c.fillText(
-        '캔들 데이터 연결 대기',
-        x+20,y+155
-      );
-
+      c.fillStyle='#809ab0';
+      c.font='18px Arial';
+      c.fillText('캔들 데이터 연결 대기',x+20,y+155);
       return;
     }
 
-    const lo = Math.min(
-      ...data.map(d=>d.low)
-    );
-
-    const hi = Math.max(
-      ...data.map(d=>d.high)
-    );
-
-    const span = hi-lo || 1;
-    const step = 550/data.length;
+    const lo=Math.min(...data.map(d=>d.low));
+    const hi=Math.max(...data.map(d=>d.high));
+    const span=hi-lo||1;
+    const step=550/data.length;
 
     data.forEach((d,j)=>{
-      const xx = x+18+step*(j+.5);
-      const yy = v =>
-        y+220-(v-lo)/span*156;
+      const xx=x+18+step*(j+.5);
+      const yy=v=>y+220-(v-lo)/span*156;
+      const color=d.close>=d.open?'#42dfbd':'#f17a98';
 
-      const color =
-        d.close>=d.open
-          ? '#42dfbd'
-          : '#f17a98';
-
-      c.strokeStyle = color;
-      c.fillStyle = color;
-
+      c.strokeStyle=color;
+      c.fillStyle=color;
       c.beginPath();
       c.moveTo(xx,yy(d.high));
       c.lineTo(xx,yy(d.low));
       c.stroke();
 
-      const top = yy(Math.max(d.open,d.close));
-      const bottom = yy(Math.min(d.open,d.close));
-      const bw = Math.max(2,step*.6);
+      const top=yy(Math.max(d.open,d.close));
+      const bottom=yy(Math.min(d.open,d.close));
+      const bw=Math.max(2,step*.6);
 
-      c.fillRect(
-        xx-bw/2,
-        top,
-        bw,
-        Math.max(2,bottom-top)
-      );
+      c.fillRect(xx-bw/2,top,bw,Math.max(2,bottom-top));
     });
   });
 
-  boardTexture.needsUpdate = true;
+  boardTexture.needsUpdate=true;
 }
 
 refreshBoard();
 
-const others = new Map();
+const others=new Map();
 
 const raidClient=createBossClient({
   THREE,
   scene,
   sceneEl,
-
   getAvatar:()=>myAvatar,
   getPlayerId:()=>myId,
   send:msg=>send(msg),
 
   removeShot:shotId=>{
-    const i=magicProjectiles.findIndex(
-      s=>s.id===shotId
-    );
-
+    const i=magicProjectiles.findIndex(s=>s.id===shotId);
     if(i>=0){
-      disposeMagicProjectile(
-        magicProjectiles[i]
-      );
+      disposeMagicProjectile(magicProjectiles[i]);
       magicProjectiles.splice(i,1);
     }
   },
@@ -1254,41 +1400,35 @@ const raidClient=createBossClient({
 });
 
 function boardFocus(position){
-  const facing = THREE.MathUtils.smoothstep(
-    (Math.cos(yaw)+1)/2,
-    .55,
-    .95
+  const facing=THREE.MathUtils.smoothstep(
+    (Math.cos(yaw)+1)/2,.55,.95
   );
 
-  const near =
-    1-THREE.MathUtils.smoothstep(
-      Math.abs(position.z-BOARD_Z),
-      4,
-      17
-    );
+  const near=1-THREE.MathUtils.smoothstep(
+    Math.abs(position.z-BOARD_Z),4,17
+  );
 
   return facing*near;
 }
 
 function cameraDistance(position){
-  const focus = boardFocus(position);
+  const focus=boardFocus(position);
 
-  const tanHalfVertical = Math.tan(
+  const tanHalfVertical=Math.tan(
     THREE.MathUtils.degToRad(camera.fov/2)
   );
 
-  const tanHalfHorizontal =
+  const tanHalfHorizontal=
     tanHalfVertical*Math.max(.25,camera.aspect||1);
 
-  const requiredToShowBoard =
+  const requiredToShowBoard=
     (BOARD_WIDTH/2+1.4)/tanHalfHorizontal;
 
-  const distanceFromPlayerToBoard = Math.max(
-    0,
-    position.z-BOARD_Z
+  const distanceFromPlayerToBoard=Math.max(
+    0,position.z-BOARD_Z
   );
 
-  const neededBehindPlayer = Math.max(
+  const neededBehindPlayer=Math.max(
     CAMERA_BASE_DISTANCE,
     requiredToShowBoard-distanceFromPlayerToBoard
   );
@@ -1301,8 +1441,8 @@ function cameraDistance(position){
 }
 
 function cameraPositionFor(position){
-  const distance = cameraDistance(position);
-  const focus = boardFocus(position);
+  const distance=cameraDistance(position);
+  const focus=boardFocus(position);
 
   return new THREE.Vector3(
     position.x-Math.sin(yaw)*distance,
@@ -1320,80 +1460,64 @@ function cameraLookAtFor(position){
 }
 
 function resetToBoard(){
-  yaw = Math.PI;
+  yaw=Math.PI;
 
   if(myAvatar){
     myAvatar.position.set(0,0,-8);
-    myAvatar.rotation.y = Math.PI;
-    myAvatar.userData.targetDirection = Math.PI;
+    myAvatar.rotation.y=Math.PI;
+    myAvatar.userData.targetDirection=Math.PI;
   }
 
-  const p = myAvatar?.position ||
-    new THREE.Vector3(0,0,-8);
+  const p=myAvatar?.position||new THREE.Vector3(0,0,-8);
 
-  camera.position.copy(
-    cameraPositionFor(p)
-  );
-
-  camera.lookAt(
-    cameraLookAtFor(p)
-  );
-
+  camera.position.copy(cameraPositionFor(p));
+  camera.lookAt(cameraLookAtFor(p));
   camera.updateMatrixWorld();
 }
 
 function updateMyAvatar(){
   if(!profile)return;
 
-  const pos = myAvatar
-    ? myAvatar.position.clone()
-    : new THREE.Vector3(0,0,-8);
+  const pos=myAvatar
+    ?myAvatar.position.clone()
+    :new THREE.Vector3(0,0,-8);
 
-  const dir = myAvatar
-    ? myAvatar.rotation.y
-    : Math.PI;
-
-  const wasSeated =
-    myAvatar?.userData.seated || false;
+  const dir=myAvatar?myAvatar.rotation.y:Math.PI;
+  const wasSeated=myAvatar?.userData.seated||false;
 
   if(myAvatar){
-    if(myId){
-      removeBubble(myId);
-    }
+    if(myId)removeBubble(myId);
     scene.remove(myAvatar);
     removeCharacterHpBar(myAvatar);
   }
 
-  myAvatar = makeAnimal(profile.animal);
+  myAvatar=makeAnimal(profile.animal);
   addCharacterHpBar(myAvatar,myHp);
   myAvatar.position.copy(pos);
-  myAvatar.rotation.y = dir;
-  myAvatar.userData.targetDirection = dir;
-  myAvatar.userData.seated = wasSeated;
+  myAvatar.rotation.y=dir;
+  myAvatar.userData.targetDirection=dir;
+  myAvatar.userData.seated=wasSeated;
   scene.add(myAvatar);
 }
 
 function updateOthers(players){
-  const seen = new Set();
+  const seen=new Set();
 
   for(const p of players){
     if(p.id===myId)continue;
-
     seen.add(p.id);
-    let avatar = others.get(p.id);
 
-    if(
-      !avatar ||
-      avatar.userData.animal!==p.animal
-    ){
+    let avatar=others.get(p.id);
+
+    if(!avatar||avatar.userData.animal!==p.animal){
       if(avatar){
         removeBubble(p.id);
         scene.remove(avatar);
         removeCharacterHpBar(avatar);
       }
 
-      avatar = makeAnimal(p.animal);
-      addCharacterHpBar(avatar,p.hp ?? 100);
+      avatar=makeAnimal(p.animal);
+      addCharacterHpBar(avatar,p.hp??100);
       scene.add(avatar);
       others.set(p.id,avatar);
     }
@@ -1404,13 +1528,11 @@ function updateOthers(players){
       Number(p.z)||0
     );
 
-    setCharacterHpBar(avatar,p.hp ?? 100);
-    avatar.userData.seated =
-      p.seated===true;
+    setCharacterHpBar(avatar,p.hp??100);
+    avatar.userData.seated=p.seated===true;
 
     if(Number.isFinite(Number(p.direction))){
-      avatar.userData.targetDirection =
-        Number(p.direction);
+      avatar.userData.targetDirection=Number(p.direction);
     }
   }
 
@@ -1424,54 +1546,44 @@ function updateOthers(players){
   }
 }
 
-if(profile && !reentryRequired){
+if(profile&&!reentryRequired){
   updateMyAvatar();
 }
 
 resetToBoard();
 
-const activeBubbles = new Map();
-const BUBBLE_LIFETIME = 6000;
+const activeBubbles=new Map();
+const BUBBLE_LIFETIME=6000;
 
 function wrapBubbleText(ctx,text,maxWidth,maxLines=3){
-  const chars = Array.from(
+  const chars=Array.from(
     String(text).replace(/\s+/g,' ').trim()
   );
 
-  const lines = [];
-  let line = '';
+  const lines=[];
+  let line='';
 
   for(const ch of chars){
-    if(
-      ctx.measureText(line+ch).width>maxWidth &&
-      line
-    ){
+    if(ctx.measureText(line+ch).width>maxWidth&&line){
       lines.push(line);
-      line = ch;
-
-      if(lines.length===maxLines-1){
-        break;
-      }
+      line=ch;
+      if(lines.length===maxLines-1)break;
     }else{
-      line += ch;
+      line+=ch;
     }
   }
 
-  const consumed =
-    Array.from(lines.join('')).length;
+  const consumed=Array.from(lines.join('')).length;
 
   if(lines.length===maxLines-1){
-    let rest = chars.slice(consumed).join('');
+    let rest=chars.slice(consumed).join('');
 
-    while(
-      rest &&
-      ctx.measureText(rest).width>maxWidth
-    ){
-      rest = rest.slice(0,-1);
+    while(rest&&ctx.measureText(rest).width>maxWidth){
+      rest=rest.slice(0,-1);
     }
 
     if(rest.length<chars.length-consumed){
-      rest = rest.slice(0,-1)+'…';
+      rest=rest.slice(0,-1)+'…';
     }
 
     lines.push(rest);
@@ -1483,59 +1595,47 @@ function wrapBubbleText(ctx,text,maxWidth,maxLines=3){
 }
 
 function removeBubble(senderId){
-  const existing = activeBubbles.get(senderId);
+  const existing=activeBubbles.get(senderId);
   if(!existing)return;
 
-  existing.sprite.parent?.remove(
-    existing.sprite
-  );
-
+  existing.sprite.parent?.remove(existing.sprite);
   existing.sprite.material.map?.dispose();
   existing.sprite.material.dispose();
-
   activeBubbles.delete(senderId);
 }
 
 function showBubble(item){
-  const senderId = item?.senderId;
-  if(!senderId || !item.message)return;
+  const senderId=item?.senderId;
+  if(!senderId||!item.message)return;
 
-  const avatar = senderId===myId
-    ? myAvatar
-    : others.get(senderId);
+  const avatar=senderId===myId
+    ?myAvatar
+    :others.get(senderId);
 
   if(!avatar)return;
   removeBubble(senderId);
 
-  const canvas = document.createElement('canvas');
-  canvas.width = 768;
-  canvas.height = 320;
+  const canvas=document.createElement('canvas');
+  canvas.width=768;
+  canvas.height=320;
 
-  const ctx = canvas.getContext('2d');
-  ctx.font = 'bold 40px sans-serif';
+  const ctx=canvas.getContext('2d');
+  ctx.font='bold 40px sans-serif';
 
-  const lines = wrapBubbleText(
-    ctx,item.message,620,3
-  );
+  const lines=wrapBubbleText(ctx,item.message,620,3);
+  const lineHeight=52;
+  const boxH=Math.max(118,lines.length*lineHeight+48);
+  const top=16;
+  const bottom=top+boxH;
 
-  const lineHeight = 52;
-  const boxH = Math.max(
-    118,
-    lines.length*lineHeight+48
-  );
-
-  const top = 16;
-  const bottom = top+boxH;
-
-  ctx.shadowColor = 'rgba(0,0,0,.35)';
-  ctx.shadowBlur = 18;
-  ctx.fillStyle = 'rgba(255,255,255,.97)';
-
+  ctx.shadowColor='rgba(0,0,0,.35)';
+  ctx.shadowBlur=18;
+  ctx.fillStyle='rgba(255,255,255,.97)';
   ctx.beginPath();
   ctx.roundRect(20,top,728,boxH,28);
   ctx.fill();
 
-  ctx.shadowBlur = 0;
+  ctx.shadowBlur=0;
   ctx.beginPath();
   ctx.moveTo(352,bottom);
   ctx.lineTo(384,bottom+30);
@@ -1543,37 +1643,33 @@ function showBubble(item){
   ctx.closePath();
   ctx.fill();
 
-  ctx.fillStyle = '#172b3b';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+  ctx.fillStyle='#172b3b';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
 
   lines.forEach((line,i)=>{
     ctx.fillText(
       line,
       384,
-      top+boxH/2+
-        (i-(lines.length-1)/2)*lineHeight,
+      top+boxH/2+(i-(lines.length-1)/2)*lineHeight,
       650
     );
   });
 
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
+  const texture=new THREE.CanvasTexture(canvas);
+  texture.colorSpace=THREE.SRGBColorSpace;
 
-  const material = new THREE.SpriteMaterial({
+  const material=new THREE.SpriteMaterial({
     map:texture,
     transparent:true,
     depthTest:false,
     depthWrite:false
   });
 
-  const sprite = new THREE.Sprite(material);
-
-  // HP 바와 겹치지 않도록 채팅 말풍선을 더 위에 배치한다.
+  const sprite=new THREE.Sprite(material);
   sprite.position.set(0,5.15,0);
   sprite.scale.set(3.8,1.58,1);
-  sprite.renderOrder = 100;
-
+  sprite.renderOrder=100;
   avatar.add(sprite);
 
   activeBubbles.set(senderId,{
@@ -1588,9 +1684,8 @@ function tickBubbles(now){
     if(now>=bubble.expires){
       removeBubble(id);
     }else if(now>bubble.expires-900){
-      bubble.sprite.material.opacity = Math.max(
-        0,
-        (bubble.expires-now)/900
+      bubble.sprite.material.opacity=Math.max(
+        0,(bubble.expires-now)/900
       );
     }
   }
@@ -1598,44 +1693,39 @@ function tickBubbles(now){
 
 function deleteBubbleByMessage(messageId){
   for(const [id,bubble] of activeBubbles){
-    if(bubble.messageId===messageId){
-      removeBubble(id);
-    }
+    if(bubble.messageId===messageId)removeBubble(id);
   }
 }
 
-const keys = new Set();
-const touchCounts = new Map();
+const keys=new Set();
+const touchCounts=new Map();
 
-let dragging = false;
-let lastPointerX = 0;
+let dragging=false;
+let lastPointerX=0;
+let jumpVelocity=0;
+let onGround=true;
 
-let jumpVelocity = 0;
-let onGround = true;
-
-const GRAVITY = 19;
-const JUMP_SPEED = 8;
+const GRAVITY=19;
+const JUMP_SPEED=8;
 
 renderer.domElement.addEventListener('pointerdown',e=>{
-  dragging = true;
-  lastPointerX = e.clientX;
+  dragging=true;
+  lastPointerX=e.clientX;
   renderer.domElement.setPointerCapture(e.pointerId);
 });
 
 renderer.domElement.addEventListener('pointermove',e=>{
   if(dragging){
-    yaw += (e.clientX-lastPointerX)*.005;
-    lastPointerX = e.clientX;
+    yaw+=(e.clientX-lastPointerX)*.005;
+    lastPointerX=e.clientX;
   }
 });
 
 for(const type of [
-  'pointerup',
-  'pointercancel',
-  'lostpointercapture'
+  'pointerup','pointercancel','lostpointercapture'
 ]){
   renderer.domElement.addEventListener(type,()=>{
-    dragging = false;
+    dragging=false;
   });
 }
 
@@ -1643,45 +1733,36 @@ window.addEventListener('keydown',e=>{
   if(
     ['INPUT','TEXTAREA'].includes(
       document.activeElement?.tagName
-    ) ||
-    !$('profile-modal').hidden || defeated || reentryRequired
-  ){
-    return;
-  }
+    )||
+    !$('profile-modal').hidden||
+    defeated||
+    reentryRequired
+  )return;
 
-  const k = e.key.toLowerCase();
+  const k=e.key.toLowerCase();
 
   if(
-    k===' ' ||
-    e.code==='Space' ||
+    k===' '||
+    e.code==='Space'||
     e.key.startsWith('Arrow')
-  ){
-    e.preventDefault();
-  }
+  )e.preventDefault();
 
-  if(
-    e.repeat &&
-    (k==='c'||e.code==='Space')
-  ){
-    return;
-  }
+  if(e.repeat&&(k==='c'||e.code==='Space'))return;
 
-  if(k==='c' && myAvatar){
+  if(k==='c'&&myAvatar){
     if(!onGround)return;
 
-    myAvatar.userData.seated =
-      !myAvatar.userData.seated;
-
-    myAvatar.userData.bodyGroup.position.y = 0;
+    myAvatar.userData.seated=!myAvatar.userData.seated;
+    myAvatar.userData.bodyGroup.position.y=0;
     sendMove(true);
   }else if(
-    (k===' '||e.code==='Space') &&
-    myAvatar &&
-    !myAvatar.userData.seated &&
+    (k===' '||e.code==='Space')&&
+    myAvatar&&
+    !myAvatar.userData.seated&&
     onGround
   ){
-    jumpVelocity = JUMP_SPEED;
-    onGround = false;
+    jumpVelocity=JUMP_SPEED;
+    onGround=false;
     sendMove(true);
   }
 
@@ -1692,10 +1773,10 @@ window.addEventListener('keyup',e=>{
   keys.delete(e.key.toLowerCase());
 });
 
-const controls = $('mobile-controls');
+const controls=$('mobile-controls');
 
 controls.querySelectorAll('.move-btn').forEach(b=>{
-  const key = b.dataset.key;
+  const key=b.dataset.key;
 
   b.addEventListener('pointerdown',e=>{
     e.preventDefault();
@@ -1706,11 +1787,10 @@ controls.querySelectorAll('.move-btn').forEach(b=>{
       key,
       (touchCounts.get(key)||0)+1
     );
-
     b.classList.add('pressed');
   });
 
-  const release = e=>{
+  const release=e=>{
     e.preventDefault();
     e.stopPropagation();
 
@@ -1718,7 +1798,6 @@ controls.querySelectorAll('.move-btn').forEach(b=>{
       key,
       Math.max(0,(touchCounts.get(key)||0)-1)
     );
-
     b.classList.remove('pressed');
   };
 
@@ -1729,26 +1808,24 @@ controls.querySelectorAll('.move-btn').forEach(b=>{
 window.addEventListener('blur',()=>{
   keys.clear();
   touchCounts.clear();
-  dragging = false;
+  dragging=false;
 
   controls.querySelectorAll('.move-btn')
-    .forEach(b=>{
-      b.classList.remove('pressed');
-    });
+    .forEach(b=>b.classList.remove('pressed'));
 });
 
-const held = k =>
-  keys.has(k) || (touchCounts.get(k)||0)>0;
+const held=k=>
+  keys.has(k)||(touchCounts.get(k)||0)>0;
 
-let lastFrame = performance.now();
-let lastSent = 0;
-let walkTime = 0;
+let lastFrame=performance.now();
+let lastSent=0;
+let walkTime=0;
 
 function sendMove(force=false){
-  if(!myAvatar || defeated || reentryRequired)return;
+  if(!myAvatar||defeated||reentryRequired)return;
 
-  const now = performance.now();
-  if(!force && now-lastSent<120)return;
+  const now=performance.now();
+  if(!force&&now-lastSent<120)return;
 
   send({
     type:'move',
@@ -1759,138 +1836,110 @@ function sendMove(force=false){
     seated:myAvatar.userData.seated
   });
 
-  lastSent = now;
+  lastSent=now;
 }
 
 function animate(now){
   requestAnimationFrame(animate);
+  const dt=Math.min((now-lastFrame)/1000,.05);
+  lastFrame=now;
 
-  const dt = Math.min(
-    (now-lastFrame)/1000,
-    .05
-  );
-
-  lastFrame = now;
-
-  if(
-    !$('profile-modal').hidden &&
-    previewModel
-  ){
-    previewModel.rotation.y = previewAngle;
-    previewModel.userData.bodyGroup.position.y =
+  if(!$('profile-modal').hidden&&previewModel){
+    previewModel.rotation.y=previewAngle;
+    previewModel.userData.bodyGroup.position.y=
       Math.sin(now*.002)*.025;
   }
 
   if(!$('profile-modal').hidden){
     resizePreview();
-    previewRenderer.render(
-      previewScene,
-      previewCamera
-    );
+    previewRenderer.render(previewScene,previewCamera);
   }
 
   if(
-    myAvatar &&
-    $('profile-modal').hidden && !defeated && !reentryRequired
+    myAvatar&&
+    $('profile-modal').hidden&&
+    !defeated&&
+    !reentryRequired
   ){
-    const f =
+    const f=
       Number(held('w')||held('arrowup'))-
       Number(held('s')||held('arrowdown'));
 
-    const s =
-      Number(held('d') || held('arrowright')) -
+    const s=
+      Number(held('d')||held('arrowright'))-
       Number(held('arrowleft'));
 
-    if(
-      (f||s) &&
-      !myAvatar.userData.seated
-    ){
-      const len = Math.hypot(f,s);
-      const forward = f/len;
-      const side = s/len;
+    if((f||s)&&!myAvatar.userData.seated){
+      const len=Math.hypot(f,s);
+      const forward=f/len;
+      const side=s/len;
 
-      const dx =
+      const dx=
         Math.sin(yaw)*forward-
         Math.cos(yaw)*side;
 
-      const dz =
+      const dz=
         Math.cos(yaw)*forward+
         Math.sin(yaw)*side;
 
-      myAvatar.position.x = Math.max(
+      myAvatar.position.x=Math.max(
         -18,
-        Math.min(
-          18,
-          myAvatar.position.x+dx*5*dt
-        )
+        Math.min(18,myAvatar.position.x+dx*5*dt)
       );
 
-      myAvatar.position.z = Math.max(
+      myAvatar.position.z=Math.max(
         -18,
-        Math.min(
-          18,
-          myAvatar.position.z+dz*5*dt
-        )
+        Math.min(18,myAvatar.position.z+dz*5*dt)
       );
 
-      myAvatar.userData.targetDirection =
-        Math.atan2(dx,dz);
-
-      walkTime += dt*12;
-
-      myAvatar.userData.bodyGroup.position.y =
+      myAvatar.userData.targetDirection=Math.atan2(dx,dz);
+      walkTime+=dt*12;
+      myAvatar.userData.bodyGroup.position.y=
         Math.abs(Math.sin(walkTime))*.085;
-
       sendMove();
     }else{
-      myAvatar.userData.bodyGroup.position.y *= .8;
+      myAvatar.userData.bodyGroup.position.y*=.8;
     }
 
     if(!onGround){
-      jumpVelocity -= GRAVITY*dt;
-      myAvatar.position.y += jumpVelocity*dt;
+      jumpVelocity-=GRAVITY*dt;
+      myAvatar.position.y+=jumpVelocity*dt;
 
       if(myAvatar.position.y<=0){
-        myAvatar.position.y = 0;
-        jumpVelocity = 0;
-        onGround = true;
+        myAvatar.position.y=0;
+        jumpVelocity=0;
+        onGround=true;
       }
-
       sendMove();
     }
 
-    const body = myAvatar.userData.bodyGroup;
+    const body=myAvatar.userData.bodyGroup;
 
-    body.scale.y = THREE.MathUtils.damp(
+    body.scale.y=THREE.MathUtils.damp(
       body.scale.y,
       myAvatar.userData.seated?.64:1,
-      12,
-      dt
+      12,dt
     );
 
-    body.position.y = THREE.MathUtils.damp(
+    body.position.y=THREE.MathUtils.damp(
       body.position.y,
-      myAvatar.userData.seated
-        ? -.13
-        : body.position.y,
-      12,
-      dt
+      myAvatar.userData.seated?-.13:body.position.y,
+      12,dt
     );
   }
 
   for(const other of others.values()){
-    const body = other.userData.bodyGroup;
+    const body=other.userData.bodyGroup;
 
-    body.scale.y = THREE.MathUtils.damp(
+    body.scale.y=THREE.MathUtils.damp(
       body.scale.y,
       other.userData.seated?.64:1,
-      12,
-      dt
+      12,dt
     );
   }
 
   if(myAvatar){
-    myAvatar.rotation.y = turn(
+    myAvatar.rotation.y=turn(
       myAvatar.rotation.y,
       myAvatar.userData.targetDirection,
       dt*8
@@ -1898,27 +1947,24 @@ function animate(now){
   }
 
   for(const a of others.values()){
-    a.rotation.y = turn(
+    a.rotation.y=turn(
       a.rotation.y,
       a.userData.targetDirection,
       dt*8
     );
   }
 
-  const target = myAvatar?.position ||
+  const target=myAvatar?.position||
     new THREE.Vector3(0,0,-8);
 
-  const followAlpha =
-    1-Math.exp(-CAMERA_FOLLOW_SPEED*dt);
+  const followAlpha=1-Math.exp(-CAMERA_FOLLOW_SPEED*dt);
 
   camera.position.lerp(
     cameraPositionFor(target),
     followAlpha
   );
 
-  camera.lookAt(
-    cameraLookAtFor(target)
-  );
+  camera.lookAt(cameraLookAtFor(target));
 
   tickBubbles(now);
   raidClient.update(now,dt);
@@ -1926,19 +1972,18 @@ function animate(now){
 }
 
 function resizeScene(){
-  const w = Math.max(1,sceneEl.clientWidth);
-  const h = Math.max(1,sceneEl.clientHeight);
+  const w=Math.max(1,sceneEl.clientWidth);
+  const h=Math.max(1,sceneEl.clientHeight);
 
   renderer.setSize(w,h,false);
-  renderer.domElement.style.width = '100%';
-  renderer.domElement.style.height = '100%';
+  renderer.domElement.style.width='100%';
+  renderer.domElement.style.height='100%';
 
-  camera.aspect = w/h;
+  camera.aspect=w/h;
   camera.updateProjectionMatrix();
 }
 
 new ResizeObserver(resizeScene).observe(sceneEl);
-
 resizeScene();
 requestAnimationFrame(animate);
 
@@ -1949,7 +1994,7 @@ function send(m){
 }
 
 function sendProfile(){
-  if(!profile || defeated || reentryRequired)return;
+  if(!profile||defeated||reentryRequired)return;
 
   send({
     type:'join',
@@ -1970,16 +2015,13 @@ function sendProfile(){
 }
 
 function addMessage(item){
-  const line = document.createElement('div');
-  line.className = 'msg';
+  const line=document.createElement('div');
+  line.className='msg';
 
-  if(item.id){
-    line.dataset.messageId = item.id;
-  }
+  if(item.id)line.dataset.messageId=item.id;
 
-  const b = document.createElement('b');
-
-  b.textContent =
+  const b=document.createElement('b');
+  b.textContent=
     `${animal(item.animal).emoji} ${item.name}: `;
 
   line.append(
@@ -1988,73 +2030,66 @@ function addMessage(item){
   );
 
   $('messages').append(line);
-  $('messages').scrollTop =
-    $('messages').scrollHeight;
+  $('messages').scrollTop=$('messages').scrollHeight;
 }
 
 function updateVotes(v){
   if(!v)return;
 
-  const total = v.long+v.short;
-  const pct = total
-    ? Math.round(v.long/total*100)
-    : 50;
+  const total=v.long+v.short;
+  const pct=total
+    ?Math.round(v.long/total*100)
+    :50;
 
-  $('longbar').style.width = pct+'%';
-
-  $('longpct').textContent =
-    `${pct}% LONG (${v.long})`;
-
-  $('shortpct').textContent =
+  $('longbar').style.width=pct+'%';
+  $('longpct').textContent=`${pct}% LONG (${v.long})`;
+  $('shortpct').textContent=
     `${100-pct}% SHORT (${v.short})`;
 }
 
 function connect(){
   if(defeated)return;
-  const protocol =
-    location.protocol==='https:' ? 'wss' : 'ws';
 
-  socket = new WebSocket(
+  const protocol=
+    location.protocol==='https:'?'wss':'ws';
+
+  socket=new WebSocket(
     `${protocol}://${location.host}/ws`
   );
 
-  socket.onopen = ()=>{
-    $('connection').textContent =
-      '● 연결됨';
-
+  socket.onopen=()=>{
+    $('connection').textContent='● 연결됨';
     sendProfile();
   };
 
-  socket.onclose = event=>{
-    if(event.code===4001){
-      showDeathPopup();
-    }
+  socket.onclose=event=>{
+    if(event.code===4001)showDeathPopup();
+
     if(defeated){
       $('connection').textContent='퇴장';
       return;
     }
-    $('connection').textContent =
-      '연결 재시도 중';
+
+    $('connection').textContent='연결 재시도 중';
     setTimeout(connect,2000);
   };
 
-  socket.onerror = ()=>{
-    $('connection').textContent =
-      '연결 오류';
+  socket.onerror=()=>{
+    $('connection').textContent='연결 오류';
   };
 
-  socket.onmessage = e=>{
+  socket.onmessage=e=>{
     let m;
 
     try{
-      m = JSON.parse(e.data);
+      m=JSON.parse(e.data);
     }catch{
       return;
     }
 
     if(raidClient.onMessage(m))return;
 
-    if(m.type==='position_correct' && myAvatar){
+    if(m.type==='position_correct'&&myAvatar){
       myAvatar.position.set(
         Number(m.x)||0,
         Number(m.y)||0,
@@ -2064,7 +2099,7 @@ function connect(){
     }
 
     if(m.type==='welcome'){
-      myId = m.id;
+      myId=m.id;
       updateVotes(m.votes);
       $('messages').replaceChildren();
 
@@ -2076,11 +2111,10 @@ function connect(){
     }
 
     if(m.type==='presence'){
-      $('online').textContent = m.count;
+      $('online').textContent=m.count;
       updateOthers(m.players||[]);
     }
 
-    // PC·모바일 이용자의 마법 공격 동기화
     if(m.type==='magic'){
       spawnRemoteMagic(m);
       return;
@@ -2097,7 +2131,9 @@ function connect(){
 
     if(m.type==='player_hp'){
       const avatar=m.id===myId
-        ? myAvatar : others.get(m.id);
+        ?myAvatar
+        :others.get(m.id);
+
       if(avatar){
         setCharacterHpBar(avatar,m.hp,m.maxHp);
       }
@@ -2118,13 +2154,12 @@ function connect(){
     }
 
     if(m.type==='chat_deleted'){
-      document.querySelectorAll(
-        '#messages .msg'
-      ).forEach(el=>{
-        if(el.dataset.messageId===m.id){
-          el.remove();
-        }
-      });
+      document.querySelectorAll('#messages .msg')
+        .forEach(el=>{
+          if(el.dataset.messageId===m.id){
+            el.remove();
+          }
+        });
 
       deleteBubbleByMessage(m.id);
     }
@@ -2139,7 +2174,7 @@ function connect(){
   };
 }
 
-$('long').onclick = ()=>{
+$('long').onclick=()=>{
   if(!profile)return showProfile();
 
   send({
@@ -2148,7 +2183,7 @@ $('long').onclick = ()=>{
   });
 };
 
-$('short').onclick = ()=>{
+$('short').onclick=()=>{
   if(!profile)return showProfile();
 
   send({
@@ -2157,21 +2192,19 @@ $('short').onclick = ()=>{
   });
 };
 
-$('chat-form').onsubmit = e=>{
+$('chat-form').onsubmit=e=>{
   e.preventDefault();
-
   if(!profile)return showProfile();
 
-  const input = $('chat-input');
-  const message = input.value.trim();
+  const input=$('chat-input');
+  const message=input.value.trim();
 
   if(message){
     send({
       type:'chat',
       message
     });
-
-    input.value = '';
+    input.value='';
   }
 };
 
@@ -2183,27 +2216,27 @@ setInterval(updatePrices,15000);
 setInterval(updateCandles,60000);
 connect();
 
-const econFrame = $('investing-calendar');
+const econFrame=$('investing-calendar');
 
 if(econFrame){
-  const custom =
-    window.INVESTING_WIDGET_URL ||
+  const custom=
+    window.INVESTING_WIDGET_URL||
     window.JMC_INVESTING_WIDGET_URL;
 
-  const fallback =
+  const fallback=
     'https://sslecal2.investing.com?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&importance=3&features=datepicker&countries=5&calType=week&timeZone=88&lang=18';
 
-  econFrame.src =
-    typeof custom==='string' &&
+  econFrame.src=
+    typeof custom==='string'&&
     /^https:\/\/(?:sslecal2\.investing\.com|sslecal2\.forexprostools\.com)(?:\/|\?)/i.test(custom)
-      ? custom
-      : fallback;
+      ?custom
+      :fallback;
 }
 
 $('calendar-scene-button')?.addEventListener(
   'click',
   ()=>{
-    const panel = $('econ-panel');
+    const panel=$('econ-panel');
 
     panel?.scrollIntoView({
       behavior:'smooth',
@@ -2223,89 +2256,116 @@ $('calendar-scene-button')?.addEventListener(
    A키 연속 마법 공격 + 멀티플레이 동기화
    ======================================== */
 
-let magicPressed = false;
-let lastMagicTime = 0;
+let magicPressed=false;
+let lastMagicTime=0;
 
-const magicProjectiles = [];
+const magicProjectiles=[];
 
-const MAGIC_INTERVAL = 200;
-const MAGIC_SPEED = 13;
-const MAGIC_LIFETIME = 1100;
+const MAGIC_INTERVAL=200;
+const MAGIC_SPEED=13;
+const MAGIC_LIFETIME=1100;
 
-// 공격 요청은 서버에만 전송한다. 서버가 승인한 마법탄만 생성한다.
-// 이렇게 해야 서버의 명중 지점과 화면의 마법탄을 매칭할 수 있다.
 function castMagic(){
-  if(!myAvatar || defeated || reentryRequired)return;
+  if(!myAvatar||defeated||reentryRequired)return;
   send({type:'magic'});
 }
 
-// 서버가 부여한 고유 번호로 발사자 본인과 타인의 마법탄을 생성한다.
 function spawnRemoteMagic(m){
-  if(!m?.shotId || !m.senderId)return;
-  const x=Number(m.x),y=Number(m.y),z=Number(m.z);
+  if(!m?.shotId||!m.senderId)return;
+
+  const x=Number(m.x);
+  const y=Number(m.y);
+  const z=Number(m.z);
   const facing=Number(m.direction);
+
   if(![x,y,z,facing].every(Number.isFinite))return;
   if(magicProjectiles.some(shot=>shot.id===m.shotId))return;
 
   const direction=new THREE.Vector3(
     Math.sin(facing),0,Math.cos(facing)
   ).normalize();
+
   const projectile=new THREE.Group();
+
   const core=new THREE.Mesh(
     new THREE.SphereGeometry(.18,12,12),
     new THREE.MeshBasicMaterial({color:0xb9ffff})
   );
+
   const aura=new THREE.Mesh(
     new THREE.SphereGeometry(.32,12,12),
     new THREE.MeshBasicMaterial({
-      color:0x9955ff,transparent:true,opacity:.48,
-      blending:THREE.AdditiveBlending,depthWrite:false
+      color:0x9955ff,
+      transparent:true,
+      opacity:.48,
+      blending:THREE.AdditiveBlending,
+      depthWrite:false
     })
   );
+
   projectile.add(core,aura);
   projectile.position.set(x,y+1.15,z);
   projectile.position.addScaledVector(direction,.85);
   scene.add(projectile);
+
   magicProjectiles.push({
-    id:m.shotId,ownerId:m.senderId,object:projectile,direction,
-    born:performance.now(),core,aura,
-    freezeUntil:0,predictedContact:false
+    id:m.shotId,
+    ownerId:m.senderId,
+    object:projectile,
+    direction,
+    born:performance.now(),
+    core,
+    aura,
+    freezeUntil:0,
+    predictedContact:false
   });
 
-  // 서버가 발사를 승인한 시점에 발사음을 재생한다.
   playMagicCastSfx(magicSoundVolume(x,z));
 }
 
-// 시각적 관통 방지: 서버 피격 확정 전에도 탄이 캐릭터 표면에
-// 닿으면 잠깐 정지한다. 실제 데미지는 오직 magic_hit에서만 처리한다.
 function advanceVisibleMagic(shot,dt,now){
-  if(shot.freezeUntil && now<shot.freezeUntil)return;
+  if(shot.freezeUntil&&now<shot.freezeUntil)return;
   shot.freezeUntil=0;
+
   const current=shot.object.position;
   const dx=shot.direction.x*MAGIC_SPEED*dt;
   const dz=shot.direction.z*MAGIC_SPEED*dt;
   const a=dx*dx+dz*dz;
   let best=null;
 
-  if(!shot.predictedContact && a>0){
+  if(!shot.predictedContact&&a>0){
     const candidates=[
-      ...(myAvatar && !defeated && !reentryRequired
-        ? [{id:myId,avatar:myAvatar}] : []),
-      ...[...others.entries()].map(([id,avatar])=>({id,avatar}))
+      ...(myAvatar&&!defeated&&!reentryRequired
+        ?[{id:myId,avatar:myAvatar}]
+        :[]),
+      ...[...others.entries()].map(
+        ([id,avatar])=>({id,avatar})
+      )
     ];
+
     for(const {id,avatar} of candidates){
-      if(id===shot.ownerId || !avatar?.visible)continue;
-      if(Math.abs(current.y-(avatar.position.y+1.0))>.85)continue;
+      if(id===shot.ownerId||!avatar?.visible)continue;
+
+      if(
+        Math.abs(
+          current.y-(avatar.position.y+1.0)
+        )>.85
+      )continue;
 
       const fx=current.x-avatar.position.x;
       const fz=current.z-avatar.position.z;
       const b=2*(fx*dx+fz*dz);
       const c=fx*fx+fz*fz-.72*.72;
       const discriminant=b*b-4*a*c;
+
       if(discriminant<0)continue;
-      const t=c<=0?0:(-b-Math.sqrt(discriminant))/(2*a);
-      if(t<0 || t>1)continue;
-      if(best===null || t<best)best=t;
+
+      const t=c<=0
+        ?0
+        :(-b-Math.sqrt(discriminant))/(2*a);
+
+      if(t<0||t>1)continue;
+      if(best===null||t<best)best=t;
     }
   }
 
@@ -2328,16 +2388,24 @@ function disposeMagicProjectile(shot){
   shot.aura.material.dispose();
 }
 
-// ===== 피격: 마법탄 소멸 + 충격파 + 불꽃 + 캐릭터 움찔 =====
+// 피격: 마법탄 소멸 + 충격파 + 불꽃 + 캐릭터 움찔
 const impactEffects=[];
 const IMPACT_LIFETIME=420;
 const HIT_REACTION_DURATION=340;
 const HIT_FLASH_COLOR=new THREE.Color(0xff758f);
 
 const damageVeil=document.createElement('div');
-damageVeil.style.cssText=`position:absolute;inset:0;z-index:18;
+
+damageVeil.style.cssText=`
+  position:absolute;inset:0;z-index:18;
   pointer-events:none;opacity:0;
-  background:radial-gradient(circle,transparent 40%,rgba(255,44,88,.55));`;
+  background:radial-gradient(
+    circle,
+    transparent 40%,
+    rgba(255,44,88,.55)
+  );
+`;
+
 sceneEl.appendChild(damageVeil);
 let lastSelfHit=-Infinity;
 
@@ -2349,8 +2417,11 @@ function createMagicImpact(x,y,z){
   const orb=new THREE.Mesh(
     new THREE.SphereGeometry(.22,12,8),
     new THREE.MeshBasicMaterial({
-      color:0xeaffff,transparent:true,opacity:1,
-      blending:THREE.AdditiveBlending,depthWrite:false
+      color:0xeaffff,
+      transparent:true,
+      opacity:1,
+      blending:THREE.AdditiveBlending,
+      depthWrite:false
     })
   );
   group.add(orb);
@@ -2358,8 +2429,11 @@ function createMagicImpact(x,y,z){
   const ring=new THREE.Mesh(
     new THREE.RingGeometry(.18,.27,28),
     new THREE.MeshBasicMaterial({
-      color:0x9f7bff,transparent:true,opacity:.9,
-      blending:THREE.AdditiveBlending,depthWrite:false,
+      color:0x9f7bff,
+      transparent:true,
+      opacity:.9,
+      blending:THREE.AdditiveBlending,
+      depthWrite:false,
       side:THREE.DoubleSide
     })
   );
@@ -2367,26 +2441,35 @@ function createMagicImpact(x,y,z){
 
   const sparkGeo=new THREE.SphereGeometry(.065,6,4);
   const sparkMat=new THREE.MeshBasicMaterial({
-    color:0x7dffff,transparent:true,opacity:1,
-    blending:THREE.AdditiveBlending,depthWrite:false
+    color:0x7dffff,
+    transparent:true,
+    opacity:1,
+    blending:THREE.AdditiveBlending,
+    depthWrite:false
   });
+
   const sparks=[];
+
   for(let i=0;i<10;i++){
     const mesh=new THREE.Mesh(sparkGeo,sparkMat);
     const theta=Math.random()*Math.PI*2;
     const rise=(Math.random()-.25)*1.5;
     const speed=1.3+Math.random()*2.2;
+
     const velocity=new THREE.Vector3(
-      Math.cos(theta)*speed,rise,Math.sin(theta)*speed
+      Math.cos(theta)*speed,
+      rise,
+      Math.sin(theta)*speed
     );
+
     group.add(mesh);
     sparks.push({mesh,velocity});
   }
 
-  // 맞는 순간 표시되는 작은 데미지 숫자
   const canvas=document.createElement('canvas');
   canvas.width=128;
   canvas.height=64;
+
   const ctx=canvas.getContext('2d');
   ctx.font='bold 46px Arial';
   ctx.textAlign='center';
@@ -2395,30 +2478,55 @@ function createMagicImpact(x,y,z){
   ctx.strokeText('-1',64,49);
   ctx.fillStyle='#ffb5ca';
   ctx.fillText('-1',64,49);
+
   const textTexture=new THREE.CanvasTexture(canvas);
-  const textSprite=new THREE.Sprite(new THREE.SpriteMaterial({
-    map:textTexture,transparent:true,depthTest:false,depthWrite:false
-  }));
+
+  const textSprite=new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map:textTexture,
+      transparent:true,
+      depthTest:false,
+      depthWrite:false
+    })
+  );
+
   textSprite.position.y=.45;
   textSprite.scale.set(.72,.36,1);
   group.add(textSprite);
 
   impactEffects.push({
-    born:performance.now(),group,orb,ring,sparks,
-    sparkGeo,sparkMat,textSprite
+    born:performance.now(),
+    group,
+    orb,
+    ring,
+    sparks,
+    sparkGeo,
+    sparkMat,
+    textSprite
   });
 }
 
 function beginHitReaction(avatar,dirX,dirZ){
   if(!avatar)return;
-  // 연속 피격 시에도 원래 색상으로 돌아가도록 최초 원색을 유지한다.
-  const originals=avatar.userData.hitReaction?.originals || new Map();
+
+  const originals=
+    avatar.userData.hitReaction?.originals||
+    new Map();
+
   avatar.userData.bodyGroup.traverse(node=>{
     const material=node.material;
-    if(material?.isMeshStandardMaterial && !originals.has(material)){
-      originals.set(material,material.color.clone());
+
+    if(
+      material?.isMeshStandardMaterial&&
+      !originals.has(material)
+    ){
+      originals.set(
+        material,
+        material.color.clone()
+      );
     }
   });
+
   avatar.userData.hitReaction={
     born:performance.now(),
     dirX:Number(dirX)||0,
@@ -2428,23 +2536,37 @@ function beginHitReaction(avatar,dirX,dirZ){
 }
 
 function handleMagicHit(m){
-  // 맞은 마법탄만 찾아 즉시 제거한다. 더 이상 몸을 통과하지 않는다.
-  const index=magicProjectiles.findIndex(shot=>shot.id===m.shotId);
+  const index=magicProjectiles.findIndex(
+    shot=>shot.id===m.shotId
+  );
+
   if(index>=0){
     disposeMagicProjectile(magicProjectiles[index]);
     magicProjectiles.splice(index,1);
   }
 
-  const x=Number(m.x),y=Number(m.y),z=Number(m.z);
-  if([x,y,z].every(Number.isFinite))createMagicImpact(x,y,z);
+  const x=Number(m.x);
+  const y=Number(m.y);
+  const z=Number(m.z);
 
-  const victim=m.targetId===myId?myAvatar:others.get(m.targetId);
+  if([x,y,z].every(Number.isFinite)){
+    createMagicImpact(x,y,z);
+  }
+
+  const victim=m.targetId===myId
+    ?myAvatar
+    :others.get(m.targetId);
+
   beginHitReaction(victim,m.dirX,m.dirZ);
-  if(m.targetId===myId)lastSelfHit=performance.now();
 
-  // 서버 명중 판정이 확정된 경우에만 피격음을 재생한다.
+  if(m.targetId===myId){
+    lastSelfHit=performance.now();
+  }
+
   playMagicHitSfx(
-    m.targetId===myId ? 1 : magicSoundVolume(x,z)
+    m.targetId===myId
+      ?1
+      :magicSoundVolume(x,z)
   );
 }
 
@@ -2454,15 +2576,20 @@ function updateMagicImpacts(now){
     const age=now-effect.born;
     const t=Math.min(1,age/IMPACT_LIFETIME);
     const strength=1-t;
+
     effect.orb.scale.setScalar(1+t*1.5);
     effect.orb.material.opacity=strength;
+
     effect.ring.scale.setScalar(1+t*4);
     effect.ring.material.opacity=strength*.9;
     effect.ring.quaternion.copy(camera.quaternion);
+
     effect.sparkMat.opacity=strength;
+
     for(const {mesh,velocity} of effect.sparks){
       mesh.position.copy(velocity).multiplyScalar(age/1000);
     }
+
     effect.textSprite.position.y=.45+t*.65;
     effect.textSprite.material.opacity=strength;
 
@@ -2486,18 +2613,29 @@ function updateMagicImpacts(now){
   for(const avatar of [myAvatar,...others.values()]){
     const hit=avatar?.userData.hitReaction;
     if(!hit)continue;
-    const t=Math.min(1,(now-hit.born)/HIT_REACTION_DURATION);
-    const shake=Math.sin(t*Math.PI)*(.3*(1-t*.4));
+
+    const t=Math.min(
+      1,
+      (now-hit.born)/HIT_REACTION_DURATION
+    );
+
+    const shake=
+      Math.sin(t*Math.PI)*(.3*(1-t*.4));
+
     const body=avatar.userData.bodyGroup;
-    // 루트 위치는 유지하므로 서버 위치 동기화와 충돌하지 않는다.
+
     body.rotation.x=-shake;
     body.rotation.z=shake*(hit.dirX>=0?1:-1);
     body.position.x=hit.dirX*shake*.65;
     body.position.z=hit.dirZ*shake*.65;
+
     const flash=t<.35?(1-t/.35)*.65:0;
+
     for(const [material,original] of hit.originals){
-      material.color.copy(original).lerp(HIT_FLASH_COLOR,flash);
+      material.color.copy(original)
+        .lerp(HIT_FLASH_COLOR,flash);
     }
+
     if(t>=1){
       body.rotation.x=0;
       body.rotation.z=0;
@@ -2508,7 +2646,6 @@ function updateMagicImpacts(now){
   }
 }
 
-// PC A키 또는 모바일 A 버튼
 window.addEventListener('keydown',e=>{
   if(e.key.toLowerCase()!=='a')return;
 
@@ -2516,83 +2653,78 @@ window.addEventListener('keydown',e=>{
     ['INPUT','TEXTAREA'].includes(
       document.activeElement?.tagName
     )
-  ){
-    return;
-  }
+  )return;
 
-  if(!$('profile-modal').hidden || defeated || reentryRequired){
-    return;
-  }
+  if(
+    !$('profile-modal').hidden||
+    defeated||
+    reentryRequired
+  )return;
 
   e.preventDefault();
-  magicPressed = true;
+  magicPressed=true;
 });
 
 window.addEventListener('keyup',e=>{
   if(e.key.toLowerCase()==='a'){
-    magicPressed = false;
+    magicPressed=false;
   }
 });
 
 window.addEventListener('blur',()=>{
-  magicPressed = false;
+  magicPressed=false;
 });
 
-let previousMagicFrame = performance.now();
+let previousMagicFrame=performance.now();
 
 function updateMagic(now){
   requestAnimationFrame(updateMagic);
 
-  const dt = Math.min(
+  const dt=Math.min(
     (now-previousMagicFrame)/1000,
-    0.05
+    .05
   );
 
-  previousMagicFrame = now;
+  previousMagicFrame=now;
 
   if(
-    magicPressed && !defeated && !reentryRequired &&
-    myAvatar &&
-    $('profile-modal').hidden &&
+    magicPressed&&
+    !defeated&&
+    !reentryRequired&&
+    myAvatar&&
+    $('profile-modal').hidden&&
     now-lastMagicTime>=MAGIC_INTERVAL
   ){
     castMagic();
-    lastMagicTime = now;
+    lastMagicTime=now;
   }
 
-  // 캐릭터 마법 시전 모션
   if(myAvatar?.userData.bodyGroup){
-    const body = myAvatar.userData.bodyGroup;
+    const body=myAvatar.userData.bodyGroup;
 
-    body.rotation.z = magicPressed
-      ? Math.sin(now*0.018)*0.12
-      : THREE.MathUtils.lerp(
+    body.rotation.z=magicPressed
+      ?Math.sin(now*.018)*.12
+      :THREE.MathUtils.lerp(
           body.rotation.z,
           0,
-          0.2
+          .2
         );
   }
 
-  // 모든 이용자의 마법탄 이동
-  for(
-    let i=magicProjectiles.length-1;
-    i>=0;
-    i--
-  ){
-    const shot = magicProjectiles[i];
+  for(let i=magicProjectiles.length-1;i>=0;i--){
+    const shot=magicProjectiles[i];
 
     advanceVisibleMagic(shot,dt,now);
+    shot.aura.rotation.y+=dt*9;
 
-    shot.aura.rotation.y += dt*9;
-
-    const age = now-shot.born;
-    const remaining = Math.max(
+    const age=now-shot.born;
+    const remaining=Math.max(
       0,
       1-age/MAGIC_LIFETIME
     );
 
-    shot.aura.material.opacity =
-      remaining*0.48;
+    shot.aura.material.opacity=
+      remaining*.48;
 
     if(age>=MAGIC_LIFETIME){
       disposeMagicProjectile(shot);
@@ -2607,99 +2739,207 @@ requestAnimationFrame(updateMagic);
 
 // ====================================================
 // 전투 HP HUD / 사망 팝업 / 입장 화면으로 자동 복귀
-// 서버가 HP와 명중 판정을 관리하며, 새 입장 시 HP 100으로 시작한다.
 // ====================================================
 const hpHud=document.createElement('div');
 hpHud.id='jmc-hp-hud';
-hpHud.style.cssText=`position:absolute;z-index:20;left:12px;top:12px;
-  padding:9px 12px;width:min(185px,42%);box-sizing:border-box;
-  border:1px solid rgba(212,183,128,.7);border-radius:10px;
-  background:rgba(7,20,33,.91);color:white;pointer-events:none;
-  font:700 14px Arial,sans-serif;`;
-hpHud.innerHTML=`<div style="display:flex;justify-content:space-between;gap:8px">
-  <span>❤️ HP</span><span id="jmc-hp-text">100 / 100</span></div>
+
+hpHud.style.cssText=`
+  position:absolute;
+  z-index:20;
+  left:12px;
+  top:12px;
+  padding:9px 12px;
+  width:min(185px,42%);
+  box-sizing:border-box;
+  border:1px solid rgba(212,183,128,.7);
+  border-radius:10px;
+  background:rgba(7,20,33,.91);
+  color:white;
+  pointer-events:none;
+  font:700 14px Arial,sans-serif;
+`;
+
+hpHud.innerHTML=`
+  <div style="display:flex;justify-content:space-between;gap:8px">
+    <span>❤️ HP</span>
+    <span id="jmc-hp-text">100 / 100</span>
+  </div>
   <div style="height:9px;margin-top:7px;background:#4e263d;border-radius:6px;overflow:hidden">
-  <div id="jmc-hp-fill" style="height:100%;width:100%;background:#43de9a;transition:width .15s"></div></div>`;
+    <div id="jmc-hp-fill" style="height:100%;width:100%;background:#43de9a;transition:width .15s"></div>
+  </div>
+`;
+
 sceneEl.appendChild(hpHud);
 
 function updateHpHud(hp,maxHp=100){
   const max=Math.max(1,Number(maxHp)||100);
-  const remaining=Math.max(0,Math.min(max,Number(hp)||0));
+  const remaining=Math.max(
+    0,
+    Math.min(max,Number(hp)||0)
+  );
+
   myHp=remaining;
+
   const percent=(remaining/max)*100;
-  $('jmc-hp-text').textContent=`${remaining} / ${max}`;
-  $('jmc-hp-fill').style.width=percent+'%';
-  $('jmc-hp-fill').style.background=percent<=25?'#f16c7c':
-    percent<=55?'#f0bc52':'#43de9a';
-  if(myAvatar)setCharacterHpBar(myAvatar,remaining,max);
+
+  $('jmc-hp-text').textContent=
+    `${remaining} / ${max}`;
+
+  $('jmc-hp-fill').style.width=
+    percent+'%';
+
+  $('jmc-hp-fill').style.background=
+    percent<=25
+      ?'#f16c7c'
+      :percent<=55
+        ?'#f0bc52'
+        :'#43de9a';
+
+  if(myAvatar){
+    setCharacterHpBar(myAvatar,remaining,max);
+  }
 }
 
 function showDeathPopup(){
   if(defeated)return;
+
   defeated=true;
   magicPressed=false;
   keys.clear();
   touchCounts.clear();
-  if(myAvatar)myAvatar.visible=false;
+
+  if(myAvatar){
+    myAvatar.visible=false;
+  }
+
   updateHpHud(0,100);
   $('connection').textContent='퇴장';
+
   if(socket?.readyState===WebSocket.OPEN){
     socket.close(4001,'HP depleted');
   }
 
   const overlay=document.createElement('div');
   overlay.id='jmc-death-overlay';
-  overlay.style.cssText=`position:fixed;inset:0;z-index:100000;
-    display:flex;align-items:center;justify-content:center;
-    background:rgba(2,6,13,.87);padding:20px;box-sizing:border-box;`;
+
+  overlay.style.cssText=`
+    position:fixed;
+    inset:0;
+    z-index:100000;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:rgba(2,6,13,.87);
+    padding:20px;
+    box-sizing:border-box;
+  `;
 
   const dialog=document.createElement('div');
-  dialog.style.cssText=`max-width:390px;width:100%;text-align:center;
-    background:#13253a;border:1px solid #bc7797;border-radius:18px;
-    padding:36px 24px;color:#fff;box-shadow:0 0 50px rgba(155,38,75,.3);
-    font-family:Arial,sans-serif;`;
+
+  dialog.style.cssText=`
+    max-width:390px;
+    width:100%;
+    text-align:center;
+    background:#13253a;
+    border:1px solid #bc7797;
+    border-radius:18px;
+    padding:36px 24px;
+    color:#fff;
+    box-shadow:0 0 50px rgba(155,38,75,.3);
+    font-family:Arial,sans-serif;
+  `;
+
   const title=document.createElement('h2');
   title.textContent='[사망하셨습니다]';
-  title.style.cssText='font-size:28px;color:#ff889d;margin:0 0 15px;';
+
+  title.style.cssText=`
+    font-size:28px;
+    color:#ff889d;
+    margin:0 0 15px;
+  `;
+
   const message=document.createElement('p');
-  message.textContent='HP가 모두 소모되었습니다. 마법 공격을 100회 적중당하면 사망합니다.';
-  message.style.cssText='font-size:15px;line-height:1.65;margin:0 0 18px;color:#d5dfeb;';
+  message.textContent=
+    'HP가 모두 소모되었습니다. 마법 공격을 100회 적중당하면 사망합니다.';
+
+  message.style.cssText=`
+    font-size:15px;
+    line-height:1.65;
+    margin:0 0 18px;
+    color:#d5dfeb;
+  `;
+
   const countdown=document.createElement('p');
-  countdown.textContent='3초 후 입장 화면으로 이동합니다.';
-  countdown.style.cssText='font-size:14px;margin:0 0 22px;color:#f1c7d1;';
+  countdown.textContent=
+    '3초 후 입장 화면으로 이동합니다.';
+
+  countdown.style.cssText=`
+    font-size:14px;
+    margin:0 0 22px;
+    color:#f1c7d1;
+  `;
+
   const button=document.createElement('button');
   button.type='button';
   button.textContent='지금 입장 화면으로 이동';
-  button.style.cssText=`cursor:pointer;border:0;border-radius:10px;
-    background:#dfc18d;color:#182537;font-size:16px;font-weight:700;
-    padding:13px 28px;`;
+
+  button.style.cssText=`
+    cursor:pointer;
+    border:0;
+    border-radius:10px;
+    background:#dfc18d;
+    color:#182537;
+    font-size:16px;
+    font-weight:700;
+    padding:13px 28px;
+  `;
 
   let transitioning=false;
   let seconds=3;
   let timerId;
+
   const returnToEntry=()=>{
     if(transitioning)return;
     transitioning=true;
     clearInterval(timerId);
+
     try{
-      sessionStorage.setItem('jmc-reentry-required','1');
+      sessionStorage.setItem(
+        'jmc-reentry-required',
+        '1'
+      );
     }catch{
-      // 세션 저장소가 막혀 있으면 프로필 저장을 해제한다.
-      try{localStorage.removeItem('jmc-profile');}catch{}
+      try{
+        localStorage.removeItem('jmc-profile');
+      }catch{}
     }
+
     location.reload();
   };
-  button.addEventListener('click',returnToEntry);
-  dialog.append(title,message,countdown,button);
+
+  button.addEventListener(
+    'click',
+    returnToEntry
+  );
+
+  dialog.append(
+    title,
+    message,
+    countdown,
+    button
+  );
+
   overlay.append(dialog);
   document.body.appendChild(overlay);
 
   timerId=setInterval(()=>{
     seconds--;
+
     if(seconds<=0){
       returnToEntry();
     }else{
-      countdown.textContent=`${seconds}초 후 입장 화면으로 이동합니다.`;
+      countdown.textContent=
+        `${seconds}초 후 입장 화면으로 이동합니다.`;
     }
   },1000);
 }
