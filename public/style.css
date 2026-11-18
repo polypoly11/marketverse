@@ -203,3 +203,25 @@ main {
   border: 0;
   background: #ffffff;
 }
+
+/* 경제 캘린더 범례 및 하단 흰색 여백 숨기기 */
+.econ-frame {
+  height: 280px !important;
+  overflow: hidden !important;
+  border-radius: 8px;
+  background: #0b1726;
+}
+
+/* 상단 로고와 현재시간 숨김 유지 */
+.econ-frame iframe {
+  display: block;
+  width: 100%;
+  height: 900px !important;
+  margin-top: -80px;
+  border: 0;
+}
+
+/* 기존 덮개 비활성화 */
+.econ-frame::after {
+  display: none !important;
+}
