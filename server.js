@@ -59,7 +59,7 @@ const clean = (value, max=180) => String(value ?? '').replace(/[\u0000-\u001f<>]
 const send = (ws, data) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(data)); };
 const broadcast = data => { for (const ws of clients.keys()) send(ws,data); };
 function presence() {
-  const players = [...clients.values()].filter(p => p.ready).map(({id,name,animal,x,z,direction}) => ({id,name,animal,x,z,direction}));
+  const players = [...clients.values()].filter(p => p.ready).map(({id,name,animal,x,y,z,direction,seated}) => ({id,name,animal,x,y,z,direction,seated}));
   broadcast({type:'presence',count:players.length,players});
 }
 wss.on('connection', (ws,req) => {
@@ -67,7 +67,7 @@ wss.on('connection', (ws,req) => {
   if(!/^[a-f0-9]{32}$/.test(guest)){send(ws,{type:'moderation',message:'새로고침 후 다시 입장해주세요.'});ws.close(4002,'Missing guest cookie');return;}
   if((bans.get(guest)||0)>Date.now()){send(ws,{type:'moderation',message:'관리자에 의해 일시적으로 접속이 제한되었습니다.'});ws.close(4003,'Banned');return;}
 
-  const p = {guestId:guest,joinedAt:Date.now(),id:crypto.randomUUID(),name:'',animal:'seal',x:0,z:-8,direction:Math.PI,ready:false,vote:null,lastChat:0,lastMove:0};
+  const p = {guestId:guest,joinedAt:Date.now(),id:crypto.randomUUID(),name:'',animal:'seal',x:0,y:0,z:-8,direction:Math.PI,seated:false,ready:false,vote:null,lastChat:0,lastMove:0};
   clients.set(ws,p);
   send(ws,{type:'welcome',id:p.id,votes:{...votes},history,notices});
   presence();
@@ -85,6 +85,8 @@ wss.on('connection', (ws,req) => {
       const x=Number(m.x),z=Number(m.z),direction=Number(m.direction);
       if(!Number.isFinite(x)||!Number.isFinite(z))return;
       p.x=Math.max(-18,Math.min(18,x)); p.z=Math.max(-18,Math.min(18,z));
+      if(Number.isFinite(Number(m.y)))p.y=Math.max(0,Math.min(2.5,Number(m.y)));
+      p.seated=m.seated===true;
       if(Number.isFinite(direction))p.direction=Math.atan2(Math.sin(direction),Math.cos(direction));
       p.lastMove=now; presence(); return;
     }
