@@ -1,1177 +1,2280 @@
-import * as THREE from "three";
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
 
-const socket = io();
+const $ = id => document.getElementById(id);
 
-const sceneWrapEl = document.getElementById("scene");
-const onlineEl = document.getElementById("online");
-const connectionEl = document.getElementById("connection");
-const myProfileEl = document.getElementById("my-profile");
+// ========================================
+// 기본 데이터
+// ========================================
 
-const messagesEl = document.getElementById("messages");
-const chatForm = document.getElementById("chat-form");
-const chatInput = document.getElementById("chat-input");
+const animals = [
+  ['seal','아기물개','🦭',0xe9f0ed],
+  ['cat','고양이','🐱',0xd89b61],
+  ['dog','강아지','🐶',0xc9945b],
+  ['rabbit','토끼','🐰',0xf1e9e3],
+  ['fox','여우','🦊',0xe7833d],
+  ['panda','판다','🐼',0xf0eee8],
+  ['bear','곰','🐻',0x9b6548],
+  ['penguin','펭귄','🐧',0x293746],
+  ['frog','개구리','🐸',0x6bba59],
+  ['hamster','햄스터','🐹',0xe6bb83],
+  ['lion','사자','🦁',0xd5a052],
+  ['tiger','호랑이','🐯',0xe69a40],
+  ['koala','코알라','🐨',0x9ea7ae],
+  ['raccoon','너구리','🦝',0x777d81],
+  ['deer','사슴','🦌',0xb87d54]
+].map(([id,name,emoji,color])=>({
+  id,name,emoji,color
+}));
 
-const longBtn = document.getElementById("long");
-const shortBtn = document.getElementById("short");
-const longBarEl = document.getElementById("longbar");
-const longPctEl = document.getElementById("longpct");
-const shortPctEl = document.getElementById("shortpct");
+const animal = id =>
+  animals.find(a=>a.id===id) || animals[0];
 
-const assetsEl = document.getElementById("assets");
+const symbols = ['BTC','ETH','SOL','XRP'].map((id,i)=>({
+  id,
+  name:['비트코인','이더리움','솔라나','리플'][i],
+  price:null,
+  candles:[]
+}));
 
-const profileModal = document.getElementById("profile-modal");
-const renameBtn = document.getElementById("rename");
-const nicknameInput = document.getElementById("nickname");
-const animalGridEl = document.getElementById("animal-grid");
-const selectedAnimalNameEl = document.getElementById("selected-animal-name");
-const enterBtn = document.getElementById("enter-lounge");
-const cancelProfileBtn = document.getElementById("cancel-profile");
-const profileErrorEl = document.getElementById("profile-error");
-const animalPreviewEl = document.getElementById("animal-preview");
-
-const detailModal = document.getElementById("detail");
-const detailCloseBtn = document.getElementById("close");
-const detailNameEl = document.getElementById("detail-name");
-const detailPriceEl = document.getElementById("detail-price");
-const detailCanvas = document.getElementById("detail-chart");
-const detailCtx = detailCanvas.getContext("2d");
-const chartStatusEl = document.getElementById("chart-status");
-const rangeButtons = [...document.querySelectorAll(".chart-toolbar button")];
-
-const mobileButtons = [...document.querySelectorAll(".move-btn")];
-
-const ANIMALS = [
-  { id: "babySeal", name: "아기물개", emoji: "🦭", color: 0xd7c0ae, ear: "none", snout: "round" },
-  { id: "bear", name: "곰", emoji: "🐻", color: 0x8d5d3f, ear: "round", snout: "round" },
-  { id: "rabbit", name: "토끼", emoji: "🐰", color: 0xd8d0da, ear: "long", snout: "round" },
-  { id: "cat", name: "고양이", emoji: "🐱", color: 0xf2c37f, ear: "point", snout: "small" },
-  { id: "dog", name: "강아지", emoji: "🐶", color: 0xca9b72, ear: "drop", snout: "round" },
-  { id: "fox", name: "여우", emoji: "🦊", color: 0xd47638, ear: "point", snout: "small" },
-  { id: "pig", name: "돼지", emoji: "🐷", color: 0xe4a7b8, ear: "small", snout: "pig" },
-  { id: "cow", name: "소", emoji: "🐮", color: 0xd5cbc2, ear: "horn", snout: "round" },
-  { id: "tiger", name: "호랑이", emoji: "🐯", color: 0xe19944, ear: "round", snout: "small" },
-  { id: "panda", name: "판다", emoji: "🐼", color: 0xe8e8e8, ear: "roundBlack", snout: "round" },
-  { id: "penguin", name: "펭귄", emoji: "🐧", color: 0x262626, ear: "none", snout: "small" },
-  { id: "chick", name: "병아리", emoji: "🐥", color: 0xf4d565, ear: "none", snout: "small" },
-  { id: "frog", name: "개구리", emoji: "🐸", color: 0x59c66c, ear: "frog", snout: "small" },
-  { id: "monkey", name: "원숭이", emoji: "🐵", color: 0x8b5d43, ear: "round", snout: "monkey" },
-  { id: "hamster", name: "햄스터", emoji: "🐹", color: 0xd4b08b, ear: "round", snout: "round" }
-];
-
-const MARKET_SYMBOLS = [
-  { key: "BTC", product: "BTC-USD", label: "BTC / USD", precision: 2 },
-  { key: "ETH", product: "ETH-USD", label: "ETH / USD", precision: 2 },
-  { key: "SOL", product: "SOL-USD", label: "SOL / USD", precision: 2 }
-];
-
-const RANGE_CONFIG = {
-  "1h": { granularity: 300, limit: 12 },
-  "1d": { granularity: 1800, limit: 48 },
-  "1w": { granularity: 21600, limit: 56 }
+const ranges = {
+  '1h':[60,60],
+  '1d':[900,96],
+  '1w':[3600,168]
 };
 
-const marketStore = {};
-let currentDetailSymbol = "BTC";
-let currentDetailRange = "1d";
+const money = n =>
+  Number.isFinite(n)
+    ? '$'+n.toLocaleString('en-US',{
+        minimumFractionDigits:2,
+        maximumFractionDigits:2
+      })
+    : '연결 대기';
 
-let joined = false;
-let myId = null;
-let myProfile = {
-  nickname: "",
-  animal: "babySeal"
-};
+const angle = a =>
+  Math.atan2(Math.sin(a),Math.cos(a));
 
-const remoteAvatars = new Map();
-const avatarSprites = new Map();
+function turn(current,target,max){
+  const diff = angle(target-current);
+  return Math.abs(diff)<=max
+    ? target
+    : current+Math.sign(diff)*max;
+}
 
-const keys = {};
-let canToggleSit = true;
-let dragActive = false;
-let dragLastX = 0;
-let cameraYawOffset = 0;
-let sendMoveCooldown = 0;
+// ========================================
+// PC / 모바일 환경
+// ========================================
 
-const playerState = {
-  x: 0,
-  z: 12,
-  dir: Math.PI,
-  sitting: false,
-  jumping: false,
-  jumpY: 0,
-  jumpV: 0
-};
+const isMobileDevice = window.matchMedia(
+  '(max-width: 980px), (pointer: coarse)'
+).matches;
 
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x061321);
-scene.fog = new THREE.Fog(0x061321, 18, 55);
-
-const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 200);
-camera.position.set(0, 5.4, 18);
-
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-sceneWrapEl.prepend(renderer.domElement);
-
-const clock = new THREE.Clock();
-
-const ambientLight = new THREE.AmbientLight(0xffffff, 1.25);
-scene.add(ambientLight);
-
-const dirLight = new THREE.DirectionalLight(0xa8d8ff, 2.0);
-dirLight.position.set(6, 12, 8);
-dirLight.castShadow = true;
-dirLight.shadow.mapSize.set(1024, 1024);
-scene.add(dirLight);
-
-const pointLight = new THREE.PointLight(0x34e1ff, 22, 60, 2);
-pointLight.position.set(0, 5, 4);
-scene.add(pointLight);
-
-const boardLight = new THREE.PointLight(0x4de0bc, 26, 45, 2);
-boardLight.position.set(0, 7, -18);
-scene.add(boardLight);
-
-const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(52, 80, 1, 1),
-  new THREE.MeshStandardMaterial({ color: 0x04121f, roughness: 0.98, metalness: 0.1 })
+const renderPixelRatio = Math.min(
+  window.devicePixelRatio || 1,
+  isMobileDevice ? 1 : 2
 );
-floor.rotation.x = -Math.PI / 2;
-floor.receiveShadow = true;
-floor.position.z = 5;
-scene.add(floor);
 
-const grid = new THREE.GridHelper(52, 52, 0x1c7ba0, 0x134764);
-grid.position.y = 0.01;
-grid.position.z = 5;
-scene.add(grid);
+// PC와 모바일 캐릭터 크기 70%
+const CHARACTER_SCALE = 0.7;
 
-const leftColumn = new THREE.Mesh(
-  new THREE.BoxGeometry(1.2, 10, 1.2),
-  new THREE.MeshStandardMaterial({ color: 0x10354a, emissive: 0x07202d })
-);
-leftColumn.position.set(-12, 4.8, -4);
-leftColumn.rotation.z = 0.18;
-scene.add(leftColumn);
+// 카메라 설정
+const CAMERA_BASE_DISTANCE = isMobileDevice ? 7.5 : 6.8;
+const CAMERA_MAX_DISTANCE = isMobileDevice ? 25 : 18;
+const CAMERA_HEIGHT = isMobileDevice ? 3.2 : 3.3;
+const CAMERA_FOLLOW_SPEED = 9;
 
-const deco1 = new THREE.Mesh(
-  new THREE.ConeGeometry(1.7, 4, 5),
-  new THREE.MeshStandardMaterial({ color: 0x1d9a97, roughness: 0.5, metalness: 0.2 })
-);
-deco1.position.set(-17, 2.1, 9);
-scene.add(deco1);
+const BOARD_Z = -18.65;
+const BOARD_WIDTH = 17;
 
-const deco2 = new THREE.Mesh(
-  new THREE.BoxGeometry(2.3, 1, 2.3),
-  new THREE.MeshStandardMaterial({ color: 0x0f413d, roughness: 0.7 })
-);
-deco2.position.set(-17, 0.5, 10.4);
-scene.add(deco2);
+// ========================================
+// 3D 동물 캐릭터
+// ========================================
 
-const billboardCanvas = document.createElement("canvas");
-billboardCanvas.width = 2048;
-billboardCanvas.height = 960;
-const billboardCtx = billboardCanvas.getContext("2d");
-const billboardTexture = new THREE.CanvasTexture(billboardCanvas);
-billboardTexture.minFilter = THREE.LinearFilter;
-billboardTexture.magFilter = THREE.LinearFilter;
+const sphere = new THREE.SphereGeometry(1,20,14);
 
-const billboardGroup = new THREE.Group();
-billboardGroup.position.set(0, 6.8, -24);
+function makeAnimal(id){
 
-const billboardBack = new THREE.Mesh(
-  new THREE.BoxGeometry(25, 11.5, 0.5),
-  new THREE.MeshStandardMaterial({ color: 0x0a1928, emissive: 0x07121c, metalness: 0.55, roughness: 0.55 })
-);
-billboardBack.castShadow = true;
-billboardBack.receiveShadow = true;
-billboardGroup.add(billboardBack);
+  const a = animal(id);
 
-const billboardFace = new THREE.Mesh(
-  new THREE.PlaneGeometry(23.6, 10.2),
-  new THREE.MeshBasicMaterial({ map: billboardTexture })
-);
-billboardFace.position.z = 0.26;
-billboardGroup.add(billboardFace);
+  const root = new THREE.Group();
+  const bodyGroup = new THREE.Group();
 
-scene.add(billboardGroup);
+  root.scale.setScalar(CHARACTER_SCALE);
+  root.add(bodyGroup);
 
-const localAvatarRoot = new THREE.Group();
-scene.add(localAvatarRoot);
-
-let previewRenderer, previewScene, previewCamera, previewAvatar;
-let selectedAnimal = "babySeal";
-
-function formatDollar(value, precision = 2) {
-  if (!Number.isFinite(value)) return "-";
-  return `$${value.toLocaleString("en-US", {
-    minimumFractionDigits: precision,
-    maximumFractionDigits: precision
-  })}`;
-}
-
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-function makeTextTexture(text, width = 512, height = 128, type = "bubble") {
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-
-  ctx.clearRect(0, 0, width, height);
-  if (type === "bubble") {
-    ctx.fillStyle = "rgba(6, 18, 30, 0.92)";
-    ctx.strokeStyle = "rgba(241, 216, 160, 0.9)";
-    ctx.lineWidth = 4;
-    roundRect(ctx, 8, 8, width - 16, height - 26, 26);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.moveTo(width / 2 - 18, height - 26);
-    ctx.lineTo(width / 2 + 18, height - 26);
-    ctx.lineTo(width / 2, height - 4);
-    ctx.closePath();
-    ctx.fillStyle = "rgba(6, 18, 30, 0.92)";
-    ctx.fill();
-    ctx.strokeStyle = "rgba(241, 216, 160, 0.9)";
-    ctx.stroke();
-
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "700 38px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(text, width / 2, height / 2 - 8);
-  } else {
-    ctx.fillStyle = "rgba(0,0,0,0.55)";
-    roundRect(ctx, 10, 18, width - 20, height - 36, 18);
-    ctx.fill();
-    ctx.fillStyle = "#f7ead1";
-    ctx.font = "700 36px sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText(text, width / 2, height / 2);
-  }
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
-}
-
-function makeTextSprite(text, type = "bubble") {
-  const texture = makeTextTexture(text, 512, type === "bubble" ? 140 : 96, type);
-  const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
-  const sprite = new THREE.Sprite(material);
-  sprite.scale.set(type === "bubble" ? 3.9 : 2.8, type === "bubble" ? 1.1 : 0.55, 1);
-  return sprite;
-}
-
-function buildAnimalAvatar(animalId) {
-  const data = ANIMALS.find((a) => a.id === animalId) || ANIMALS[0];
-  const g = new THREE.Group();
-  g.scale.setScalar(0.7);
-
-  const bodyMat = new THREE.MeshStandardMaterial({
-    color: data.color,
-    roughness: 0.7,
-    metalness: 0.08
-  });
-
-  const darkMat = new THREE.MeshStandardMaterial({
-    color: 0x2c1a12,
-    roughness: 0.75
-  });
-
-  const lightMat = new THREE.MeshStandardMaterial({
-    color: 0xf4e7d6,
-    roughness: 0.8
-  });
-
-  const body = new THREE.Mesh(new THREE.SphereGeometry(0.95, 28, 28), bodyMat);
-  body.scale.set(1.0, 1.1, 0.9);
-  body.position.y = 1.1;
-  body.castShadow = true;
-  g.add(body);
-
-  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.55, 24, 24), lightMat);
-  belly.scale.set(1, 1.1, 0.5);
-  belly.position.set(0, 1.0, 0.55);
-  belly.castShadow = true;
-  g.add(belly);
-
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.75, 28, 28), bodyMat);
-  head.position.set(0, 2.2, 0);
-  head.castShadow = true;
-  g.add(head);
-
-  const eyeGeo = new THREE.SphereGeometry(0.06, 16, 16);
-  const eyeL = new THREE.Mesh(eyeGeo, darkMat);
-  const eyeR = new THREE.Mesh(eyeGeo, darkMat);
-  eyeL.position.set(-0.18, 2.25, 0.67);
-  eyeR.position.set(0.18, 2.25, 0.67);
-  g.add(eyeL, eyeR);
-
-  const mouth = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 12), darkMat);
-  mouth.position.set(0, 2.0, 0.73);
-  g.add(mouth);
-
-  const addEar = (x, y, z, sx, sy, sz, color = bodyMat) => {
-    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.24, 18, 18), color);
-    ear.position.set(x, y, z);
-    ear.scale.set(sx, sy, sz);
-    ear.castShadow = true;
-    g.add(ear);
-  };
-
-  if (data.ear === "round") {
-    addEar(-0.42, 2.75, -0.05, 1, 1, 0.7);
-    addEar(0.42, 2.75, -0.05, 1, 1, 0.7);
-  }
-  if (data.ear === "roundBlack") {
-    const blackMat = new THREE.MeshStandardMaterial({ color: 0x191919, roughness: 0.8 });
-    addEar(-0.42, 2.75, -0.05, 1, 1, 0.7, blackMat);
-    addEar(0.42, 2.75, -0.05, 1, 1, 0.7, blackMat);
-    const patch1 = new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 16), blackMat);
-    const patch2 = new THREE.Mesh(new THREE.SphereGeometry(0.14, 16, 16), blackMat);
-    patch1.position.set(-0.18, 2.25, 0.64);
-    patch2.position.set(0.18, 2.25, 0.64);
-    patch1.scale.set(1.4, 1, 0.4);
-    patch2.scale.set(1.4, 1, 0.4);
-    g.add(patch1, patch2);
-  }
-  if (data.ear === "point") {
-    const earGeo = new THREE.ConeGeometry(0.18, 0.48, 4);
-    const e1 = new THREE.Mesh(earGeo, bodyMat);
-    const e2 = new THREE.Mesh(earGeo, bodyMat);
-    e1.position.set(-0.42, 2.84, 0);
-    e2.position.set(0.42, 2.84, 0);
-    e1.rotation.z = -0.2;
-    e2.rotation.z = 0.2;
-    e1.castShadow = true;
-    e2.castShadow = true;
-    g.add(e1, e2);
-  }
-  if (data.ear === "long") {
-    const earGeo = new THREE.CapsuleGeometry(0.12, 0.75, 4, 8);
-    const e1 = new THREE.Mesh(earGeo, bodyMat);
-    const e2 = new THREE.Mesh(earGeo, bodyMat);
-    e1.position.set(-0.28, 3.08, 0);
-    e2.position.set(0.28, 3.08, 0);
-    e1.rotation.z = 0.08;
-    e2.rotation.z = -0.08;
-    g.add(e1, e2);
-  }
-  if (data.ear === "drop") {
-    const earGeo = new THREE.CapsuleGeometry(0.12, 0.45, 4, 8);
-    const e1 = new THREE.Mesh(earGeo, bodyMat);
-    const e2 = new THREE.Mesh(earGeo, bodyMat);
-    e1.position.set(-0.44, 2.55, 0.02);
-    e2.position.set(0.44, 2.55, 0.02);
-    e1.rotation.z = 0.52;
-    e2.rotation.z = -0.52;
-    g.add(e1, e2);
-  }
-  if (data.ear === "small") {
-    addEar(-0.26, 2.78, 0.05, 0.8, 0.8, 0.6);
-    addEar(0.26, 2.78, 0.05, 0.8, 0.8, 0.6);
-  }
-  if (data.ear === "horn") {
-    const hornMat = new THREE.MeshStandardMaterial({ color: 0xa38d78, roughness: 0.8 });
-    const hGeo = new THREE.ConeGeometry(0.12, 0.36, 5);
-    const h1 = new THREE.Mesh(hGeo, hornMat);
-    const h2 = new THREE.Mesh(hGeo, hornMat);
-    h1.position.set(-0.28, 2.9, 0);
-    h2.position.set(0.28, 2.9, 0);
-    h1.rotation.z = 0.6;
-    h2.rotation.z = -0.6;
-    g.add(h1, h2);
-  }
-  if (data.ear === "frog") {
-    const eyeBallMat = new THREE.MeshStandardMaterial({ color: 0xf9fbfc, roughness: 0.7 });
-    const pupMat = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.8 });
-    const b1 = new THREE.Mesh(new THREE.SphereGeometry(0.18, 18, 18), eyeBallMat);
-    const b2 = new THREE.Mesh(new THREE.SphereGeometry(0.18, 18, 18), eyeBallMat);
-    b1.position.set(-0.27, 2.62, 0.4);
-    b2.position.set(0.27, 2.62, 0.4);
-    g.add(b1, b2);
-    const p1 = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 12), pupMat);
-    const p2 = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 12), pupMat);
-    p1.position.set(-0.27, 2.62, 0.56);
-    p2.position.set(0.27, 2.62, 0.56);
-    g.add(p1, p2);
-  }
-
-  if (data.snout === "pig") {
-    const snout = new THREE.Mesh(new THREE.SphereGeometry(0.24, 18, 18), lightMat);
-    snout.scale.set(1.3, 0.9, 0.8);
-    snout.position.set(0, 2.03, 0.73);
-    g.add(snout);
-  } else if (data.snout === "monkey") {
-    const faceMat = new THREE.MeshStandardMaterial({ color: 0xe6c19d, roughness: 0.7 });
-    const face = new THREE.Mesh(new THREE.SphereGeometry(0.37, 18, 18), faceMat);
-    face.scale.set(1, 0.8, 0.45);
-    face.position.set(0, 2.02, 0.62);
-    g.add(face);
-  } else if (data.snout === "small") {
-    const snout = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 16), lightMat);
-    snout.scale.set(1.1, 0.75, 0.6);
-    snout.position.set(0, 2.02, 0.7);
-    g.add(snout);
-  } else if (data.snout === "round") {
-    const snout = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), lightMat);
-    snout.scale.set(1.25, 0.85, 0.7);
-    snout.position.set(0, 2.0, 0.7);
-    g.add(snout);
-  }
-
-  const armGeo = new THREE.CapsuleGeometry(0.14, 0.55, 3, 6);
-  const legGeo = new THREE.CapsuleGeometry(0.16, 0.62, 3, 6);
-
-  const armL = new THREE.Mesh(armGeo, bodyMat);
-  const armR = new THREE.Mesh(armGeo, bodyMat);
-  armL.position.set(-0.65, 1.28, 0.2);
-  armR.position.set(0.65, 1.28, 0.2);
-  armL.rotation.z = 0.35;
-  armR.rotation.z = -0.35;
-  g.add(armL, armR);
-
-  const legL = new THREE.Mesh(legGeo, bodyMat);
-  const legR = new THREE.Mesh(legGeo, bodyMat);
-  legL.position.set(-0.3, 0.35, 0);
-  legR.position.set(0.3, 0.35, 0);
-  g.add(legL, legR);
-
-  const tail = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 16), bodyMat);
-  tail.position.set(0, 1.0, -0.72);
-  g.add(tail);
-
-  const shadow = new THREE.Mesh(
-    new THREE.CircleGeometry(0.88, 32),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22 })
-  );
-  shadow.rotation.x = -Math.PI / 2;
-  shadow.position.y = 0.03;
-  g.add(shadow);
-
-  const nameSprite = makeTextSprite("", "name");
-  nameSprite.position.set(0, 3.55, 0);
-  g.add(nameSprite);
-
-  const bubbleSprite = makeTextSprite("", "bubble");
-  bubbleSprite.position.set(0, 4.45, 0);
-  bubbleSprite.visible = false;
-  g.add(bubbleSprite);
-
-  g.userData = {
-    data,
-    armL,
-    armR,
-    legL,
-    legR,
-    body,
-    head,
-    nameSprite,
-    bubbleSprite,
-    shadow,
-    baseY: 0
-  };
-
-  return g;
-}
-
-function setAvatarName(group, text) {
-  if (!group?.userData?.nameSprite) return;
-  group.userData.nameSprite.material.map.dispose?.();
-  group.userData.nameSprite.material.map = makeTextTexture(text, 420, 96, "name");
-  group.userData.nameSprite.material.needsUpdate = true;
-}
-
-function setAvatarBubble(group, text) {
-  if (!group?.userData?.bubbleSprite) return;
-  if (!text) {
-    group.userData.bubbleSprite.visible = false;
-    return;
-  }
-  group.userData.bubbleSprite.visible = true;
-  group.userData.bubbleSprite.material.map.dispose?.();
-  group.userData.bubbleSprite.material.map = makeTextTexture(text, 512, 140, "bubble");
-  group.userData.bubbleSprite.material.needsUpdate = true;
-}
-
-function mountLocalAvatar() {
-  localAvatarRoot.clear();
-  const avatar = buildAnimalAvatar(myProfile.animal);
-  avatar.position.set(playerState.x, playerState.jumpY, playerState.z);
-  avatar.rotation.y = playerState.dir;
-  setAvatarName(avatar, myProfile.nickname || "나");
-  localAvatarRoot.add(avatar);
-  localAvatarRoot.userData.avatar = avatar;
-}
-
-function ensureRemoteAvatar(id, player) {
-  if (id === myId) return;
-  let avatar = remoteAvatars.get(id);
-  if (!avatar) {
-    avatar = buildAnimalAvatar(player.animal);
-    setAvatarName(avatar, player.nickname);
-    avatar.position.set(player.x, 0, player.z);
-    avatar.rotation.y = player.dir || Math.PI;
-    scene.add(avatar);
-    remoteAvatars.set(id, avatar);
-  }
-  return avatar;
-}
-
-function syncRemotePlayers(players) {
-  const seen = new Set();
-  for (const [id, p] of Object.entries(players)) {
-    seen.add(id);
-    if (id === myId) continue;
-    let avatar = remoteAvatars.get(id);
-    const currentAnimal = avatar?.userData?.data?.id;
-    if (!avatar || currentAnimal !== p.animal) {
-      if (avatar) {
-        scene.remove(avatar);
-        remoteAvatars.delete(id);
-      }
-      avatar = ensureRemoteAvatar(id, p);
-    }
-    avatar.position.x = p.x;
-    avatar.position.z = p.z;
-    avatar.rotation.y = p.dir || Math.PI;
-    avatar.userData.baseY = p.sitting ? -0.38 : 0;
-    avatar.position.y = avatar.userData.baseY;
-    avatar.scale.setScalar(0.7);
-    setAvatarName(avatar, p.nickname);
-    setAvatarBubble(avatar, p.bubble || "");
-  }
-
-  for (const [id, avatar] of remoteAvatars.entries()) {
-    if (!seen.has(id)) {
-      scene.remove(avatar);
-      remoteAvatars.delete(id);
-    }
-  }
-}
-
-function buildAnimalSelector() {
-  animalGridEl.innerHTML = "";
-  ANIMALS.forEach((animal) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "animal-option" + (animal.id === selectedAnimal ? " selected" : "");
-    btn.innerHTML = `<span class="animal-emoji">${animal.emoji}</span><span class="animal-name">${animal.name}</span>`;
-    btn.addEventListener("click", () => {
-      selectedAnimal = animal.id;
-      selectedAnimalNameEl.textContent = animal.name;
-      [...animalGridEl.children].forEach((node) => node.classList.remove("selected"));
-      btn.classList.add("selected");
-      refreshPreviewAvatar();
+  const mat = (color,roughness=.84) =>
+    new THREE.MeshStandardMaterial({
+      color,
+      roughness,
+      metalness:0
     });
-    animalGridEl.appendChild(btn);
-  });
-  selectedAnimalNameEl.textContent = ANIMALS.find((a) => a.id === selectedAnimal)?.name || "아기물개";
-}
 
-function initPreviewScene() {
-  previewRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  previewRenderer.setSize(animalPreviewEl.clientWidth, animalPreviewEl.clientHeight);
-  animalPreviewEl.innerHTML = "";
-  animalPreviewEl.appendChild(previewRenderer.domElement);
+  const fur = mat(a.color);
+  const light = mat(0xffe9d4);
+  const dark = mat(0x20212b);
+  const pink = mat(0xe98f9d);
+  const white = mat(0xffffff);
+  const brown = mat(0x7d4b30);
 
-  previewScene = new THREE.Scene();
-  previewCamera = new THREE.PerspectiveCamera(45, animalPreviewEl.clientWidth / animalPreviewEl.clientHeight, 0.1, 100);
-  previewCamera.position.set(0, 2.1, 7.2);
-
-  previewScene.add(new THREE.AmbientLight(0xffffff, 1.3));
-  const l = new THREE.DirectionalLight(0xffffff, 1.5);
-  l.position.set(3, 6, 4);
-  previewScene.add(l);
-
-  refreshPreviewAvatar();
-
-  let rotating = false;
-  let lastX = 0;
-
-  animalPreviewEl.addEventListener("pointerdown", (e) => {
-    rotating = true;
-    lastX = e.clientX;
-  });
-  window.addEventListener("pointerup", () => rotating = false);
-  window.addEventListener("pointermove", (e) => {
-    if (!rotating || !previewAvatar) return;
-    const dx = e.clientX - lastX;
-    lastX = e.clientX;
-    previewAvatar.rotation.y += dx * 0.01;
-  });
-
-  function previewLoop() {
-    requestAnimationFrame(previewLoop);
-    if (previewAvatar) previewAvatar.rotation.y += 0.003;
-    previewRenderer.render(previewScene, previewCamera);
+  function orb(parent,x,y,z,sx,sy,sz,material){
+    const m = new THREE.Mesh(sphere,material);
+    m.position.set(x,y,z);
+    m.scale.set(sx,sy,sz);
+    parent.add(m);
+    return m;
   }
-  previewLoop();
-}
 
-function refreshPreviewAvatar() {
-  if (!previewScene) return;
-  if (previewAvatar) previewScene.remove(previewAvatar);
-  previewAvatar = buildAnimalAvatar(selectedAnimal);
-  previewAvatar.position.y = -0.2;
-  previewScene.add(previewAvatar);
-}
+  function cone(parent,x,y,z,r,h,material,rotation=0){
+    const m = new THREE.Mesh(
+      new THREE.ConeGeometry(r,h,12),
+      material
+    );
+    m.position.set(x,y,z);
+    m.rotation.z = rotation;
+    parent.add(m);
+    return m;
+  }
 
-function openProfileModal(isRename = false) {
-  profileModal.hidden = false;
-  profileModal.style.display = "grid";
-  cancelProfileBtn.hidden = !isRename;
-  nicknameInput.value = isRename ? myProfile.nickname : "";
-  profileErrorEl.textContent = "";
-  if (isRename) selectedAnimal = myProfile.animal;
-  buildAnimalSelector();
-  refreshPreviewAvatar();
-}
+  // 몸과 머리
+  orb(bodyGroup,0,.91,0,.53,.68,.42,fur);
+  orb(bodyGroup,0,1.82,.1,.67,.61,.58,fur);
+  orb(bodyGroup,0,.92,.37,.36,.45,.1,light);
 
-function closeProfileModal() {
-  profileModal.style.display = "none";
-}
+  // 다리
+  for(const x of [-.31,.31]){
+    for(const z of [-.23,.24]){
+      orb(bodyGroup,x,.32,z,.18,.32,.2,fur);
+    }
+  }
 
-function addMessage(item) {
-  const div = document.createElement("div");
-  div.className = "msg";
-  div.innerHTML = `<b>${escapeHtml(item.nickname)}</b> ${escapeHtml(item.text)}`;
-  messagesEl.appendChild(div);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-}
+  // 귀
+  if(['rabbit','deer'].includes(id)){
 
-function renderMessages(list) {
-  messagesEl.innerHTML = "";
-  list.forEach(addMessage);
-}
+    for(const x of [-.39,.39]){
 
-function escapeHtml(str) {
-  return String(str)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
-}
+      const e = orb(
+        bodyGroup,x,2.48,.04,
+        .2,id==='rabbit'?.59:.42,.16,fur
+      );
 
-function updateVoteUI(votes) {
-  const total = votes.long + votes.short || 1;
-  const longPct = Math.round((votes.long / total) * 100);
-  const shortPct = 100 - longPct;
-  longBarEl.style.width = `${longPct}%`;
-  longPctEl.textContent = `${longPct}% LONG`;
-  shortPctEl.textContent = `${shortPct}% SHORT`;
-}
+      e.rotation.z = x>0 ? -.18 : .18;
 
-async function fetchMarketRange(symbolKey, range = "1d") {
-  const meta = MARKET_SYMBOLS.find((s) => s.key === symbolKey);
-  if (!meta) return [];
-  const conf = RANGE_CONFIG[range] || RANGE_CONFIG["1d"];
-  const url = `https://api.exchange.coinbase.com/products/${meta.product}/candles?granularity=${conf.granularity}`;
-  const res = await fetch(url);
-  const arr = await res.json();
-  if (!Array.isArray(arr)) return [];
-  const sorted = arr
-    .map((x) => ({
-      time: x[0],
-      low: x[1],
-      high: x[2],
-      open: x[3],
-      close: x[4],
-      volume: x[5]
-    }))
-    .sort((a, b) => a.time - b.time)
-    .slice(-conf.limit);
-  return sorted;
-}
-
-async function fetchMarketAll() {
-  await Promise.all(
-    MARKET_SYMBOLS.map(async (meta) => {
-      try {
-        const tickerRes = await fetch(`https://api.exchange.coinbase.com/products/${meta.product}/ticker`);
-        const ticker = await tickerRes.json();
-        const candles = await fetchMarketRange(meta.key, "1d");
-
-        const price = Number(ticker.price || 0);
-        const open = candles.length ? candles[0].open : price;
-        const last = candles.length ? candles[candles.length - 1].close : price;
-        const changePct = open ? ((last - open) / open) * 100 : 0;
-
-        marketStore[meta.key] = {
-          ...meta,
-          price,
-          candles,
-          changePct
-        };
-      } catch (err) {
-        console.error(meta.key, err);
+      if(id==='rabbit'){
+        const inner = orb(
+          bodyGroup,x,2.49,.19,
+          .11,.41,.04,pink
+        );
+        inner.rotation.z = e.rotation.z;
       }
+    }
+
+  }else if(['seal','penguin','frog'].includes(id)){
+
+    if(id==='frog'){
+      for(const x of [-.43,.43]){
+        orb(bodyGroup,x,2.26,.39,.24,.24,.21,fur);
+      }
+    }
+
+  }else{
+
+    for(const x of [-.47,.47]){
+
+      if(['cat','fox','tiger','raccoon'].includes(id)){
+        cone(
+          bodyGroup,x,2.39,.04,
+          .24,.5,fur,x>0?-.23:.23
+        );
+      }else{
+        orb(bodyGroup,x,2.36,.02,.26,.3,.2,fur);
+      }
+    }
+  }
+
+  // 얼굴 무늬
+  if(['panda','raccoon'].includes(id)){
+    for(const x of [-.29,.29]){
+      orb(bodyGroup,x,1.91,.58,.24,.24,.06,dark);
+    }
+  }
+
+  if(id==='penguin'){
+    orb(bodyGroup,0,1.04,.35,.36,.52,.11,white);
+    orb(bodyGroup,0,1.87,.57,.46,.4,.1,white);
+  }
+
+  if(['fox','cat','dog','hamster','lion'].includes(id)){
+    orb(bodyGroup,0,1.56,.57,.42,.24,.14,light);
+  }
+
+  // 눈
+  for(const x of [-.26,.26]){
+    orb(bodyGroup,x,1.93,.62,.14,.17,.09,white);
+    orb(bodyGroup,x,1.93,.695,.09,.12,.05,dark);
+    orb(bodyGroup,x-.03,1.98,.738,.033,.042,.015,white);
+  }
+
+  if(id==='frog'){
+    for(const x of [-.43,.43]){
+      orb(bodyGroup,x,2.28,.55,.15,.16,.1,white);
+      orb(bodyGroup,x,2.28,.64,.08,.11,.045,dark);
+    }
+  }
+
+  // 코
+  if(id==='penguin'){
+    cone(
+      bodyGroup,0,1.63,.7,
+      .19,.36,mat(0xf2aa43),Math.PI/2
+    );
+  }else{
+    orb(
+      bodyGroup,0,1.65,.69,.16,.11,.12,
+      ['dog','bear','koala','raccoon','seal','panda']
+        .includes(id) ? dark : pink
+    );
+  }
+
+  // 볼
+  for(const x of [-.42,.42]){
+    orb(bodyGroup,x,1.68,.57,.13,.085,.035,pink);
+  }
+
+  // 꼬리
+  if(!['seal','penguin','frog'].includes(id)){
+    const tail = orb(
+      bodyGroup,0,.9,-.52,
+      id==='fox'?.34:.2,
+      id==='fox'?.37:.25,
+      id==='fox'?.5:.3,
+      fur
+    );
+    tail.rotation.x = -.35;
+  }
+
+  // 아기물개
+  if(id==='seal'){
+    for(const x of [-.54,.54]){
+      const fin = orb(
+        bodyGroup,x,.55,.12,.31,.13,.42,fur
+      );
+      fin.rotation.z = x>0 ? -.45 : .45;
+    }
+    orb(bodyGroup,0,.29,-.47,.46,.13,.29,fur);
+  }
+
+  // 펭귄
+  if(id==='penguin'){
+    for(const x of [-.57,.57]){
+      const wing = orb(
+        bodyGroup,x,1.05,0,.19,.47,.2,fur
+      );
+      wing.rotation.z = x>0 ? -.35 : .35;
+    }
+  }
+
+  // 사자
+  if(id==='lion'){
+
+    orb(
+      bodyGroup,0,1.82,-.05,
+      .83,.79,.54,mat(0xa56c31)
+    );
+
+    orb(bodyGroup,0,1.84,.43,.6,.54,.26,fur);
+
+    for(const x of [-.26,.26]){
+      orb(bodyGroup,x,1.93,.67,.14,.17,.09,white);
+      orb(bodyGroup,x,1.93,.74,.09,.12,.05,dark);
+    }
+
+    orb(bodyGroup,0,1.65,.73,.15,.1,.1,dark);
+  }
+
+  // 호랑이
+  if(id==='tiger'){
+    for(const x of [-.42,.42]){
+      for(const y of [1.65,1.91,2.12]){
+        const stripe = orb(
+          bodyGroup,x,y,.47,.11,.045,.1,dark
+        );
+        stripe.rotation.z = x>0 ? .35 : -.35;
+      }
+    }
+  }
+
+  // 사슴
+  if(id==='deer'){
+    for(const x of [-.34,.34]){
+      cone(
+        bodyGroup,x,2.75,-.06,
+        .09,.75,brown,x>0?-.3:.3
+      );
+    }
+  }
+
+  // 코알라
+  if(id==='koala'){
+    orb(bodyGroup,0,1.68,.72,.22,.29,.16,dark);
+    for(const x of [-.65,.65]){
+      orb(bodyGroup,x,2.38,.06,.3,.33,.13,fur);
+    }
+  }
+
+  // 햄스터
+  if(id==='hamster'){
+    for(const x of [-.46,.46]){
+      orb(bodyGroup,x,1.64,.45,.29,.25,.2,light);
+    }
+  }
+
+  // 그림자
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(.7,24),
+    new THREE.MeshBasicMaterial({
+      color:0x000000,
+      transparent:true,
+      opacity:.2,
+      depthWrite:false
     })
   );
 
-  renderAssetCards();
-  drawBillboard();
-  if (!detailModal.hidden) {
-    openDetail(currentDetailSymbol, currentDetailRange);
+  shadow.rotation.x = -Math.PI/2;
+  shadow.position.y = .02;
+
+  root.add(shadow);
+
+  root.userData.bodyGroup = bodyGroup;
+  root.userData.targetDirection = Math.PI;
+  root.userData.animal = id;
+  root.userData.walk = 0;
+  root.userData.seated = false;
+  root.userData.jumpHeight = 0;
+
+  return root;
+}
+
+// ========================================
+// 동물 캐릭터 미리보기
+// ========================================
+
+const previewScene = new THREE.Scene();
+
+const previewCamera = new THREE.PerspectiveCamera(
+  35,1,.1,40
+);
+
+previewCamera.position.set(0,1.6,7.7);
+previewCamera.lookAt(0,1.45,0);
+
+previewScene.add(
+  new THREE.HemisphereLight(0xffffff,0x56758d,2.5)
+);
+
+const previewLight = new THREE.DirectionalLight(
+  0xffe8c4,3.2
+);
+
+previewLight.position.set(3,6,5);
+previewScene.add(previewLight);
+
+const previewRenderer = new THREE.WebGLRenderer({
+  alpha:true,
+  antialias:!isMobileDevice,
+  powerPreference:'low-power'
+});
+
+previewRenderer.setPixelRatio(renderPixelRatio);
+
+$('animal-preview').appendChild(
+  previewRenderer.domElement
+);
+
+let previewModel = null;
+let previewAngle = 0;
+let previewDragging = false;
+let previewX = 0;
+let selectedAnimal = 'seal';
+
+function selectAnimal(id){
+
+  selectedAnimal = id;
+
+  if(previewModel){
+    previewScene.remove(previewModel);
   }
+
+  previewModel = makeAnimal(id);
+  previewScene.add(previewModel);
+
+  previewAngle = 0;
+
+  $('selected-animal-name').textContent =
+    animal(id).name;
+
+  document.querySelectorAll('.animal-option')
+    .forEach(b=>{
+      b.classList.toggle(
+        'selected',
+        b.dataset.animal===id
+      );
+    });
 }
 
-function drawCandles(ctx, candles, x, y, w, h, opts = {}) {
-  if (!candles?.length) return;
-  const highs = candles.map((c) => c.high);
-  const lows = candles.map((c) => c.low);
-  const max = Math.max(...highs);
-  const min = Math.min(...lows);
-  const range = Math.max(max - min, 0.0001);
-  const candleW = w / candles.length;
+const animalGrid = $('animal-grid');
 
-  ctx.save();
-  ctx.strokeStyle = opts.gridColor || "rgba(255,255,255,0.08)";
-  ctx.lineWidth = 1;
-  for (let i = 1; i <= 4; i++) {
-    const gy = y + (h / 4) * i;
-    ctx.beginPath();
-    ctx.moveTo(x, gy);
-    ctx.lineTo(x + w, gy);
-    ctx.stroke();
+for(const a of animals){
+
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'animal-option';
+  b.dataset.animal = a.id;
+
+  const e = document.createElement('span');
+  e.className = 'animal-emoji';
+  e.textContent = a.emoji;
+
+  const n = document.createElement('span');
+  n.className = 'animal-name';
+  n.textContent = a.name;
+
+  b.append(e,n);
+
+  b.onclick = ()=>selectAnimal(a.id);
+
+  animalGrid.append(b);
+}
+
+selectAnimal('seal');
+
+const previewEl = $('animal-preview');
+
+previewEl.addEventListener('pointerdown',e=>{
+  previewDragging = true;
+  previewX = e.clientX;
+  previewEl.setPointerCapture(e.pointerId);
+});
+
+previewEl.addEventListener('pointermove',e=>{
+  if(previewDragging){
+    previewAngle += (e.clientX-previewX)*.013;
+    previewX = e.clientX;
   }
+});
 
-  candles.forEach((c, i) => {
-    const cx = x + i * candleW + candleW * 0.5;
-    const openY = y + h - ((c.open - min) / range) * h;
-    const closeY = y + h - ((c.close - min) / range) * h;
-    const highY = y + h - ((c.high - min) / range) * h;
-    const lowY = y + h - ((c.low - min) / range) * h;
-
-    const up = c.close >= c.open;
-    ctx.strokeStyle = up ? "#4de0bc" : "#ff6b84";
-    ctx.fillStyle = up ? "#4de0bc" : "#ff6b84";
-    ctx.lineWidth = 2;
-
-    ctx.beginPath();
-    ctx.moveTo(cx, highY);
-    ctx.lineTo(cx, lowY);
-    ctx.stroke();
-
-    const bodyY = Math.min(openY, closeY);
-    const bodyH = Math.max(Math.abs(closeY - openY), 3);
-    const bodyW = Math.max(candleW * 0.55, 3);
-    ctx.fillRect(cx - bodyW / 2, bodyY, bodyW, bodyH);
-  });
-
-  ctx.restore();
-}
-
-function drawBillboard() {
-  const ctx = billboardCtx;
-  const w = billboardCanvas.width;
-  const h = billboardCanvas.height;
-
-  const grad = ctx.createLinearGradient(0, 0, w, h);
-  grad.addColorStop(0, "#061426");
-  grad.addColorStop(1, "#0c2438");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, w, h);
-
-  ctx.fillStyle = "#d7b87c";
-  ctx.font = "700 40px sans-serif";
-  ctx.fillText("JMC INVEST LOUNGE", 80, 70);
-
-  ctx.fillStyle = "#7a92a8";
-  ctx.font = "600 22px sans-serif";
-  ctx.fillText("BTC · ETH · SOL", w - 310, 70);
-
-  const gap = 34;
-  const top = 120;
-  const panelW = (w - 80 * 2 - gap * 2) / 3;
-  const panelH = 690;
-  const startX = 80;
-
-  MARKET_SYMBOLS.forEach((meta, idx) => {
-    const data = marketStore[meta.key] || {};
-    const px = startX + idx * (panelW + gap);
-    const py = top;
-
-    ctx.fillStyle = "#10273b";
-    ctx.strokeStyle = "rgba(255,255,255,0.08)";
-    ctx.lineWidth = 3;
-    ctx.fillRect(px, py, panelW, panelH);
-    ctx.strokeRect(px, py, panelW, panelH);
-
-    ctx.fillStyle = "#e9d8ae";
-    ctx.font = "700 32px sans-serif";
-    ctx.fillText(meta.label, px + 26, py + 48);
-
-    ctx.fillStyle = data.changePct >= 0 ? "#4de0bc" : "#ff6b84";
-    ctx.font = "700 48px sans-serif";
-    ctx.fillText(formatDollar(data.price || 0, meta.precision), px + 26, py + 108);
-
-    ctx.font = "700 28px sans-serif";
-    const ch = Number.isFinite(data.changePct) ? `${data.changePct >= 0 ? "+" : ""}${data.changePct.toFixed(2)}%` : "-";
-    ctx.fillText(ch, px + panelW - 160, py + 108);
-
-    drawCandles(ctx, data.candles || [], px + 18, py + 150, panelW - 36, panelH - 190);
-  });
-
-  billboardTexture.needsUpdate = true;
-}
-
-function renderAssetCards() {
-  assetsEl.innerHTML = "";
-  MARKET_SYMBOLS.forEach((meta) => {
-    const data = marketStore[meta.key];
-    const card = document.createElement("div");
-    card.className = "asset-card";
-    card.addEventListener("click", () => openDetail(meta.key, "1d"));
-
-    card.innerHTML = `
-      <div class="asset-head">
-        <div>
-          <strong>${meta.label}</strong>
-          <small>실시간 코인베이스 기준</small>
-        </div>
-        <div class="asset-price">
-          ${formatDollar(data?.price || 0, meta.precision)}
-          <span class="change">${data?.changePct >= 0 ? "+" : ""}${(data?.changePct || 0).toFixed(2)}%</span>
-        </div>
-      </div>
-      <canvas class="spark-chart" width="300" height="100"></canvas>
-    `;
-
-    assetsEl.appendChild(card);
-
-    const canvas = card.querySelector("canvas");
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#081421";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    drawCandles(ctx, data?.candles || [], 10, 10, canvas.width - 20, canvas.height - 20);
+for(const event of [
+  'pointerup',
+  'pointercancel',
+  'lostpointercapture'
+]){
+  previewEl.addEventListener(event,()=>{
+    previewDragging = false;
   });
 }
 
-async function openDetail(symbolKey, range = "1d") {
-  currentDetailSymbol = symbolKey;
-  currentDetailRange = range;
-  detailModal.hidden = false;
+function resizePreview(){
 
-  rangeButtons.forEach((btn) => btn.classList.toggle("selected", btn.dataset.range === range));
-  const meta = MARKET_SYMBOLS.find((s) => s.key === symbolKey);
-  if (!meta) return;
-  detailNameEl.textContent = meta.label;
+  const r = previewEl.getBoundingClientRect();
 
-  chartStatusEl.textContent = "차트 불러오는 중...";
-  try {
-    const candles = await fetchMarketRange(symbolKey, range);
-    const tickerRes = await fetch(`https://api.exchange.coinbase.com/products/${meta.product}/ticker`);
-    const ticker = await tickerRes.json();
-    const price = Number(ticker.price || 0);
-    detailPriceEl.textContent = formatDollar(price, meta.precision);
+  if(!r.width || !r.height)return;
 
-    detailCtx.clearRect(0, 0, detailCanvas.width, detailCanvas.height);
-    detailCtx.fillStyle = "#081421";
-    detailCtx.fillRect(0, 0, detailCanvas.width, detailCanvas.height);
-    drawCandles(detailCtx, candles, 30, 20, detailCanvas.width - 60, detailCanvas.height - 40);
+  previewRenderer.setSize(
+    r.width,r.height,false
+  );
 
-    chartStatusEl.textContent = "업데이트 완료";
-  } catch (err) {
-    chartStatusEl.textContent = "차트 로드 실패";
-  }
+  previewCamera.aspect = r.width/r.height;
+  previewCamera.updateProjectionMatrix();
 }
 
-detailCloseBtn.addEventListener("click", () => {
-  detailModal.hidden = true;
-});
+new ResizeObserver(resizePreview).observe(previewEl);
 
-rangeButtons.forEach((btn) => {
-  btn.addEventListener("click", () => openDetail(currentDetailSymbol, btn.dataset.range));
-});
+// ========================================
+// 프로필
+// ========================================
 
-function applyPlayerPose(avatar, delta, moving, sitting, jumping, jumpY = 0) {
-  if (!avatar?.userData) return;
-  avatar.position.y = (sitting ? -0.38 : 0) + jumpY;
-  avatar.scale.setScalar(0.7);
+let profile = null;
+let myAvatar = null;
+let activeSymbol = null;
+let activeRange = '1d';
+let socket = null;
+let myId = null;
+let yaw = Math.PI;
 
-  const swing = moving ? Math.sin(performance.now() * 0.01) * 0.5 : 0;
-  avatar.userData.armL.rotation.x = swing;
-  avatar.userData.armR.rotation.x = -swing;
-  avatar.userData.legL.rotation.x = -swing;
-  avatar.userData.legR.rotation.x = swing;
+try{
 
-  avatar.userData.body.rotation.x = sitting ? 0.28 : 0;
-  avatar.userData.head.position.y = sitting ? 2.0 : 2.2;
-  avatar.userData.shadow.scale.setScalar(jumping ? 0.88 : 1);
-}
+  const p = JSON.parse(
+    localStorage.getItem('jmc-profile')
+  );
 
-function onResize() {
-  const w = sceneWrapEl.clientWidth;
-  const h = sceneWrapEl.clientHeight;
-  camera.aspect = w / h;
-  camera.updateProjectionMatrix();
-  renderer.setSize(w, h);
-}
-window.addEventListener("resize", onResize);
-onResize();
-
-function animate() {
-  requestAnimationFrame(animate);
-  const dt = Math.min(clock.getDelta(), 0.033);
-
-  const localAvatar = localAvatarRoot.userData.avatar;
-  if (localAvatar) {
-    const movingVec = new THREE.Vector2(
-      (keys.a || keys.ArrowLeft ? 1 : 0) + (keys.d || keys.ArrowRight ? -1 : 0),
-      (keys.w || keys.ArrowUp ? 1 : 0) + (keys.s || keys.ArrowDown ? -1 : 0)
-    );
-
-    let moving = false;
-    if (profileModal.style.display !== "grid") {
-      if (movingVec.lengthSq() > 0) {
-        moving = true;
-        movingVec.normalize();
-        const speed = 6.8 * dt;
-        playerState.x -= movingVec.x * speed;
-        playerState.z -= movingVec.y * speed;
-
-        playerState.x = Math.max(-15, Math.min(15, playerState.x));
-        playerState.z = Math.max(-2, Math.min(20, playerState.z));
-
-        playerState.dir = Math.atan2(movingVec.x, movingVec.y);
-      }
-
-      if ((keys.c || keys.C) && canToggleSit) {
-        playerState.sitting = !playerState.sitting;
-        if (playerState.sitting) {
-          playerState.jumping = false;
-          playerState.jumpY = 0;
-          playerState.jumpV = 0;
-        }
-        canToggleSit = false;
-      }
-      if (!(keys.c || keys.C)) {
-        canToggleSit = true;
-      }
-
-      if ((keys[" "] || keys.Space) && !playerState.jumping && !playerState.sitting) {
-        playerState.jumping = true;
-        playerState.jumpV = 5.2;
-      }
-    }
-
-    if (playerState.jumping) {
-      playerState.jumpV -= 12 * dt;
-      playerState.jumpY += playerState.jumpV * dt;
-      if (playerState.jumpY <= 0) {
-        playerState.jumpY = 0;
-        playerState.jumpV = 0;
-        playerState.jumping = false;
-      }
-    }
-
-    localAvatar.position.x = playerState.x;
-    localAvatar.position.z = playerState.z;
-    localAvatar.rotation.y = playerState.dir;
-    applyPlayerPose(localAvatar, dt, moving, playerState.sitting, playerState.jumping, playerState.jumpY);
-
-    const closeFactor = THREE.MathUtils.clamp((10 - playerState.z) / 12, 0, 1);
-    const desiredYaw = cameraYawOffset;
-    const camDistance = 8.6 + closeFactor * 4.5;
-    const camHeight = 4.9 + closeFactor * 1.2;
-    const targetX = playerState.x + Math.sin(desiredYaw) * 0.5;
-    const camX = playerState.x + Math.sin(desiredYaw) * 2.2;
-    const camZ = playerState.z + camDistance * Math.cos(desiredYaw);
-
-    camera.position.x += (camX - camera.position.x) * 0.08;
-    camera.position.y += (camHeight - camera.position.y) * 0.08;
-    camera.position.z += (camZ - camera.position.z) * 0.08;
-
-    const lookX = targetX;
-    const lookY = 2.2;
-    const lookZ = THREE.MathUtils.lerp(playerState.z - 1.6, -18, 0.55);
-    camera.lookAt(lookX, lookY, lookZ);
-
-    sendMoveCooldown += dt;
-    if (joined && sendMoveCooldown > 0.05) {
-      sendMoveCooldown = 0;
-      socket.emit("move", {
-        x: playerState.x,
-        z: playerState.z,
-        dir: playerState.dir,
-        sitting: playerState.sitting,
-        jumping: playerState.jumping
-      });
-    }
+  if(p?.name){
+    profile = {
+      name:String(p.name).slice(0,16),
+      animal:animal(p.animal).id
+    };
   }
 
-  for (const avatar of remoteAvatars.values()) {
-    applyPlayerPose(avatar, dt, false, avatar.userData.baseY < 0, false, 0);
-  }
+}catch{}
 
-  renderer.render(scene, camera);
+function showProfile(editing=false){
+
+  selectedAnimal = profile?.animal || 'seal';
+
+  selectAnimal(selectedAnimal);
+
+  $('nickname').value = profile?.name || '';
+  $('profile-error').textContent = '';
+
+  $('cancel-profile').hidden = !editing;
+
+  $('enter-lounge').textContent =
+    editing ? '설정 저장하기' : 'JMC 라운지 입장하기';
+
+  $('profile-modal').hidden = false;
+
+  resizePreview();
 }
-animate();
 
-window.addEventListener("keydown", (e) => {
-  keys[e.key] = true;
-  if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)) {
-    e.preventDefault();
-  }
-});
-window.addEventListener("keyup", (e) => {
-  keys[e.key] = false;
-});
+function saveProfile(){
 
-mobileButtons.forEach((btn) => {
-  const key = btn.dataset.key;
-  const down = (e) => {
-    e.preventDefault();
-    keys[key] = true;
-    btn.classList.add("pressed");
-  };
-  const up = (e) => {
-    e.preventDefault();
-    keys[key] = false;
-    btn.classList.remove("pressed");
-  };
-  btn.addEventListener("pointerdown", down);
-  btn.addEventListener("pointerup", up);
-  btn.addEventListener("pointercancel", up);
-  btn.addEventListener("pointerleave", up);
-});
+  const name = $('nickname').value.trim().slice(0,16);
 
-sceneWrapEl.addEventListener("pointerdown", (e) => {
-  if (e.target.closest("#mobile-controls")) return;
-  dragActive = true;
-  dragLastX = e.clientX;
-});
-window.addEventListener("pointerup", () => dragActive = false);
-window.addEventListener("pointermove", (e) => {
-  if (!dragActive) return;
-  const dx = e.clientX - dragLastX;
-  dragLastX = e.clientX;
-  cameraYawOffset -= dx * 0.004;
-  cameraYawOffset = Math.max(-0.55, Math.min(0.55, cameraYawOffset));
-});
-
-chatForm.addEventListener("submit", (e) => {
-  e.preventDefault();
-  const text = chatInput.value.trim();
-  if (!text) return;
-  socket.emit("chat", text);
-  chatInput.value = "";
-});
-
-longBtn.addEventListener("click", () => socket.emit("vote", "long"));
-shortBtn.addEventListener("click", () => socket.emit("vote", "short"));
-
-renameBtn.addEventListener("click", () => openProfileModal(true));
-cancelProfileBtn.addEventListener("click", closeProfileModal);
-
-enterBtn.addEventListener("click", () => {
-  const nickname = nicknameInput.value.trim();
-  if (!nickname) {
-    profileErrorEl.textContent = "닉네임을 입력해 주세요.";
+  if(!name){
+    $('profile-error').textContent = '닉네임을 입력해주세요.';
     return;
   }
 
-  myProfile.nickname = nickname.slice(0, 16);
-  myProfile.animal = selectedAnimal;
-  myProfileEl.textContent = `${ANIMALS.find((a) => a.id === myProfile.animal)?.emoji || "🦭"} ${myProfile.nickname}`;
+  const first = !profile;
 
-  mountLocalAvatar();
+  profile = {
+    name,
+    animal:selectedAnimal
+  };
 
-  if (!joined) {
-    socket.emit("join", myProfile);
-    joined = true;
-  } else {
-    socket.emit("rename", myProfile);
+  try{
+    localStorage.setItem(
+      'jmc-profile',
+      JSON.stringify(profile)
+    );
+  }catch{}
+
+  $('profile-modal').hidden = true;
+
+  $('my-profile').textContent =
+    `${animal(profile.animal).emoji} ${name}`;
+
+  updateMyAvatar();
+
+  if(first){
+    resetToBoard();
   }
 
-  closeProfileModal();
-});
-
-socket.on("connect", () => {
-  connectionEl.textContent = "연결됨";
-});
-socket.on("disconnect", () => {
-  connectionEl.textContent = "연결 끊김";
-});
-
-socket.on("bootstrap", (payload) => {
-  onlineEl.textContent = payload.online || 0;
-  renderMessages(payload.messages || []);
-  updateVoteUI(payload.votes || { long: 0, short: 0 });
-  syncRemotePlayers(payload.players || {});
-  myId = socket.id;
-});
-
-socket.on("state", (payload) => {
-  onlineEl.textContent = payload.online || 0;
-  renderMessages(payload.messages || []);
-  updateVoteUI(payload.votes || { long: 0, short: 0 });
-  syncRemotePlayers(payload.players || {});
-  myId = socket.id;
-
-  const me = payload.players?.[socket.id];
-  if (me && joined) {
-    playerState.x = me.x;
-    playerState.z = me.z;
-    playerState.dir = me.dir;
-    playerState.sitting = me.sitting;
-    mountLocalAvatar();
-  }
-});
-
-socket.on("players:update", ({ id, x, z, dir, sitting }) => {
-  if (id === socket.id) return;
-  const avatar = remoteAvatars.get(id);
-  if (!avatar) return;
-  avatar.position.x = x;
-  avatar.position.z = z;
-  avatar.rotation.y = dir;
-  avatar.userData.baseY = sitting ? -0.38 : 0;
-});
-
-socket.on("chat:new", (item) => addMessage(item));
-
-socket.on("bubble:update", ({ id, text }) => {
-  if (id === socket.id) {
-    const avatar = localAvatarRoot.userData.avatar;
-    setAvatarBubble(avatar, text);
-  } else {
-    const avatar = remoteAvatars.get(id);
-    setAvatarBubble(avatar, text);
-  }
-});
-
-socket.on("messages:clear", () => {
-  messagesEl.innerHTML = "";
-  const localAvatar = localAvatarRoot.userData.avatar;
-  if (localAvatar) setAvatarBubble(localAvatar, "");
-  for (const avatar of remoteAvatars.values()) {
-    setAvatarBubble(avatar, "");
-  }
-});
-
-socket.on("vote:update", (votes) => updateVoteUI(votes));
-
-function init() {
-  mountLocalAvatar();
-  buildAnimalSelector();
-  initPreviewScene();
-  openProfileModal(false);
-  fetchMarketAll();
-  setInterval(fetchMarketAll, 10000);
+  sendProfile();
 }
-init();
+
+$('enter-lounge').onclick = saveProfile;
+
+$('cancel-profile').onclick = ()=>{
+  if(profile){
+    $('profile-modal').hidden = true;
+  }
+};
+
+$('rename').onclick = ()=>showProfile(true);
+
+$('nickname').addEventListener('keydown',e=>{
+  if(e.key==='Enter')saveProfile();
+});
+
+if(profile){
+
+  $('profile-modal').hidden = true;
+
+  $('my-profile').textContent =
+    `${animal(profile.animal).emoji} ${profile.name}`;
+
+}else{
+
+  showProfile();
+}
+
+// ========================================
+// 캔들 차트
+// ========================================
+
+function plotChart(canvas,candles,mini=false){
+
+  const c = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+
+  c.fillStyle = '#081421';
+  c.fillRect(0,0,w,h);
+
+  const data = (candles||[]).filter(d=>
+    [d.open,d.high,d.low,d.close].every(Number.isFinite)
+  );
+
+  if(!data.length){
+    c.fillStyle = '#8ba4ba';
+    c.font = '16px sans-serif';
+    c.fillText('캔들 데이터 연결 대기',20,h/2);
+    return;
+  }
+
+  const lo = Math.min(...data.map(d=>d.low));
+  const hi = Math.max(...data.map(d=>d.high));
+  const pad = (hi-lo)*.08 || 1;
+
+  const min = lo-pad;
+  const max = hi+pad;
+
+  const L = mini?12:28;
+  const R = mini?12:90;
+  const T = mini?12:24;
+  const B = mini?12:30;
+
+  const W = w-L-R;
+  const H = h-T-B;
+  const step = W/data.length;
+
+  const y = v =>
+    T+(max-v)/(max-min)*H;
+
+  c.strokeStyle = '#1d3548';
+
+  for(let i=0;i<=4;i++){
+
+    const yy = T+H*i/4;
+
+    c.beginPath();
+    c.moveTo(L,yy);
+    c.lineTo(w-R,yy);
+    c.stroke();
+
+    if(!mini){
+      c.fillStyle = '#809ab0';
+      c.font = '13px sans-serif';
+      c.fillText(
+        (max-(max-min)*i/4).toFixed(2),
+        w-R+7,
+        yy+4
+      );
+    }
+  }
+
+  data.forEach((d,i)=>{
+
+    const x = L+step*(i+.5);
+
+    const color =
+      d.close>=d.open ? '#42dfbd' : '#f17a98';
+
+    c.strokeStyle = color;
+    c.fillStyle = color;
+
+    c.beginPath();
+    c.moveTo(x,y(d.high));
+    c.lineTo(x,y(d.low));
+    c.stroke();
+
+    const top = y(Math.max(d.open,d.close));
+    const bottom = y(Math.min(d.open,d.close));
+
+    const bw = Math.max(
+      1.5,
+      Math.min(step*.65,mini?8:16)
+    );
+
+    c.fillRect(
+      x-bw/2,
+      top,
+      bw,
+      Math.max(1.5,bottom-top)
+    );
+  });
+}
+
+function renderAssets(){
+
+  const parent = $('assets');
+  parent.replaceChildren();
+
+  for(const s of symbols){
+
+    const card = document.createElement('div');
+    card.className = 'crypto-asset';
+
+    const head = document.createElement('div');
+    head.className = 'crypto-head';
+
+    const left = document.createElement('div');
+    const title = document.createElement('strong');
+    const ticker = document.createElement('small');
+
+    title.textContent = s.name;
+    ticker.textContent = s.id+' / USD';
+
+    left.append(title,ticker);
+
+    const right = document.createElement('div');
+    right.className = 'price';
+    right.textContent = money(s.price);
+
+    const note = document.createElement('span');
+    note.className = 'change';
+    note.textContent = 'USD · Coinbase';
+
+    right.append(note);
+
+    head.append(left,right);
+
+    const canvas = document.createElement('canvas');
+    canvas.className = 'spark-chart';
+    canvas.width = 580;
+    canvas.height = 155;
+
+    plotChart(canvas,s.candles,true);
+
+    card.append(head,canvas);
+
+    card.onclick = ()=>openDetail(s);
+
+    parent.append(card);
+  }
+}
+
+async function loadCandles(id,range='1d'){
+
+  const [granularity,limit] = ranges[range];
+
+  const r = await fetch(
+    `/api/candles/${id}?granularity=${granularity}&limit=${limit}`,
+    {cache:'no-store'}
+  );
+
+  if(!r.ok)throw Error('Candles');
+
+  const d = await r.json();
+  return d.candles || [];
+}
+
+async function updatePrices(){
+
+  await Promise.all(symbols.map(async s=>{
+
+    try{
+
+      const r = await fetch(
+        `/api/price/${s.id}`,
+        {cache:'no-store'}
+      );
+
+      if(!r.ok)throw Error('Price');
+
+      const v = Number(
+        (await r.json()).price
+      );
+
+      s.price = Number.isFinite(v)?v:null;
+
+    }catch{
+
+      s.price = null;
+    }
+  }));
+
+  renderAssets();
+  refreshBoard();
+
+  if(activeSymbol){
+    $('detail-price').textContent =
+      money(activeSymbol.price);
+  }
+}
+
+async function updateCandles(){
+
+  await Promise.all(symbols.map(async s=>{
+
+    try{
+      s.candles = await loadCandles(s.id);
+    }catch(e){
+      console.warn(s.id,e.message);
+    }
+  }));
+
+  renderAssets();
+  refreshBoard();
+
+  if(activeSymbol && activeRange==='1d'){
+    updateDetailChart();
+  }
+}
+
+function openDetail(s){
+
+  activeSymbol = s;
+  activeRange = '1d';
+
+  $('detail-name').textContent =
+    `${s.name} (${s.id})`;
+
+  $('detail-price').textContent =
+    money(s.price);
+
+  $('detail').hidden = false;
+
+  document.querySelectorAll('[data-range]')
+    .forEach(b=>{
+      b.classList.toggle(
+        'selected',
+        b.dataset.range==='1d'
+      );
+    });
+
+  updateDetailChart();
+}
+
+async function updateDetailChart(){
+
+  const s = activeSymbol;
+  const r = activeRange;
+
+  if(!s)return;
+
+  $('chart-status').textContent =
+    '캔들 차트를 불러오는 중...';
+
+  try{
+
+    const data =
+      r==='1d' && s.candles.length
+        ? s.candles
+        : await loadCandles(s.id,r);
+
+    if(s!==activeSymbol || r!==activeRange)return;
+
+    plotChart($('detail-chart'),data);
+
+    $('chart-status').textContent =
+      'Coinbase OHLC 캔들 차트';
+
+  }catch{
+
+    plotChart($('detail-chart'),[]);
+
+    $('chart-status').textContent =
+      '차트 연결에 실패했습니다.';
+  }
+}
+
+document.querySelectorAll('[data-range]')
+  .forEach(b=>{
+
+    b.onclick = ()=>{
+
+      activeRange = b.dataset.range;
+
+      document.querySelectorAll('[data-range]')
+        .forEach(x=>{
+          x.classList.toggle('selected',x===b);
+        });
+
+      updateDetailChart();
+    };
+  });
+
+$('close').onclick = ()=>{
+  $('detail').hidden = true;
+  activeSymbol = null;
+};
+
+$('detail').onclick = e=>{
+  if(e.target===$('detail')){
+    $('close').click();
+  }
+};
+
+// ========================================
+// 3D 메타버스 공간
+// ========================================
+
+const sceneEl = $('scene');
+
+const scene = new THREE.Scene();
+
+scene.background = new THREE.Color('#080f1b');
+scene.fog = new THREE.Fog('#080f1b',25,80);
+
+const camera = new THREE.PerspectiveCamera(
+  74,1,.1,120
+);
+
+const renderer = new THREE.WebGLRenderer({
+  antialias:!isMobileDevice,
+  powerPreference:'low-power'
+});
+
+renderer.setPixelRatio(renderPixelRatio);
+
+// ========================================
+// 중요 수정: 캔버스 중앙 정렬
+// ========================================
+
+// 캔버스의 실제 화면 크기를 #scene과 일치시킨다.
+// 렌더링 해상도와 CSS 표시 크기를 분리해
+// PC 배율 또는 모바일 해상도에 따른
+// 화면 좌우 치우침을 방지한다.
+
+renderer.domElement.style.display = 'block';
+renderer.domElement.style.position = 'absolute';
+renderer.domElement.style.left = '0';
+renderer.domElement.style.top = '0';
+renderer.domElement.style.width = '100%';
+renderer.domElement.style.height = '100%';
+renderer.domElement.style.touchAction = 'none';
+renderer.domElement.style.zIndex = '0';
+
+sceneEl.appendChild(renderer.domElement);
+
+scene.add(
+  new THREE.HemisphereLight(
+    0x9bc9e0,0x0b1524,2.2
+  )
+);
+
+function box(w,h,d,color,x,y,z){
+
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(w,h,d),
+    new THREE.MeshStandardMaterial({
+      color,
+      metalness:.35,
+      roughness:.55
+    })
+  );
+
+  mesh.position.set(x,y,z);
+  scene.add(mesh);
+
+  return mesh;
+}
+
+// 바닥
+box(42,.4,42,0x101c2b,0,-.25,0);
+
+const grid = new THREE.GridHelper(
+  42,42,0x24435a,0x182a3e
+);
+
+grid.position.y = .01;
+scene.add(grid);
+
+// 벽
+box(38,8,.5,0x15293a,0,4,-19);
+box(.5,8,38,0x14283a,-20,4,0);
+box(.5,8,38,0x14283a,20,4,0);
+
+// 기둥
+for(const x of [-18,18]){
+  for(const z of [-18,18]){
+    box(.6,8,.6,0x304b5c,x,4,z);
+  }
+}
+
+// 소파
+for(const x of [-12,12]){
+
+  box(7,.55,2.5,0x29495e,x,.35,4);
+  box(7,1.15,.6,0x365c72,x,1.05,5.1);
+
+  box(1.2,.75,2.4,0x365c72,x-3,.65,4);
+  box(1.2,.75,2.4,0x365c72,x+3,.65,4);
+
+  box(3.5,.2,1.5,0xd5b68a,x,.75,1.7);
+}
+
+// 식물
+for(const x of [-17,17]){
+  for(const z of [-10,10]){
+
+    box(1.2,.9,1.2,0x24413e,x,.45,z);
+
+    const plant = new THREE.Mesh(
+      new THREE.ConeGeometry(.7,2.5,8),
+      new THREE.MeshStandardMaterial({
+        color:0x238878
+      })
+    );
+
+    plant.position.set(x,2,z);
+    scene.add(plant);
+  }
+}
+
+// 조명
+for(const x of [-12,0,12]){
+
+  const light = new THREE.PointLight(
+    0xffd49b,25,17
+  );
+
+  light.position.set(x,6,3);
+  scene.add(light);
+}
+
+const neon = new THREE.PointLight(
+  0x4de0bc,75,30
+);
+
+neon.position.set(0,7,-10);
+scene.add(neon);
+
+// ========================================
+// 실시간 시세 전광판
+// ========================================
+
+const boardCanvas = document.createElement('canvas');
+
+boardCanvas.width = 1280;
+boardCanvas.height = 620;
+
+const boardCtx = boardCanvas.getContext('2d');
+
+const boardTexture = new THREE.CanvasTexture(
+  boardCanvas
+);
+
+boardTexture.colorSpace = THREE.SRGBColorSpace;
+
+const board = new THREE.Mesh(
+  new THREE.PlaneGeometry(17,8.2),
+  new THREE.MeshBasicMaterial({
+    map:boardTexture,
+    side:THREE.DoubleSide
+  })
+);
+
+board.position.set(0,4.5,BOARD_Z);
+scene.add(board);
+
+function refreshBoard(){
+
+  const c = boardCtx;
+
+  c.fillStyle = '#071421';
+  c.fillRect(0,0,1280,620);
+
+  c.fillStyle = '#dfc79a';
+  c.font = 'bold 34px Arial';
+
+  c.fillText(
+    'JMC INVEST LOUNGE',
+    40,55
+  );
+
+  c.fillStyle = '#88a5b8';
+  c.font = '20px Arial';
+
+  c.fillText(
+    'BTC · ETH · SOL · XRP',
+    870,55
+  );
+
+  symbols.forEach((s,i)=>{
+
+    const x = 36+(i%2)*608;
+    const y = 90+Math.floor(i/2)*255;
+
+    c.fillStyle = '#10263a';
+    c.fillRect(x,y,588,240);
+
+    c.strokeStyle = '#315065';
+    c.strokeRect(x,y,588,240);
+
+    c.fillStyle = '#f0e1c2';
+    c.font = 'bold 23px Arial';
+
+    c.fillText(
+      s.id+' / USD',
+      x+18,y+34
+    );
+
+    c.fillStyle = '#42dfbd';
+    c.font = 'bold 29px Arial';
+
+    c.fillText(
+      money(s.price),
+      x+180,y+35
+    );
+
+    const data = s.candles.filter(d=>
+      [d.open,d.high,d.low,d.close]
+        .every(Number.isFinite)
+    );
+
+    if(!data.length){
+
+      c.fillStyle = '#809ab0';
+      c.font = '18px Arial';
+
+      c.fillText(
+        '캔들 데이터 연결 대기',
+        x+20,y+155
+      );
+
+      return;
+    }
+
+    const lo = Math.min(
+      ...data.map(d=>d.low)
+    );
+
+    const hi = Math.max(
+      ...data.map(d=>d.high)
+    );
+
+    const span = hi-lo || 1;
+    const step = 550/data.length;
+
+    data.forEach((d,j)=>{
+
+      const xx = x+18+step*(j+.5);
+
+      const yy = v =>
+        y+220-(v-lo)/span*156;
+
+      const color =
+        d.close>=d.open
+          ? '#42dfbd'
+          : '#f17a98';
+
+      c.strokeStyle = color;
+      c.fillStyle = color;
+
+      c.beginPath();
+      c.moveTo(xx,yy(d.high));
+      c.lineTo(xx,yy(d.low));
+      c.stroke();
+
+      const top = yy(Math.max(d.open,d.close));
+      const bottom = yy(Math.min(d.open,d.close));
+
+      const bw = Math.max(2,step*.6);
+
+      c.fillRect(
+        xx-bw/2,
+        top,
+        bw,
+        Math.max(2,bottom-top)
+      );
+    });
+  });
+
+  boardTexture.needsUpdate = true;
+}
+
+refreshBoard();
+
+// ========================================
+// 3인칭 카메라와 캐릭터
+// ========================================
+
+const others = new Map();
+
+// 전광판을 바라보는 정도를 계산
+function boardFocus(position){
+
+  const facing = THREE.MathUtils.smoothstep(
+    (Math.cos(yaw)+1)/2,
+    .55,
+    .95
+  );
+
+  const near =
+    1-THREE.MathUtils.smoothstep(
+      Math.abs(position.z-BOARD_Z),
+      4,
+      17
+    );
+
+  return facing*near;
+}
+
+// 전광판 가까이 접근하면 자동 줌아웃
+function cameraDistance(position){
+
+  const focus = boardFocus(position);
+
+  const tanHalfVertical = Math.tan(
+    THREE.MathUtils.degToRad(camera.fov/2)
+  );
+
+  const tanHalfHorizontal =
+    tanHalfVertical*Math.max(.25,camera.aspect||1);
+
+  const requiredToShowBoard =
+    (BOARD_WIDTH/2+1.4)/tanHalfHorizontal;
+
+  const distanceFromPlayerToBoard = Math.max(
+    0,
+    position.z-BOARD_Z
+  );
+
+  const neededBehindPlayer = Math.max(
+    CAMERA_BASE_DISTANCE,
+    requiredToShowBoard-distanceFromPlayerToBoard
+  );
+
+  return THREE.MathUtils.lerp(
+    CAMERA_BASE_DISTANCE,
+    Math.min(CAMERA_MAX_DISTANCE,neededBehindPlayer),
+    focus
+  );
+}
+
+// 캐릭터의 실제 위치를 기준으로 카메라 배치
+function cameraPositionFor(position){
+
+  const distance = cameraDistance(position);
+  const focus = boardFocus(position);
+
+  return new THREE.Vector3(
+    position.x-Math.sin(yaw)*distance,
+    position.y+CAMERA_HEIGHT+focus*.8,
+    position.z-Math.cos(yaw)*distance
+  );
+}
+
+// 항상 내 캐릭터를 화면 중앙에서 바라봄
+function cameraLookAtFor(position){
+
+  return new THREE.Vector3(
+    position.x,
+    position.y+1.15+boardFocus(position)*1.25,
+    position.z
+  );
+}
+
+// 시작 카메라
+function resetToBoard(){
+
+  yaw = Math.PI;
+
+  if(myAvatar){
+
+    myAvatar.position.set(0,0,-8);
+    myAvatar.rotation.y = Math.PI;
+    myAvatar.userData.targetDirection = Math.PI;
+  }
+
+  const p = myAvatar?.position ||
+    new THREE.Vector3(0,0,-8);
+
+  camera.position.copy(
+    cameraPositionFor(p)
+  );
+
+  camera.lookAt(
+    cameraLookAtFor(p)
+  );
+
+  camera.updateMatrixWorld();
+}
+
+function updateMyAvatar(){
+
+  if(!profile)return;
+
+  const pos = myAvatar
+    ? myAvatar.position.clone()
+    : new THREE.Vector3(0,0,-8);
+
+  const dir = myAvatar
+    ? myAvatar.rotation.y
+    : Math.PI;
+
+  const wasSeated =
+    myAvatar?.userData.seated || false;
+
+  if(myAvatar){
+
+    if(myId){
+      removeBubble(myId);
+    }
+
+    scene.remove(myAvatar);
+  }
+
+  myAvatar = makeAnimal(profile.animal);
+
+  myAvatar.position.copy(pos);
+  myAvatar.rotation.y = dir;
+
+  myAvatar.userData.targetDirection = dir;
+  myAvatar.userData.seated = wasSeated;
+
+  scene.add(myAvatar);
+}
+
+function updateOthers(players){
+
+  const seen = new Set();
+
+  for(const p of players){
+
+    if(p.id===myId)continue;
+
+    seen.add(p.id);
+
+    let avatar = others.get(p.id);
+
+    if(
+      !avatar ||
+      avatar.userData.animal!==p.animal
+    ){
+
+      if(avatar){
+        scene.remove(avatar);
+      }
+
+      avatar = makeAnimal(p.animal);
+
+      scene.add(avatar);
+      others.set(p.id,avatar);
+    }
+
+    avatar.position.set(
+      Number(p.x)||0,
+      Number(p.y)||0,
+      Number(p.z)||0
+    );
+
+    avatar.userData.seated =
+      p.seated===true;
+
+    if(Number.isFinite(Number(p.direction))){
+      avatar.userData.targetDirection =
+        Number(p.direction);
+    }
+  }
+
+  for(const [id,a] of others){
+
+    if(!seen.has(id)){
+      removeBubble(id);
+      scene.remove(a);
+      others.delete(id);
+    }
+  }
+}
+
+if(profile){
+  updateMyAvatar();
+}
+
+resetToBoard();
+
+// ========================================
+// 캐릭터 채팅 말풍선
+// ========================================
+
+const activeBubbles = new Map();
+
+const BUBBLE_LIFETIME = 6000;
+
+function wrapBubbleText(ctx,text,maxWidth,maxLines=3){
+
+  const chars = Array.from(
+    String(text).replace(/\s+/g,' ').trim()
+  );
+
+  const lines = [];
+  let line = '';
+
+  for(const ch of chars){
+
+    if(
+      ctx.measureText(line+ch).width>maxWidth &&
+      line
+    ){
+
+      lines.push(line);
+      line = ch;
+
+      if(lines.length===maxLines-1){
+        break;
+      }
+
+    }else{
+      line += ch;
+    }
+  }
+
+  const consumed =
+    Array.from(lines.join('')).length;
+
+  if(lines.length===maxLines-1){
+
+    let rest = chars.slice(consumed).join('');
+
+    while(
+      rest &&
+      ctx.measureText(rest).width>maxWidth
+    ){
+      rest = rest.slice(0,-1);
+    }
+
+    if(rest.length<chars.length-consumed){
+      rest = rest.slice(0,-1)+'…';
+    }
+
+    lines.push(rest);
+
+  }else if(line){
+
+    lines.push(line);
+  }
+
+  return lines;
+}
+
+function removeBubble(senderId){
+
+  const existing = activeBubbles.get(senderId);
+
+  if(!existing)return;
+
+  existing.sprite.parent?.remove(
+    existing.sprite
+  );
+
+  existing.sprite.material.map?.dispose();
+  existing.sprite.material.dispose();
+
+  activeBubbles.delete(senderId);
+}
+
+function showBubble(item){
+
+  const senderId = item?.senderId;
+
+  if(!senderId || !item.message)return;
+
+  const avatar = senderId===myId
+    ? myAvatar
+    : others.get(senderId);
+
+  if(!avatar)return;
+
+  removeBubble(senderId);
+
+  const canvas = document.createElement('canvas');
+
+  canvas.width = 768;
+  canvas.height = 320;
+
+  const ctx = canvas.getContext('2d');
+
+  ctx.font = 'bold 40px sans-serif';
+
+  const lines = wrapBubbleText(
+    ctx,item.message,620,3
+  );
+
+  const lineHeight = 52;
+
+  const boxH = Math.max(
+    118,
+    lines.length*lineHeight+48
+  );
+
+  const top = 16;
+  const bottom = top+boxH;
+
+  ctx.shadowColor = 'rgba(0,0,0,.35)';
+  ctx.shadowBlur = 18;
+
+  ctx.fillStyle = 'rgba(255,255,255,.97)';
+
+  ctx.beginPath();
+  ctx.roundRect(20,top,728,boxH,28);
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+
+  ctx.beginPath();
+  ctx.moveTo(352,bottom);
+  ctx.lineTo(384,bottom+30);
+  ctx.lineTo(416,bottom);
+
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = '#172b3b';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  lines.forEach((line,i)=>{
+    ctx.fillText(
+      line,
+      384,
+      top+boxH/2+
+        (i-(lines.length-1)/2)*lineHeight,
+      650
+    );
+  });
+
+  const texture = new THREE.CanvasTexture(canvas);
+
+  texture.colorSpace = THREE.SRGBColorSpace;
+
+  const material = new THREE.SpriteMaterial({
+    map:texture,
+    transparent:true,
+    depthTest:false,
+    depthWrite:false
+  });
+
+  const sprite = new THREE.Sprite(material);
+
+  sprite.position.set(0,3.65,0);
+  sprite.scale.set(3.8,1.58,1);
+  sprite.renderOrder = 100;
+
+  avatar.add(sprite);
+
+  activeBubbles.set(senderId,{
+    sprite,
+    expires:performance.now()+BUBBLE_LIFETIME,
+    messageId:item.id
+  });
+}
+
+function tickBubbles(now){
+
+  for(const [id,bubble] of activeBubbles){
+
+    if(now>=bubble.expires){
+
+      removeBubble(id);
+
+    }else if(now>bubble.expires-900){
+
+      bubble.sprite.material.opacity = Math.max(
+        0,
+        (bubble.expires-now)/900
+      );
+    }
+  }
+}
+
+function deleteBubbleByMessage(messageId){
+
+  for(const [id,bubble] of activeBubbles){
+
+    if(bubble.messageId===messageId){
+      removeBubble(id);
+    }
+  }
+}
+
+// ========================================
+// PC / 모바일 이동 조작
+// ========================================
+
+const keys = new Set();
+const touchCounts = new Map();
+
+let dragging = false;
+let lastPointerX = 0;
+
+let jumpVelocity = 0;
+let onGround = true;
+
+const GRAVITY = 19;
+const JUMP_SPEED = 8;
+
+// 화면 드래그: 시점 회전
+renderer.domElement.addEventListener('pointerdown',e=>{
+
+  dragging = true;
+  lastPointerX = e.clientX;
+
+  renderer.domElement.setPointerCapture(e.pointerId);
+});
+
+renderer.domElement.addEventListener('pointermove',e=>{
+
+  if(dragging){
+    yaw += (e.clientX-lastPointerX)*.005;
+    lastPointerX = e.clientX;
+  }
+});
+
+for(const type of [
+  'pointerup',
+  'pointercancel',
+  'lostpointercapture'
+]){
+  renderer.domElement.addEventListener(type,()=>{
+    dragging = false;
+  });
+}
+
+// 키보드 조작
+window.addEventListener('keydown',e=>{
+
+  if(
+    ['INPUT','TEXTAREA'].includes(
+      document.activeElement?.tagName
+    ) ||
+    !$('profile-modal').hidden
+  ){
+    return;
+  }
+
+  const k = e.key.toLowerCase();
+
+  if(
+    k===' ' ||
+    e.code==='Space' ||
+    e.key.startsWith('Arrow')
+  ){
+    e.preventDefault();
+  }
+
+  if(
+    e.repeat &&
+    (k==='c'||e.code==='Space')
+  ){
+    return;
+  }
+
+  // C: 앉기
+  if(k==='c' && myAvatar){
+
+    if(!onGround)return;
+
+    myAvatar.userData.seated =
+      !myAvatar.userData.seated;
+
+    myAvatar.userData.bodyGroup.position.y = 0;
+
+    sendMove(true);
+
+  // Space: 점프
+  }else if(
+    (k===' '||e.code==='Space') &&
+    myAvatar &&
+    !myAvatar.userData.seated &&
+    onGround
+  ){
+
+    jumpVelocity = JUMP_SPEED;
+    onGround = false;
+
+    sendMove(true);
+  }
+
+  keys.add(k);
+});
+
+window.addEventListener('keyup',e=>{
+  keys.delete(e.key.toLowerCase());
+});
+
+// 모바일 방향키
+const controls = $('mobile-controls');
+
+controls.querySelectorAll('.move-btn').forEach(b=>{
+
+  const key = b.dataset.key;
+
+  b.addEventListener('pointerdown',e=>{
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    b.setPointerCapture(e.pointerId);
+
+    touchCounts.set(
+      key,
+      (touchCounts.get(key)||0)+1
+    );
+
+    b.classList.add('pressed');
+  });
+
+  const release = e=>{
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    touchCounts.set(
+      key,
+      Math.max(0,(touchCounts.get(key)||0)-1)
+    );
+
+    b.classList.remove('pressed');
+  };
+
+  b.addEventListener('pointerup',release);
+  b.addEventListener('pointercancel',release);
+});
+
+window.addEventListener('blur',()=>{
+
+  keys.clear();
+  touchCounts.clear();
+  dragging = false;
+
+  controls.querySelectorAll('.move-btn')
+    .forEach(b=>{
+      b.classList.remove('pressed');
+    });
+});
+
+const held = k =>
+  keys.has(k) || (touchCounts.get(k)||0)>0;
+
+let lastFrame = performance.now();
+let lastSent = 0;
+let walkTime = 0;
+
+// ========================================
+// 캐릭터 위치 서버 전송
+// ========================================
+
+function sendMove(force=false){
+
+  if(!myAvatar)return;
+
+  const now = performance.now();
+
+  if(!force && now-lastSent<120)return;
+
+  send({
+    type:'move',
+    x:myAvatar.position.x,
+    y:myAvatar.position.y,
+    z:myAvatar.position.z,
+    direction:myAvatar.userData.targetDirection,
+    seated:myAvatar.userData.seated
+  });
+
+  lastSent = now;
+}
+
+// ========================================
+// 메인 애니메이션
+// ========================================
+
+function animate(now){
+
+  requestAnimationFrame(animate);
+
+  const dt = Math.min(
+    (now-lastFrame)/1000,
+    .05
+  );
+
+  lastFrame = now;
+
+  // 동물 선택 미리보기
+  if(
+    !$('profile-modal').hidden &&
+    previewModel
+  ){
+
+    previewModel.rotation.y = previewAngle;
+
+    previewModel.userData.bodyGroup.position.y =
+      Math.sin(now*.002)*.025;
+  }
+
+  if(!$('profile-modal').hidden){
+
+    resizePreview();
+
+    previewRenderer.render(
+      previewScene,
+      previewCamera
+    );
+  }
+
+  // 내 캐릭터 조작
+  if(
+    myAvatar &&
+    $('profile-modal').hidden
+  ){
+
+    const f =
+      Number(held('w')||held('arrowup'))-
+      Number(held('s')||held('arrowdown'));
+
+    const s =
+      Number(held('d')||held('arrowright'))-
+      Number(held('a')||held('arrowleft'));
+
+    if(
+      (f||s) &&
+      !myAvatar.userData.seated
+    ){
+
+      const len = Math.hypot(f,s);
+
+      const forward = f/len;
+      const side = s/len;
+
+      const dx =
+        Math.sin(yaw)*forward-
+        Math.cos(yaw)*side;
+
+      const dz =
+        Math.cos(yaw)*forward+
+        Math.sin(yaw)*side;
+
+      myAvatar.position.x = Math.max(
+        -18,
+        Math.min(
+          18,
+          myAvatar.position.x+dx*5*dt
+        )
+      );
+
+      myAvatar.position.z = Math.max(
+        -18,
+        Math.min(
+          18,
+          myAvatar.position.z+dz*5*dt
+        )
+      );
+
+      myAvatar.userData.targetDirection =
+        Math.atan2(dx,dz);
+
+      walkTime += dt*12;
+
+      myAvatar.userData.bodyGroup.position.y =
+        Math.abs(Math.sin(walkTime))*.085;
+
+      sendMove();
+
+    }else{
+
+      myAvatar.userData.bodyGroup.position.y *= .8;
+    }
+
+    // 점프
+    if(!onGround){
+
+      jumpVelocity -= GRAVITY*dt;
+
+      myAvatar.position.y += jumpVelocity*dt;
+
+      if(myAvatar.position.y<=0){
+
+        myAvatar.position.y = 0;
+        jumpVelocity = 0;
+        onGround = true;
+      }
+
+      sendMove();
+    }
+
+    // 앉기 애니메이션
+    const body = myAvatar.userData.bodyGroup;
+
+    body.scale.y = THREE.MathUtils.damp(
+      body.scale.y,
+      myAvatar.userData.seated?.64:1,
+      12,
+      dt
+    );
+
+    body.position.y = THREE.MathUtils.damp(
+      body.position.y,
+      myAvatar.userData.seated
+        ? -.13
+        : body.position.y,
+      12,
+      dt
+    );
+  }
+
+  // 다른 이용자 캐릭터
+  for(const other of others.values()){
+
+    const body = other.userData.bodyGroup;
+
+    body.scale.y = THREE.MathUtils.damp(
+      body.scale.y,
+      other.userData.seated?.64:1,
+      12,
+      dt
+    );
+  }
+
+  // 내 캐릭터 회전
+  if(myAvatar){
+
+    myAvatar.rotation.y = turn(
+      myAvatar.rotation.y,
+      myAvatar.userData.targetDirection,
+      dt*8
+    );
+  }
+
+  // 다른 캐릭터 회전
+  for(const a of others.values()){
+
+    a.rotation.y = turn(
+      a.rotation.y,
+      a.userData.targetDirection,
+      dt*8
+    );
+  }
+
+  // ======================================
+  // 중앙 정렬된 3인칭 카메라
+  // ======================================
+
+  const target = myAvatar?.position ||
+    new THREE.Vector3(0,0,-8);
+
+  const followAlpha =
+    1-Math.exp(-CAMERA_FOLLOW_SPEED*dt);
+
+  camera.position.lerp(
+    cameraPositionFor(target),
+    followAlpha
+  );
+
+  // 캐릭터를 카메라 광학 중심으로 조준
+  camera.lookAt(
+    cameraLookAtFor(target)
+  );
+
+  tickBubbles(now);
+
+  renderer.render(scene,camera);
+}
+
+// ========================================
+// 화면 크기 자동 조정
+// ========================================
+
+function resizeScene(){
+
+  const w = Math.max(1,sceneEl.clientWidth);
+  const h = Math.max(1,sceneEl.clientHeight);
+
+  // 내부 렌더링 해상도 설정
+  renderer.setSize(w,h,false);
+
+  // 실제 화면에 표시되는 크기는
+  // 메타버스 영역의 정확히 100%
+  renderer.domElement.style.width = '100%';
+  renderer.domElement.style.height = '100%';
+
+  camera.aspect = w/h;
+  camera.updateProjectionMatrix();
+}
+
+new ResizeObserver(resizeScene).observe(sceneEl);
+
+resizeScene();
+
+requestAnimationFrame(animate);
+
+// ========================================
+// 서버 연결
+// ========================================
+
+function send(m){
+
+  if(socket?.readyState===WebSocket.OPEN){
+    socket.send(JSON.stringify(m));
+  }
+}
+
+function sendProfile(){
+
+  if(!profile)return;
+
+  send({
+    type:'join',
+    name:profile.name,
+    animal:profile.animal
+  });
+
+  if(myAvatar){
+
+    send({
+      type:'move',
+      x:myAvatar.position.x,
+      y:myAvatar.position.y,
+      z:myAvatar.position.z,
+      direction:myAvatar.userData.targetDirection,
+      seated:myAvatar.userData.seated
+    });
+  }
+}
+
+// ========================================
+// 채팅
+// ========================================
+
+function addMessage(item){
+
+  const line = document.createElement('div');
+  line.className = 'msg';
+
+  if(item.id){
+    line.dataset.messageId = item.id;
+  }
+
+  const b = document.createElement('b');
+
+  b.textContent =
+    `${animal(item.animal).emoji} ${item.name}: `;
+
+  line.append(
+    b,
+    document.createTextNode(item.message||'')
+  );
+
+  $('messages').append(line);
+
+  $('messages').scrollTop =
+    $('messages').scrollHeight;
+}
+
+// ========================================
+// 롱·숏 투표
+// ========================================
+
+function updateVotes(v){
+
+  if(!v)return;
+
+  const total = v.long+v.short;
+
+  const pct = total
+    ? Math.round(v.long/total*100)
+    : 50;
+
+  $('longbar').style.width = pct+'%';
+
+  $('longpct').textContent =
+    `${pct}% LONG (${v.long})`;
+
+  $('shortpct').textContent =
+    `${100-pct}% SHORT (${v.short})`;
+}
+
+// ========================================
+// WebSocket 멀티플레이
+// ========================================
+
+function connect(){
+
+  const protocol =
+    location.protocol==='https:' ? 'wss' : 'ws';
+
+  socket = new WebSocket(
+    `${protocol}://${location.host}/ws`
+  );
+
+  socket.onopen = ()=>{
+
+    $('connection').textContent =
+      '● 연결됨';
+
+    sendProfile();
+  };
+
+  socket.onclose = ()=>{
+
+    $('connection').textContent =
+      '연결 재시도 중';
+
+    setTimeout(connect,2000);
+  };
+
+  socket.onerror = ()=>{
+
+    $('connection').textContent =
+      '연결 오류';
+  };
+
+  socket.onmessage = e=>{
+
+    let m;
+
+    try{
+      m = JSON.parse(e.data);
+    }catch{
+      return;
+    }
+
+    if(m.type==='welcome'){
+
+      myId = m.id;
+
+      updateVotes(m.votes);
+
+      $('messages').replaceChildren();
+
+      for(const item of m.history||[]){
+        addMessage(item);
+      }
+
+      sendProfile();
+    }
+
+    if(m.type==='presence'){
+
+      $('online').textContent = m.count;
+
+      updateOthers(m.players||[]);
+    }
+
+    if(m.type==='chat'){
+
+      addMessage(m.item);
+      showBubble(m.item);
+    }
+
+    if(m.type==='votes'){
+
+      updateVotes(m.votes);
+    }
+
+    if(m.type==='chat_deleted'){
+
+      document.querySelectorAll(
+        '#messages .msg'
+      ).forEach(el=>{
+
+        if(el.dataset.messageId===m.id){
+          el.remove();
+        }
+      });
+
+      deleteBubbleByMessage(m.id);
+    }
+
+    if(m.type==='chat_reset'){
+
+      $('messages').replaceChildren();
+
+      for(const id of [...activeBubbles.keys()]){
+        removeBubble(id);
+      }
+    }
+  };
+}
+
+// ========================================
+// 투표 버튼
+// ========================================
+
+$('long').onclick = ()=>{
+
+  if(!profile)return showProfile();
+
+  send({
+    type:'vote',
+    side:'long'
+  });
+};
+
+$('short').onclick = ()=>{
+
+  if(!profile)return showProfile();
+
+  send({
+    type:'vote',
+    side:'short'
+  });
+};
+
+// ========================================
+// 채팅 입력
+// ========================================
+
+$('chat-form').onsubmit = e=>{
+
+  e.preventDefault();
+
+  if(!profile)return showProfile();
+
+  const input = $('chat-input');
+  const message = input.value.trim();
+
+  if(message){
+
+    send({
+      type:'chat',
+      message
+    });
+
+    input.value = '';
+  }
+};
+
+// ========================================
+// 실시간 시세
+// ========================================
+
+renderAssets();
+updatePrices();
+updateCandles();
+
+setInterval(updatePrices,15000);
+setInterval(updateCandles,60000);
+
+connect();
+
+// ========================================
+// 경제 캘린더
+// ========================================
+
+const econFrame = $('investing-calendar');
+
+if(econFrame){
+
+  const custom =
+    window.INVESTING_WIDGET_URL ||
+    window.JMC_INVESTING_WIDGET_URL;
+
+  const fallback =
+    'https://sslecal2.investing.com?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&importance=3&features=datepicker&countries=5&calType=week&timeZone=88&lang=18';
+
+  econFrame.src =
+    typeof custom==='string' &&
+    /^https:\/\/(?:sslecal2\.investing\.com|sslecal2\.forexprostools\.com)(?:\/|\?)/i.test(custom)
+      ? custom
+      : fallback;
+}
+
+$('calendar-scene-button')?.addEventListener(
+  'click',
+  ()=>{
+
+    const panel = $('econ-panel');
+
+    panel?.scrollIntoView({
+      behavior:'smooth',
+      block:'center'
+    });
+
+    panel?.classList.add('econ-focus');
+
+    setTimeout(
+      ()=>panel?.classList.remove('econ-focus'),
+      1800
+    );
+  }
+);
