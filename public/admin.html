@@ -1,0 +1,1337 @@
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>JMC 인베스트라운지 | 운영자 센터</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a111e;
+      --panel: #121e2f;
+      --raised: #1a293c;
+      --line: #293b52;
+      --text: #edf2fb;
+      --muted: #93a8bd;
+      --accent: #e5c38d;
+      --teal: #5addc3;
+      --red: #ef7b91;
+    }
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.5 -apple-system, BlinkMacSystemFont,
+        "Segoe UI", sans-serif;
+    }
+    button, input, textarea { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    a { color: var(--accent); text-decoration: none; }
+    .button {
+      color: #102030;
+      background: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      padding: 10px 15px;
+      font-weight: 750;
+    }
+    .button.secondary {
+      color: var(--text);
+      background: #1b3046;
+      border-color: #35516b;
+    }
+    .button.danger {
+      color: #ffadbd;
+      background: #3d2433;
+      border-color: #7a4657;
+    }
+    .button.mini {
+      padding: 6px 10px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+    button:focus-visible,
+    input:focus-visible,
+    textarea:focus-visible {
+      outline: 2px solid var(--teal);
+      outline-offset: 2px;
+    }
+    input, textarea {
+      background: #0d1a2a;
+      border: 1px solid #354960;
+      border-radius: 10px;
+      color: var(--text);
+      padding: 12px 13px;
+      width: 100%;
+    }
+    input::placeholder, textarea::placeholder {
+      color: #748ba1;
+    }
+    textarea {
+      resize: vertical;
+      min-height: 90px;
+    }
+    h1, h2, h3, p { margin-top: 0; }
+    .eyebrow {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: var(--accent);
+    }
+    .muted { color: var(--muted); }
+    .login-wrap {
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background:
+        radial-gradient(
+          circle at 50% 0%,
+          #1c3852 0,
+          transparent 55%
+        ),
+        var(--bg);
+    }
+    .login-card {
+      width: min(430px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      padding: 36px;
+      box-shadow: 0 25px 80px #0008;
+    }
+    .login-card h1 {
+      font-size: 27px;
+      margin: 9px 0 12px;
+    }
+    .login-card form {
+      display: grid;
+      gap: 14px;
+      margin-top: 25px;
+    }
+    .login-card label {
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .form-error {
+      min-height: 20px;
+      color: var(--red);
+      font-size: 13px;
+      margin-top: 13px;
+    }
+    .app {
+      display: grid;
+      grid-template-columns: 236px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+    .sidebar {
+      background: #0c1828;
+      border-right: 1px solid var(--line);
+      padding: 28px 17px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .brand { margin: 3px 9px 30px; }
+    .brand strong {
+      display: block;
+      font-size: 19px;
+      letter-spacing: .3px;
+    }
+    .brand small {
+      display: block;
+      color: var(--muted);
+      margin-top: 3px;
+      font-size: 12px;
+    }
+    .nav { display: grid; gap: 6px; }
+    .nav button {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid transparent;
+      text-align: left;
+      border-radius: 10px;
+      padding: 12px 14px;
+    }
+    .nav button.active {
+      background: #26364a;
+      color: var(--accent);
+      border-color: #415069;
+      font-weight: 700;
+    }
+    .sidebar-foot {
+      margin-top: auto;
+      border-top: 1px solid var(--line);
+      padding: 20px 9px 0;
+    }
+    .sidebar-foot .button {
+      width: 100%;
+      margin-top: 13px;
+    }
+    main {
+      min-width: 0;
+      padding: 30px clamp(16px, 3vw, 46px) 50px;
+    }
+    .top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+    }
+    .top h1 {
+      margin: 5px 0 3px;
+      font-size: 28px;
+    }
+    .status-pill {
+      border: 1px solid #315e5b;
+      border-radius: 99px;
+      background: #103331;
+      padding: 8px 12px;
+      color: var(--teal);
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    .card, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+    }
+    .card { padding: 20px; }
+    .card small {
+      color: var(--muted);
+      display: block;
+      font-size: 12px;
+    }
+    .card strong {
+      font-size: 32px;
+      font-variant-numeric: tabular-nums;
+      display: block;
+      margin-top: 10px;
+    }
+    .layout-2 {
+      display: grid;
+      grid-template-columns: 1.35fr 1fr;
+      gap: 18px;
+    }
+    .panel {
+      padding: 22px;
+      margin-bottom: 18px;
+      min-width: 0;
+    }
+    .panel h2 {
+      font-size: 17px;
+      margin: 0 0 4px;
+    }
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .panel-head .muted {
+      font-size: 12px;
+      margin: 0;
+    }
+    .stack { display: grid; gap: 11px; }
+    .notice-form { display: grid; gap: 12px; }
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .table-scroll { overflow-x: auto; }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 13px;
+    }
+    th, td {
+      text-align: left;
+      padding: 13px 12px;
+      border-bottom: 1px solid var(--line);
+      vertical-align: middle;
+    }
+    th {
+      color: var(--muted);
+      font-weight: 650;
+      white-space: nowrap;
+    }
+    td { white-space: nowrap; }
+    tr:last-child td { border-bottom: 0; }
+    .hp-track {
+      width: 85px;
+      height: 8px;
+      display: inline-block;
+      background: #49303a;
+      border-radius: 99px;
+      overflow: hidden;
+      margin-right: 8px;
+      vertical-align: middle;
+    }
+    .hp-fill {
+      height: 100%;
+      background: var(--teal);
+      border-radius: 99px;
+    }
+    .chat-item {
+      border-bottom: 1px solid var(--line);
+      padding: 12px 0;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .chat-item:last-child { border-bottom: 0; }
+    .chat-item .message {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    .chat-item b { font-size: 13px; }
+    .chat-item p { margin: 4px 0 0; }
+    .chat-item time {
+      font-size: 11px;
+      color: var(--muted);
+      margin-left: 6px;
+    }
+    .switch-row {
+      padding: 16px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .switch-row:last-child { border-bottom: 0; }
+    .switch-row small {
+      display: block;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+    .empty {
+      text-align: center;
+      padding: 30px 12px;
+      color: var(--muted);
+    }
+    .audit { display: grid; gap: 9px; }
+    .audit-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 9px;
+    }
+    .audit-row time {
+      color: var(--muted);
+      white-space: nowrap;
+      font-size: 11px;
+    }
+    .toast {
+      position: fixed;
+      right: 19px;
+      bottom: 20px;
+      padding: 12px 17px;
+      border-radius: 10px;
+      background: #244d45;
+      color: #e7fff6;
+      box-shadow: 0 8px 30px #0008;
+      max-width: 340px;
+      z-index: 9;
+    }
+    .toast.error {
+      background: #5d2d3b;
+      color: #fff0f2;
+    }
+    @media(max-width: 1100px) {
+      .cards { grid-template-columns: repeat(2, 1fr); }
+      .layout-2 { grid-template-columns: 1fr; }
+    }
+    @media(max-width: 760px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar {
+        height: auto;
+        position: relative;
+        padding: 15px;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      .brand { margin: 0 4px 12px; }
+      .nav {
+        display: flex;
+        overflow-x: auto;
+      }
+      .nav button {
+        white-space: nowrap;
+        padding: 9px 12px;
+      }
+      .sidebar-foot {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-top: 8px;
+        border: 0;
+        padding: 0 3px;
+      }
+      .sidebar-foot .button {
+        margin: 0;
+        width: auto;
+      }
+      main { padding-top: 22px; }
+      .top h1 { font-size: 23px; }
+      .card { padding: 15px; }
+      .card strong { font-size: 25px; }
+      .panel { padding: 17px; }
+    }
+  </style>
+</head>
+<body>
+  <section class="login-wrap" id="login-view">
+    <div class="login-card">
+      <div class="eyebrow">JMC INVEST LOUNGE</div>
+      <h1>운영자 센터</h1>
+      <p class="muted">
+        관리자만 접속할 수 있는 통합 운영 대시보드입니다.
+      </p>
+      <form id="login-form">
+        <label for="password">관리자 비밀번호</label>
+        <input
+          type="password"
+          id="password"
+          autocomplete="current-password"
+          required
+          placeholder="Railway에 설정한 ADMIN_PASSWORD"
+        >
+        <button class="button" type="submit">
+          안전하게 로그인
+        </button>
+      </form>
+      <p
+        class="form-error"
+        id="login-error"
+        aria-live="polite"
+      ></p>
+      <p
+        class="muted"
+        style="font-size:12px;margin:12px 0 0"
+      >
+        비밀번호는 브라우저에 저장하지 않습니다.
+      </p>
+    </div>
+  </section>
+
+  <div class="app" id="app-view" hidden>
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="eyebrow">JMC</span>
+        <strong>INVEST LOUNGE</strong>
+        <small>ADMIN CONTROL CENTER</small>
+      </div>
+
+      <nav class="nav" aria-label="관리 메뉴">
+        <button class="active" data-tab="overview">
+          ◈ 대시보드
+        </button>
+        <button data-tab="players">
+          ◉ 접속자 관리
+        </button>
+        <button data-tab="chats">
+          ▤ 채팅 관리
+        </button>
+        <button data-tab="settings">
+          ⚙ 운영 설정
+        </button>
+      </nav>
+
+      <div class="sidebar-foot">
+        <a href="/" target="_blank" rel="noopener">
+          ↗ 실제 라운지 열기
+        </a>
+        <button id="logout" class="button secondary">
+          로그아웃
+        </button>
+      </div>
+    </aside>
+
+    <main>
+      <header class="top">
+        <div>
+          <div class="eyebrow">OPERATIONS</div>
+          <h1 id="page-title">대시보드</h1>
+          <span class="muted" id="updated-at">
+            서버 연결 확인 중
+          </span>
+        </div>
+        <span class="status-pill" id="live-status">
+          ● 연결 확인 중
+        </span>
+      </header>
+
+      <section id="tab-overview">
+        <div class="cards">
+          <div class="card">
+            <small>실시간 접속 인원</small>
+            <strong id="metric-online">—</strong>
+          </div>
+          <div class="card">
+            <small>WebSocket 연결</small>
+            <strong id="metric-connections">—</strong>
+          </div>
+          <div class="card">
+            <small>서버 메모리 (MB)</small>
+            <strong id="metric-memory">—</strong>
+          </div>
+          <div class="card">
+            <small>현재 마법탄</small>
+            <strong id="metric-shots">—</strong>
+          </div>
+        </div>
+
+        <div class="layout-2">
+          <div>
+            <div class="panel">
+              <div class="panel-head">
+                <div>
+                  <h2>전체 공지 전송</h2>
+                  <p class="muted">
+                    공지 내용은 일반 채팅에
+                    운영자 명의로 표시됩니다.
+                  </p>
+                </div>
+              </div>
+              <form id="notice-form" class="notice-form">
+                <textarea
+                  id="notice-message"
+                  maxlength="160"
+                  placeholder="모든 참가자에게 보낼 공지를 입력하세요."
+                  required
+                ></textarea>
+                <div class="actions">
+                  <button type="submit" class="button">
+                    📢 전체 공지 전송
+                  </button>
+                  <span class="muted" id="notice-count">
+                    0 / 160
+                  </span>
+                </div>
+              </form>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head">
+                <h2>최근 운영 기록</h2>
+              </div>
+              <div class="audit" id="audit-list">
+                <div class="empty">기록이 없습니다.</div>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <div class="panel">
+              <div class="panel-head">
+                <h2>라운지 현황</h2>
+              </div>
+              <div class="stack">
+                <p style="margin:0">
+                  서버 가동 시간:
+                  <strong id="metric-uptime">—</strong>
+                </p>
+                <p style="margin:0">
+                  최근 채팅 기록:
+                  <strong id="metric-chats">—</strong>건
+                </p>
+                <p style="margin:0">
+                  롱 투표:
+                  <strong id="metric-long">—</strong>명
+                </p>
+                <p style="margin:0">
+                  숏 투표:
+                  <strong id="metric-short">—</strong>명
+                </p>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="panel-head">
+                <h2>빠른 관리</h2>
+              </div>
+              <div class="stack">
+                <button
+                  class="button secondary"
+                  data-goto="players"
+                >
+                  접속자 및 HP 확인
+                </button>
+                <button
+                  class="button secondary"
+                  data-goto="chats"
+                >
+                  최근 채팅 검토
+                </button>
+                <button
+                  class="button secondary"
+                  data-goto="settings"
+                >
+                  마법·채팅 설정
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-players" hidden>
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>실시간 접속자</h2>
+              <p class="muted">
+                3초마다 갱신됩니다.
+                HP 회복 및 5분 접속 제한을 지원합니다.
+              </p>
+            </div>
+          </div>
+
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>이용자</th>
+                  <th>HP</th>
+                  <th>투표</th>
+                  <th>접속 시간</th>
+                  <th>관리</th>
+                </tr>
+              </thead>
+              <tbody id="player-table">
+                <tr>
+                  <td colspan="5" class="empty">
+                    접속자를 불러오는 중입니다.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p
+            class="muted"
+            style="font-size:12px;margin:13px 0 0"
+          >
+            주의: 강제 퇴장은 같은 공인 IP를 공유하는
+            다른 사용자에게도 재입장 제한이 적용될 수 있습니다.
+          </p>
+        </div>
+      </section>
+
+      <section id="tab-chats" hidden>
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>채팅 기록 관리</h2>
+              <p class="muted">
+                최근 40건까지 저장합니다.
+                한국시간 자정에 초기화됩니다.
+              </p>
+            </div>
+            <button
+              id="reset-chat"
+              class="button danger mini"
+            >
+              전체 채팅 삭제
+            </button>
+          </div>
+          <div id="chat-list">
+            <div class="empty">
+              채팅을 불러오는 중입니다.
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-settings" hidden>
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <h2>서비스 기능 설정</h2>
+              <p class="muted">
+                변경 후 즉시 모든 참가자에게 적용됩니다.
+              </p>
+            </div>
+          </div>
+
+          <div class="switch-row">
+            <div>
+              <strong>실시간 채팅</strong>
+              <small>
+                중단하면 신규 일반 채팅을 차단합니다.
+              </small>
+            </div>
+            <button
+              class="button secondary"
+              id="toggle-chat"
+              data-setting="chatEnabled"
+            >
+              상태 확인 중
+            </button>
+          </div>
+
+          <div class="switch-row">
+            <div>
+              <strong>마법 공격 PVP</strong>
+              <small>
+                중단하면 새로운 마법탄 발사를 차단합니다.
+              </small>
+            </div>
+            <button
+              class="button secondary"
+              id="toggle-magic"
+              data-setting="magicEnabled"
+            >
+              상태 확인 중
+            </button>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2>투표 관리</h2>
+          </div>
+          <p class="muted">
+            롱·숏 투표를 초기화하고 모든 이용자가
+            다시 투표할 수 있도록 합니다.
+          </p>
+          <button id="reset-votes" class="button danger">
+            롱·숏 투표 초기화
+          </button>
+        </div>
+
+        <p class="muted" style="font-size:12px">
+          관리자 로그인, 차단 기록과 운영 설정은
+          서버 메모리에 저장됩니다.
+          Railway 재시작 시 초기화됩니다.
+        </p>
+      </section>
+    </main>
+  </div>
+
+  <div
+    class="toast"
+    id="toast"
+    hidden
+    role="status"
+    aria-live="polite"
+  ></div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+
+    let snapshot = null;
+    let activeTab = 'overview';
+    let toastTimeout = null;
+
+    const emoji = {
+      seal:'🦭',
+      cat:'🐱',
+      dog:'🐶',
+      rabbit:'🐰',
+      fox:'🦊',
+      panda:'🐼',
+      bear:'🐻',
+      penguin:'🐧',
+      frog:'🐸',
+      hamster:'🐹',
+      lion:'🦁',
+      tiger:'🐯',
+      koala:'🐨',
+      raccoon:'🦝',
+      deer:'🦌'
+    };
+
+    function toast(message, error = false) {
+      const el = $('toast');
+      el.textContent = message;
+      el.classList.toggle('error', error);
+      el.hidden = false;
+
+      clearTimeout(toastTimeout);
+
+      toastTimeout = setTimeout(() => {
+        el.hidden = true;
+      }, 3500);
+    }
+
+    async function request(url, data) {
+      const options = {
+        credentials:'same-origin',
+        cache:'no-store'
+      };
+
+      if (data !== undefined) {
+        options.method = 'POST';
+        options.headers = {
+          'Content-Type':'application/json',
+          'X-JMC-Admin':'1'
+        };
+        options.body = JSON.stringify(data);
+      }
+
+      const response = await fetch(url, options);
+      const result = await response.json()
+        .catch(() => ({}));
+
+      if (!response.ok) {
+        const error = new Error(
+          result.error ||
+          `요청 실패 (${response.status})`
+        );
+        error.status = response.status;
+        throw error;
+      }
+
+      return result;
+    }
+
+    function showLogin() {
+      $('login-view').hidden = false;
+      $('app-view').hidden = true;
+      $('password').value = '';
+    }
+
+    function showApp() {
+      $('login-view').hidden = true;
+      $('app-view').hidden = false;
+    }
+
+    function formatTime(time) {
+      return new Date(time).toLocaleString('ko-KR', {
+        timeZone:'Asia/Seoul',
+        hour:'2-digit',
+        minute:'2-digit',
+        second:'2-digit'
+      });
+    }
+
+    function duration(seconds) {
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor(seconds % 3600 / 60);
+      return `${h}시간 ${m}분`;
+    }
+
+    function node(tag, text, className) {
+      const element = document.createElement(tag);
+      if (text !== undefined) {
+        element.textContent = String(text);
+      }
+      if (className) element.className = className;
+      return element;
+    }
+
+    function changeTab(tab) {
+      activeTab = tab;
+
+      for (const name of [
+        'overview','players','chats','settings'
+      ]) {
+        $('tab-' + name).hidden = name !== tab;
+      }
+
+      document.querySelectorAll('[data-tab]')
+        .forEach(b => {
+          b.classList.toggle(
+            'active',
+            b.dataset.tab === tab
+          );
+        });
+
+      $('page-title').textContent = ({
+        overview:'대시보드',
+        players:'접속자 관리',
+        chats:'채팅 관리',
+        settings:'운영 설정'
+      })[tab];
+    }
+
+    function renderPlayers(players) {
+      const body = $('player-table');
+      body.replaceChildren();
+
+      if (!players.length) {
+        const tr = node('tr');
+        const td = node(
+          'td',
+          '현재 접속한 참가자가 없습니다.',
+          'empty'
+        );
+        td.colSpan = 5;
+        tr.append(td);
+        body.append(tr);
+        return;
+      }
+
+      players.forEach(p => {
+        const tr = node('tr');
+
+        tr.append(
+          node(
+            'td',
+            `${emoji[p.animal] || '👤'} ${p.name}`
+          )
+        );
+
+        const hpCell = node('td');
+        const track = node(
+          'span',
+          undefined,
+          'hp-track'
+        );
+
+        const fill = node(
+          'span',
+          undefined,
+          'hp-fill'
+        );
+
+        fill.style.display = 'block';
+        fill.style.width =
+          Math.max(
+            0,
+            Math.min(100, p.hp)
+          ) + '%';
+
+        fill.style.background =
+          p.hp <= 25
+            ? '#ef7b91'
+            : p.hp <= 55
+              ? '#e5c38d'
+              : '#5addc3';
+
+        track.append(fill);
+
+        hpCell.append(
+          track,
+          node('span', `${p.hp}/100`)
+        );
+
+        tr.append(
+          hpCell,
+          node(
+            'td',
+            p.vote ? p.vote.toUpperCase() : '—'
+          )
+        );
+
+        tr.append(
+          node('td', formatTime(p.joinedAt))
+        );
+
+        const buttons = node('td');
+
+        const heal = node(
+          'button',
+          'HP 회복',
+          'button secondary mini'
+        );
+
+        heal.dataset.action = 'heal';
+        heal.dataset.id = p.id;
+
+        const kick = node(
+          'button',
+          '강제 퇴장',
+          'button danger mini'
+        );
+
+        kick.dataset.action = 'kick';
+        kick.dataset.id = p.id;
+
+        buttons.append(
+          heal,
+          document.createTextNode(' '),
+          kick
+        );
+
+        tr.append(buttons);
+        body.append(tr);
+      });
+    }
+
+    function renderChats(items) {
+      const list = $('chat-list');
+      list.replaceChildren();
+
+      if (!items.length) {
+        list.append(
+          node(
+            'div',
+            '채팅 기록이 없습니다.',
+            'empty'
+          )
+        );
+        return;
+      }
+
+      [...items].reverse().forEach(item => {
+        const entry = node(
+          'div',
+          undefined,
+          'chat-item'
+        );
+
+        const content = node(
+          'div',
+          undefined,
+          'message'
+        );
+
+        const sender = node(
+          'b',
+          `${emoji[item.animal] || '👤'} ${item.name}`
+        );
+
+        const time = node(
+          'time',
+          formatTime(item.time)
+        );
+
+        const text = node('p', item.message);
+
+        content.append(sender,time,text);
+
+        const del = node(
+          'button',
+          '삭제',
+          'button danger mini'
+        );
+
+        del.dataset.action = 'delete-chat';
+        del.dataset.id = item.id;
+
+        entry.append(content,del);
+        list.append(entry);
+      });
+    }
+
+    function renderAudit(items) {
+      const list = $('audit-list');
+      list.replaceChildren();
+
+      if (!items.length) {
+        list.append(
+          node(
+            'div',
+            '운영 기록이 없습니다.',
+            'empty'
+          )
+        );
+        return;
+      }
+
+      items.forEach(item => {
+        const line = node(
+          'div',
+          undefined,
+          'audit-row'
+        );
+
+        line.append(
+          node('span', item.action),
+          node('time', formatTime(item.time))
+        );
+
+        list.append(line);
+      });
+    }
+
+    function render(data) {
+      snapshot = data;
+      showApp();
+
+      $('live-status').textContent =
+        '● 정상 운영 중';
+
+      $('updated-at').textContent =
+        '최근 갱신: ' + formatTime(data.now);
+
+      $('metric-online').textContent =
+        data.online;
+
+      $('metric-connections').textContent =
+        data.connections;
+
+      $('metric-memory').textContent =
+        data.memoryMB;
+
+      $('metric-shots').textContent =
+        data.shots;
+
+      $('metric-uptime').textContent =
+        duration(data.uptime);
+
+      $('metric-chats').textContent =
+        data.chatCount;
+
+      $('metric-long').textContent =
+        data.votes.long;
+
+      $('metric-short').textContent =
+        data.votes.short;
+
+      renderPlayers(data.players);
+      renderChats(data.history);
+      renderAudit(data.audit);
+
+      for (const [id,key] of [
+        ['toggle-chat','chatEnabled'],
+        ['toggle-magic','magicEnabled']
+      ]) {
+        const enabled = data.settings[key];
+
+        $(id).textContent = enabled
+          ? '● 사용 중'
+          : '○ 중단됨';
+
+        $(id).className = enabled
+          ? 'button secondary'
+          : 'button danger';
+      }
+    }
+
+    let loading = false;
+
+    async function refresh() {
+      if (
+        loading ||
+        document.visibilityState === 'hidden'
+      ) {
+        return;
+      }
+
+      loading = true;
+
+      try {
+        render(
+          await request('/api/admin/status')
+        );
+      } catch (error) {
+        if (
+          error.status === 401 ||
+          error.status === 503
+        ) {
+          showLogin();
+
+          $('login-error').textContent =
+            error.status === 503
+              ? error.message
+              : '';
+        } else {
+          $('live-status').textContent =
+            '● 연결 확인 필요';
+        }
+      } finally {
+        loading = false;
+      }
+    }
+
+    async function action(
+      url,
+      data,
+      message
+    ) {
+      try {
+        await request(url,data);
+        toast(message);
+        await refresh();
+      } catch (error) {
+        toast(error.message,true);
+      }
+    }
+
+    $('login-form').onsubmit = async e => {
+      e.preventDefault();
+      $('login-error').textContent = '';
+
+      try {
+        await request('/api/admin/login',{
+          password:$('password').value
+        });
+
+        $('password').value = '';
+        await refresh();
+      } catch (error) {
+        $('login-error').textContent =
+          error.message;
+      }
+    };
+
+    document.querySelectorAll('[data-tab]')
+      .forEach(b => {
+        b.onclick = () =>
+          changeTab(b.dataset.tab);
+      });
+
+    document.querySelectorAll('[data-goto]')
+      .forEach(b => {
+        b.onclick = () =>
+          changeTab(b.dataset.goto);
+      });
+
+    $('notice-message').oninput = () => {
+      $('notice-count').textContent =
+        $('notice-message').value.length +
+        ' / 160';
+    };
+
+    $('notice-form').onsubmit = async e => {
+      e.preventDefault();
+
+      const message =
+        $('notice-message').value.trim();
+
+      if (!message) return;
+
+      try {
+        await request(
+          '/api/admin/notice',
+          {message}
+        );
+
+        $('notice-message').value = '';
+        $('notice-count').textContent =
+          '0 / 160';
+
+        toast('전체 공지를 전송했습니다.');
+        await refresh();
+      } catch (error) {
+        toast(error.message,true);
+      }
+    };
+
+    $('player-table').onclick = e => {
+      const b = e.target.closest(
+        '[data-action]'
+      );
+
+      if (!b) return;
+
+      if (b.dataset.action === 'heal') {
+        action(
+          '/api/admin/player/heal',
+          {id:b.dataset.id},
+          'HP를 100으로 회복했습니다.'
+        );
+      } else if (
+        b.dataset.action === 'kick'
+      ) {
+        if (
+          confirm(
+            '이 이용자를 퇴장시키고 같은 IP의 재접속을 5분간 제한할까요?'
+          )
+        ) {
+          action(
+            '/api/admin/player/kick',
+            {id:b.dataset.id},
+            '강제 퇴장 처리했습니다.'
+          );
+        }
+      }
+    };
+
+    $('chat-list').onclick = e => {
+      const b = e.target.closest(
+        '[data-action="delete-chat"]'
+      );
+
+      if (
+        b &&
+        confirm('이 채팅 메시지를 삭제할까요?')
+      ) {
+        action(
+          '/api/admin/chat/delete',
+          {id:b.dataset.id},
+          '채팅을 삭제했습니다.'
+        );
+      }
+    };
+
+    $('reset-chat').onclick = () => {
+      if (
+        confirm(
+          '전체 채팅 기록과 말풍선을 모두 삭제할까요?'
+        )
+      ) {
+        action(
+          '/api/admin/chat/reset',
+          {},
+          '전체 채팅을 초기화했습니다.'
+        );
+      }
+    };
+
+    $('reset-votes').onclick = () => {
+      if (
+        confirm(
+          '모든 롱·숏 투표를 초기화할까요?'
+        )
+      ) {
+        action(
+          '/api/admin/votes/reset',
+          {},
+          '투표를 초기화했습니다.'
+        );
+      }
+    };
+
+    document.querySelectorAll(
+      '[data-setting]'
+    ).forEach(b => {
+      b.onclick = () => {
+        if (!snapshot) return;
+
+        const key = b.dataset.setting;
+        const value =
+          !snapshot.settings[key];
+
+        action(
+          '/api/admin/settings',
+          {key,value},
+          '운영 설정을 변경했습니다.'
+        );
+      };
+    });
+
+    $('logout').onclick = async () => {
+      try {
+        await request(
+          '/api/admin/logout',
+          {}
+        );
+      } catch {}
+
+      showLogin();
+      toast('로그아웃했습니다.');
+    };
+
+    changeTab('overview');
+    refresh();
+
+    setInterval(refresh,3000);
+  </script>
+</body>
+</html>
