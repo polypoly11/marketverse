@@ -935,10 +935,6 @@ function installSceneLiveChat() {
       box-sizing:border-box;
     }
 
-    #scene > .jmc-scene-chat .panel-head {
-      display:none !important;
-    }
-
     #scene > .jmc-scene-chat #messages {
       display:block !important;
       flex:none !important;
