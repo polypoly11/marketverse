@@ -2278,3 +2278,156 @@ $('calendar-scene-button')?.addEventListener(
     );
   }
 );
+
+/* ========================================
+   A키 연속 마법 공격
+   ======================================== */
+
+let magicPressed = false;
+let lastMagicTime = 0;
+
+const magicProjectiles = [];
+
+const MAGIC_INTERVAL = 200;
+const MAGIC_SPEED = 13;
+const MAGIC_LIFETIME = 1100;
+
+// 마법탄 생성
+function castMagic() {
+  if (!myAvatar) return;
+
+  const direction = new THREE.Vector3(
+    Math.sin(myAvatar.rotation.y),
+    0,
+    Math.cos(myAvatar.rotation.y)
+  ).normalize();
+
+  const projectile = new THREE.Group();
+
+  // 빛나는 마법탄
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(0.18, 12, 12),
+    new THREE.MeshBasicMaterial({
+      color: 0xb9ffff
+    })
+  );
+
+  const aura = new THREE.Mesh(
+    new THREE.SphereGeometry(0.32, 12, 12),
+    new THREE.MeshBasicMaterial({
+      color: 0x9955ff,
+      transparent: true,
+      opacity: 0.48,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    })
+  );
+
+  projectile.add(core, aura);
+
+  projectile.position.copy(myAvatar.position);
+  projectile.position.y += 1.15;
+  projectile.position.addScaledVector(direction, 0.85);
+
+  scene.add(projectile);
+
+  magicProjectiles.push({
+    object: projectile,
+    direction,
+    born: performance.now(),
+    core,
+    aura
+  });
+}
+
+// A키 누르기
+window.addEventListener('keydown', (e) => {
+  if (e.key.toLowerCase() !== 'a') return;
+
+  if (['INPUT', 'TEXTAREA'].includes(
+    document.activeElement?.tagName
+  )) return;
+
+  if (!document.getElementById('profile-modal').hidden) {
+    return;
+  }
+
+  e.preventDefault();
+  magicPressed = true;
+});
+
+// A키 떼기
+window.addEventListener('keyup', (e) => {
+  if (e.key.toLowerCase() === 'a') {
+    magicPressed = false;
+  }
+});
+
+window.addEventListener('blur', () => {
+  magicPressed = false;
+});
+
+// 마법탄 이동 및 연속 발사
+let previousMagicFrame = performance.now();
+
+function updateMagic(now) {
+  requestAnimationFrame(updateMagic);
+
+  const dt = Math.min(
+    (now - previousMagicFrame) / 1000,
+    0.05
+  );
+
+  previousMagicFrame = now;
+
+  if (
+    magicPressed &&
+    myAvatar &&
+    now - lastMagicTime >= MAGIC_INTERVAL
+  ) {
+    castMagic();
+    lastMagicTime = now;
+  }
+
+  // 공격 중 캐릭터 마법 시전 모션
+  if (myAvatar?.userData.bodyGroup) {
+    const body = myAvatar.userData.bodyGroup;
+
+    body.rotation.z = magicPressed
+      ? Math.sin(now * 0.018) * 0.12
+      : THREE.MathUtils.lerp(body.rotation.z, 0, 0.2);
+  }
+
+  for (let i = magicProjectiles.length - 1; i >= 0; i--) {
+    const shot = magicProjectiles[i];
+
+    shot.object.position.addScaledVector(
+      shot.direction,
+      MAGIC_SPEED * dt
+    );
+
+    shot.aura.rotation.y += dt * 9;
+
+    const age = now - shot.born;
+    const remaining = Math.max(
+      0,
+      1 - age / MAGIC_LIFETIME
+    );
+
+    shot.aura.material.opacity = remaining * 0.48;
+
+    if (age >= MAGIC_LIFETIME) {
+      scene.remove(shot.object);
+
+      shot.core.geometry.dispose();
+      shot.core.material.dispose();
+
+      shot.aura.geometry.dispose();
+      shot.aura.material.dispose();
+
+      magicProjectiles.splice(i, 1);
+    }
+  }
+}
+
+requestAnimationFrame(updateMagic);
