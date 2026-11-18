@@ -120,85 +120,335 @@ export function createBossClient({
 
   function makeWhale() {
     const root=new THREE.Group();
-
     root.position.copy(bossPos);
+
+    // 몸통은 X축 방향: 오른쪽(+X)이 머리, 왼쪽(-X)이 꼬리.
+    // 카메라에서 고래의 옆모습이 보이도록 Y축 회전은 0으로 유지한다.
+    root.rotation.y=0;
     scene.add(root);
 
-    // 고래의 몸통과 배
-    ellipsoid(
-      root,0x438cc9,
-      0,0,0,
-      1.85,1.15,2.05
-    );
+    const palette={
+      back:0x397fae,
+      flank:0x69b7d5,
+      belly:0xc5eaf0,
+      fin:0x357ba8,
+      eye:0x102338,
+      water:0xb1edff
+    };
 
-    ellipsoid(
-      root,0x9ad8ef,
-      0,-.53,.45,
-      1.52,.54,1.55
-    );
+    // 하나로 연결된 매끄러운 유선형 몸통.
+    // 머리·허리·꼬리의 실루엣이 자연스럽게 이어진다.
+    const stations=[
+      [-2.20, 0.01, 0.05, 0.07],
+      [-2.00, 0.01, 0.20, 0.20],
+      [-1.70, 0.00, 0.38, 0.37],
+      [-1.35, 0.00, 0.57, 0.56],
+      [-0.90, 0.00, 0.76, 0.72],
+      [-0.40, 0.00, 0.88, 0.84],
+      [ 0.15, 0.01, 0.94, 0.88],
+      [ 0.65, 0.04, 0.90, 0.84],
+      [ 1.10, 0.09, 0.80, 0.76],
+      [ 1.47, 0.09, 0.69, 0.68],
+      [ 1.78, 0.04, 0.54, 0.54],
+      [ 2.02,-0.04, 0.34, 0.37],
+      [ 2.16,-0.07, 0.13, 0.19],
+      [ 2.18,-0.07, 0.01, 0.01]
+    ];
 
-    ellipsoid(
-      root,0x3b79b9,
-      -1.65,.05,-.1,
-      .7,.3,.67
-    );
+    function smooth(a,b,c,d,t) {
+      return 0.5*(
+        2*b+(-a+c)*t+
+        (2*a-5*b+4*c-d)*t*t+
+        (-a+3*b-3*c+d)*t*t*t
+      );
+    }
 
-    // 양쪽 지느러미와 눈
-    for(const side of [-1,1]) {
-      const fin=ellipsoid(
-        root,0x3a7fbd,
-        side*1.73,-.42,.25,
-        .95,.18,.52
+    const longitudinal=4;
+    const radial=36;
+    const positions=[];
+    const colors=[];
+    const indices=[];
+    const backColor=new THREE.Color(palette.back);
+    const flankColor=new THREE.Color(palette.flank);
+    const bellyColor=new THREE.Color(palette.belly);
+
+    for(let i=0;i<=(stations.length-1)*longitudinal;i++) {
+      const section=Math.min(
+        stations.length-2,
+        Math.floor(i/longitudinal)
       );
 
-      fin.rotation.z=side*.24;
+      const t=(i-section*longitudinal)/longitudinal;
+      const before=stations[Math.max(0,section-1)];
+      const left=stations[section];
+      const right=stations[section+1];
+      const after=stations[Math.min(stations.length-1,section+2)];
+
+      const values=[0,1,2,3].map(k=>smooth(
+        before[k],left[k],right[k],after[k],t
+      ));
+
+      const [x,centerY,ry,rz]=values;
+
+      for(let j=0;j<=radial;j++) {
+        const angle=j/radial*Math.PI*2;
+        const height=Math.sin(angle);
+
+        positions.push(
+          x,
+          centerY+Math.max(0.01,ry)*height,
+          Math.max(0.01,rz)*Math.cos(angle)
+        );
+
+        // 위쪽은 푸른색, 측면은 밝은 청색, 배는 연한 하늘색.
+        const c=backColor.clone().lerp(
+          flankColor,
+          THREE.MathUtils.smoothstep(-height,-0.65,0.8)*0.18+0.22
+        );
+
+        const bellyBlend=THREE.MathUtils.smoothstep(
+          -height,0.17,0.61
+        );
+
+        c.lerp(bellyColor,bellyBlend);
+        colors.push(c.r,c.g,c.b);
+      }
+    }
+
+    const rings=(stations.length-1)*longitudinal;
+
+    for(let i=0;i<rings;i++) {
+      for(let j=0;j<radial;j++) {
+        const a=i*(radial+1)+j;
+        const b=(i+1)*(radial+1)+j;
+        const c=a+1;
+        const d=b+1;
+
+        indices.push(a,b,c,b,d,c);
+      }
+    }
+
+    const bodyGeometry=new THREE.BufferGeometry();
+
+    bodyGeometry.setAttribute(
+      'position',
+      new THREE.Float32BufferAttribute(positions,3)
+    );
+
+    bodyGeometry.setAttribute(
+      'color',
+      new THREE.Float32BufferAttribute(colors,3)
+    );
+
+    bodyGeometry.setIndex(indices);
+    bodyGeometry.computeVertexNormals();
+
+    const body=new THREE.Mesh(
+      bodyGeometry,
+      new THREE.MeshStandardMaterial({
+        vertexColors:true,
+        roughness:0.57,
+        metalness:0.05
+      })
+    );
+
+    root.add(body);
+
+    // 둥글고 부드러운 아래턱.
+    ellipsoid(
+      root,palette.belly,
+      1.55,-0.30,0,
+      0.52,0.22,0.46
+    );
+
+    function addCurve(points,color,radius,opacity=1) {
+      const curve=new THREE.CatmullRomCurve3(
+        points.map(p=>new THREE.Vector3(...p))
+      );
+
+      const material=new THREE.MeshStandardMaterial({
+        color,
+        roughness:0.7,
+        transparent:opacity<1,
+        opacity
+      });
+
+      const mesh=new THREE.Mesh(
+        new THREE.TubeGeometry(curve,24,radius,6,false),
+        material
+      );
+
+      root.add(mesh);
+      return mesh;
+    }
+
+    // 양쪽 눈, 눈동자, 반사광 및 입선.
+    for(const side of [-1,1]) {
+      ellipsoid(
+        root,0xe8f8fb,
+        1.34,0.28,side*0.690,
+        0.16,0.16,0.055
+      );
 
       ellipsoid(
-        root,0x12253b,
-        side*1.18,.28,1.34,
-        .17,.18,.13
+        root,palette.eye,
+        1.36,0.28,side*0.737,
+        0.102,0.109,0.035
       );
 
       ellipsoid(
         root,0xffffff,
-        side*1.16,.34,1.45,
-        .045,.05,.03
+        1.392,0.331,side*0.766,
+        0.035,0.037,0.018
+      );
+
+      // 볼 하이라이트
+      ellipsoid(
+        root,0x8bcee2,
+        1.08,-0.11,side*0.732,
+        0.19,0.10,0.035
+      );
+
+      // 웃는 입선
+      addCurve([
+        [0.79,-0.245,side*0.784],
+        [1.14,-0.298,side*0.692],
+        [1.51,-0.335,side*0.574],
+        [1.78,-0.294,side*0.421]
+      ],0x315c79,0.016);
+    }
+
+    // 등지느러미: 단단한 윤곽과 둥근 모서리.
+    function extrudedFin(shape,depth,color) {
+      return new THREE.Mesh(
+        new THREE.ExtrudeGeometry(shape,{
+          depth,
+          steps:1,
+          bevelEnabled:true,
+          bevelSize:0.032,
+          bevelThickness:0.027,
+          bevelSegments:2,
+          curveSegments:14
+        }),
+        new THREE.MeshStandardMaterial({
+          color,
+          roughness:0.63,
+          side:THREE.DoubleSide
+        })
       );
     }
 
-    // 고래 꼬리
+    const dorsalShape=new THREE.Shape();
+
+    dorsalShape.moveTo(-1.00,0.69);
+    dorsalShape.bezierCurveTo(
+      -0.77,0.92,
+      -0.64,1.27,
+      -0.39,1.38
+    );
+    dorsalShape.bezierCurveTo(
+      -0.43,1.13,
+      -0.12,0.94,
+      0.15,0.78
+    );
+    dorsalShape.quadraticCurveTo(
+      -0.40,0.88,
+      -1.00,0.69
+    );
+
+    const dorsal=extrudedFin(
+      dorsalShape,0.12,0x3479a5
+    );
+
+    dorsal.position.z=-0.06;
+    root.add(dorsal);
+
+    // 가슴지느러미는 뒤로 뻗어 옆 실루엣을 만든다.
+    const finShape=new THREE.Shape();
+
+    finShape.moveTo(-0.18,-0.30);
+    finShape.bezierCurveTo(
+      -0.41,-0.39,
+      -0.95,-0.75,
+      -1.18,-1.03
+    );
+    finShape.quadraticCurveTo(
+      -1.34,-1.22,
+      -1.16,-1.23
+    );
+    finShape.bezierCurveTo(
+      -0.77,-1.17,
+      -0.15,-0.69,
+      0.09,-0.43
+    );
+    finShape.quadraticCurveTo(
+      0.10,-0.29,
+      -0.18,-0.30
+    );
+
+    const farFin=extrudedFin(
+      finShape,0.11,0x3373a0
+    );
+    farFin.position.z=-0.91;
+    root.add(farFin);
+
+    const nearFin=extrudedFin(
+      finShape,0.13,palette.fin
+    );
+    nearFin.position.z=0.79;
+    root.add(nearFin);
+
+    // 꼬리자루와 좌우 꼬리지느러미.
     const tail=new THREE.Group();
-
-    tail.position.set(0,.03,-1.9);
-
-    ellipsoid(
-      tail,0x448ecd,
-      0,0,-.42,
-      .2,.28,.62
-    );
-
-    ellipsoid(
-      tail,0x448ecd,
-      -.49,.12,-.65,
-      .72,.16,.45
-    );
-
-    ellipsoid(
-      tail,0x448ecd,
-      .49,.12,-.65,
-      .72,.16,.45
-    );
-
+    tail.position.set(-2.08,0.01,0);
     root.add(tail);
 
-    // 물 분출구
-    const blow=new THREE.Mesh(
-      new THREE.ConeGeometry(.16,.35,8),
-      mat(0x77d9e8)
+    ellipsoid(
+      tail,0x367da9,
+      -0.22,0,0,
+      0.52,0.17,0.19
     );
 
-    blow.position.set(0,1.13,.3);
-    root.add(blow);
+    for(const side of [-1,1]) {
+      const fluke=ellipsoid(
+        tail,palette.fin,
+        -0.61,0.045,side*0.35,
+        0.60,0.115,0.47
+      );
+
+      fluke.rotation.y=side*0.36;
+      fluke.rotation.z=side*0.075;
+    }
+
+    // 머리 위 물 분출구.
+    ellipsoid(
+      root,0x214c6a,
+      0.97,0.879,0,
+      0.13,0.024,0.105
+    );
+
+    const spout=new THREE.Group();
+
+    spout.position.set(0.97,0.93,0);
+    root.add(spout);
+
+    const water=[];
+
+    for(let i=0;i<7;i++) {
+      const drop=new THREE.Mesh(
+        new THREE.SphereGeometry(0.055,10,8),
+        new THREE.MeshBasicMaterial({
+          color:palette.water,
+          transparent:true,
+          opacity:0.65,
+          depthWrite:false
+        })
+      );
+
+      drop.userData.phase=i/7;
+      spout.add(drop);
+      water.push(drop);
+    }
 
     // 고래 머리 위 HP 바
     hpCanvas=document.createElement('canvas');
@@ -217,11 +467,19 @@ export function createBossClient({
       })
     );
 
-    hpSprite.position.set(0,2.1,0);
-    hpSprite.scale.set(5,1,1);
+    hpSprite.position.set(0,1.95,0);
+    hpSprite.scale.set(4.8,0.95,1);
     root.add(hpSprite);
 
-    whale={root,tail};
+    whale={
+      root,
+      tail,
+      nearFin,
+      farFin,
+      spout,
+      water
+    };
+
     updateHp(current.hp);
   }
 
@@ -519,15 +777,44 @@ export function createBossClient({
   function update(now,dt) {
     if(whale?.root.visible) {
       whale.root.position.y=
-        bossPos.y+Math.sin(now*.0015)*.16;
+        bossPos.y+Math.sin(now*0.00145)*0.15;
+
+      // 수영하듯 꼬리를 흔들고 가슴지느러미를 움직인다.
+      whale.tail.rotation.y=
+        Math.sin(now*0.0025)*0.25;
 
       whale.tail.rotation.z=
-        Math.sin(now*.002)*.15;
+        Math.sin(now*0.0025+0.6)*0.08;
+
+      whale.nearFin.rotation.z=
+        Math.sin(now*0.0018)*0.07;
+
+      whale.farFin.rotation.z=
+        -Math.sin(now*0.0018)*0.07;
+
+      // 분수처럼 올라갔다 사라지는 물방울.
+      for(const drop of whale.water) {
+        const progress=
+          (now*0.00055+drop.userData.phase)%1;
+
+        const arc=Math.sin(progress*Math.PI);
+
+        drop.position.set(
+          Math.sin(progress*Math.PI*2)*0.20,
+          0.06+progress*0.68,
+          Math.cos(progress*Math.PI*2)*0.15
+        );
+
+        drop.scale.setScalar(
+          0.7+arc*0.65
+        );
+
+        drop.material.opacity=
+          Math.max(0,arc*0.68);
+      }
 
       const scale=now-recentHit<200
-        ? 1+Math.sin(
-            (now-recentHit)*.055
-          )*.015
+        ? 1+Math.sin((now-recentHit)*0.055)*0.015
         : 1;
 
       whale.root.scale.setScalar(scale);
