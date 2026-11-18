@@ -3,6 +3,12 @@ import express from 'express';
 import { createServer } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import crypto from 'node:crypto';
+import {
+  mountAdmin,
+  isBlocked,
+  getClientIP,
+  adminState
+} from './admin.js';
 
 const app = express();
 
@@ -50,8 +56,8 @@ const history = [];
 // ========================================
 // 실시간 마법 전투 규칙
 // HP 100 / 마법 1회 명중 시 HP -1
-// 명중은 서버에서 판정한다.
 // ========================================
+
 const MAX_HP = 100;
 const MAGIC_SPEED = 13;
 const MAGIC_LIFETIME = 1100;
@@ -99,7 +105,6 @@ function resetChatAtKoreanMidnight() {
   return true;
 }
 
-// 자정 경과 후 최대 1초 내 초기화
 setInterval(
   resetChatAtKoreanMidnight,
   1000
@@ -174,12 +179,33 @@ function presence() {
 }
 
 // ========================================
+// 어드민 기능 등록
+// ========================================
+
+mountAdmin(app, {
+  clients,
+  votes,
+  history,
+  magicShots,
+  send,
+  broadcast,
+  presence
+});
+
+// ========================================
 // WebSocket 멀티플레이 서버
 // ========================================
 
 wss.on('connection', (ws, req) => {
 
+  // 관리자가 차단한 IP는 재입장 제한
+  if (isBlocked(req)) {
+    ws.close(4003, 'Temporarily blocked');
+    return;
+  }
+
   const p = {
+    clientIP: getClientIP(req),
     joinedAt: Date.now(),
 
     id: crypto.randomUUID(),
@@ -201,7 +227,6 @@ wss.on('connection', (ws, req) => {
     lastChat: 0,
     lastMove: 0,
 
-    // 마법 연속 공격 간격 및 체력
     lastMagic: 0,
     hp: MAX_HP
   };
@@ -247,8 +272,6 @@ wss.on('connection', (ws, req) => {
 
     if (m.type === 'join') {
 
-      // HP가 0이면 동일 연결에서 부활할 수 없다.
-      // 사망 후 새 WebSocket으로 재입장해야 한다.
       if (p.hp <= 0) {
         return;
       }
@@ -267,8 +290,6 @@ wss.on('connection', (ws, req) => {
 
       p.ready = true;
 
-      // 프로필을 수정하거나 join 메시지가 반복돼도
-      // 기존 HP는 초기화하지 않는다.
       send(ws, {
         type: 'hp',
         hp: p.hp,
@@ -348,21 +369,25 @@ wss.on('connection', (ws, req) => {
 
     if (m.type === 'magic') {
 
+      // 관리자가 마법 공격을 중단한 경우
+      if (!adminState.magicEnabled) {
+        return;
+      }
+
       const now = Date.now();
 
-      // A키를 누르고 있으면 약 0.2초마다 발사
-      if (now - p.lastMagic < MAGIC_FIRE_INTERVAL) {
+      if (
+        now - p.lastMagic <
+        MAGIC_FIRE_INTERVAL
+      ) {
         return;
       }
 
       p.lastMagic = now;
 
-      // 서버에 저장된 캐릭터 위치와 방향만 사용한다.
-      // 클라이언트가 명중 여부나 데미지를 조작할 수 없다.
       const dirX = Math.sin(p.direction);
       const dirZ = Math.cos(p.direction);
 
-      // 각 마법탄에 고유 ID를 부여한다.
       const shotId = crypto.randomUUID();
 
       magicShots.push({
@@ -378,7 +403,6 @@ wss.on('connection', (ws, req) => {
       });
 
       const magicEvent = {
-
         type: 'magic',
 
         shotId,
@@ -396,8 +420,6 @@ wss.on('connection', (ws, req) => {
         time: now
       };
 
-      // 발사자 포함 전원에게 동일한 마법탄 ID를 전송한다.
-      // 서버에서 승인한 마법탄만 화면에 생성한다.
       broadcast(magicEvent);
 
       return;
@@ -408,6 +430,11 @@ wss.on('connection', (ws, req) => {
     // ====================================
 
     if (m.type === 'chat') {
+
+      // 관리자가 일반 채팅을 중단한 경우
+      if (!adminState.chatEnabled) {
+        return;
+      }
 
       resetChatAtKoreanMidnight();
 
@@ -426,7 +453,6 @@ wss.on('connection', (ws, req) => {
       p.lastChat = now;
 
       const item = {
-
         id: crypto.randomUUID(),
 
         senderId: p.id,
@@ -485,7 +511,6 @@ wss.on('connection', (ws, req) => {
 
       return;
     }
-
   });
 
   // ======================================
@@ -523,13 +548,10 @@ wss.on('connection', (ws, req) => {
       err.message
     );
   });
-
 });
 
 // ========================================
 // 마법 명중 판정 및 HP 실시간 동기화
-// 서버에서 40ms 간격으로 마법탄을 이동시킨다.
-// 각 마법탄은 최대 1명에게 HP 1 피해를 준다.
 // ========================================
 
 function updateMagicCollisions() {
@@ -537,9 +559,7 @@ function updateMagicCollisions() {
   const now = Date.now();
 
   const activePlayers = [...clients.entries()]
-    .filter(([, p]) =>
-      p.ready && p.hp > 0
-    );
+    .filter(([, p]) => p.ready && p.hp > 0);
 
   for (
     let i = magicShots.length - 1;
@@ -549,7 +569,6 @@ function updateMagicCollisions() {
 
     const shot = magicShots[i];
 
-    // 발사자가 퇴장했거나 탄의 수명이 끝났으면 제거
     if (
       !shot.owner.ready ||
       now - shot.born > MAGIC_LIFETIME
@@ -572,23 +591,22 @@ function updateMagicCollisions() {
     const startZ = shot.z;
 
     const endX =
-      startX + shot.dirX * MAGIC_SPEED * dt;
+      startX +
+      shot.dirX * MAGIC_SPEED * dt;
 
     const endZ =
-      startZ + shot.dirZ * MAGIC_SPEED * dt;
+      startZ +
+      shot.dirZ * MAGIC_SPEED * dt;
 
     const dx = endX - startX;
     const dz = endZ - startZ;
 
     const lengthSq = dx * dx + dz * dz;
 
-    // 같은 순간 여러 캐릭터와 충돌해도
-    // 가장 먼저 닿는 캐릭터 한 명에게만 피해를 준다.
     let nearest = null;
 
     for (const [targetWs, target] of activePlayers) {
 
-      // 자신은 자신의 마법탄에 맞지 않는다.
       if (
         !target.ready ||
         target.hp <= 0 ||
@@ -597,7 +615,6 @@ function updateMagicCollisions() {
         continue;
       }
 
-      // 캐릭터 몸통 높이와 마법탄의 높이 비교
       if (
         Math.abs(
           shot.y - (target.y + 1.0)
@@ -606,8 +623,6 @@ function updateMagicCollisions() {
         continue;
       }
 
-      // 마법탄이 프레임 사이에 캐릭터를
-      // 통과하지 않도록 선분 충돌 판정
       const t = lengthSq > 0
         ? Math.max(
             0,
@@ -633,10 +648,7 @@ function updateMagicCollisions() {
         continue;
       }
 
-      if (
-        !nearest ||
-        t < nearest.t
-      ) {
+      if (!nearest || t < nearest.t) {
         nearest = {
           targetWs,
           target,
@@ -648,10 +660,8 @@ function updateMagicCollisions() {
     }
 
     if (!nearest) {
-
       shot.x = endX;
       shot.z = endZ;
-
       continue;
     }
 
@@ -666,23 +676,19 @@ function updateMagicCollisions() {
       impactZ
     } = nearest;
 
-    // 캐릭터 몸에 맞은 마법탄은 즉시 제거한다.
     magicShots.splice(i, 1);
 
-    // 실제 HP 감소는 서버에서만 계산한다.
     target.hp = Math.max(
       0,
       target.hp - 1
     );
 
-    // 맞은 본인의 HP HUD 갱신
     send(targetWs, {
       type: 'hp',
       hp: target.hp,
       maxHp: MAX_HP
     });
 
-    // 모든 참가자의 캐릭터 HP 바 갱신
     broadcast({
       type: 'player_hp',
       id: target.id,
@@ -690,43 +696,26 @@ function updateMagicCollisions() {
       maxHp: MAX_HP
     });
 
-    // ====================================
-    // 신규 피격 이벤트
-    // 화면에 마법탄 소멸, 충격파, 불꽃,
-    // 캐릭터 움찔 및 -1 데미지 표시
-    // ====================================
-
+    // 마법탄 소멸 + 피격 액션 동기화
     broadcast({
       type: 'magic_hit',
 
-      // 제거해야 할 마법탄의 고유 번호
       shotId: shot.id,
 
-      // 공격을 맞은 참가자
       targetId: target.id,
 
-      // 실제 서버 명중 위치
       x: impactX,
       y: shot.y,
       z: impactZ,
 
-      // 공격 진행 방향
-      // 피격 시 몸이 밀리는 방향에 사용
       dirX: shot.dirX,
       dirZ: shot.dirZ,
 
-      // 남은 체력
       hp: target.hp
     });
 
-    // ====================================
-    // HP 0: 사망 처리
-    // ====================================
-
     if (target.hp === 0) {
 
-      // 즉시 접속 명단에서 제외하고
-      // 공격과 이동을 차단한다.
       target.ready = false;
 
       send(targetWs, {
@@ -735,7 +724,6 @@ function updateMagicCollisions() {
         hp: 0
       });
 
-      // 4001: HP 소진으로 인한 정상적인 게임 퇴장
       targetWs.close(
         4001,
         'HP depleted'
@@ -746,7 +734,6 @@ function updateMagicCollisions() {
   }
 }
 
-// 40ms마다 실제 충돌 판정
 setInterval(
   updateMagicCollisions,
   40
@@ -846,7 +833,6 @@ app.get('/api/price/:symbol', async (req, res) => {
       error: 'Price unavailable'
     });
   }
-
 });
 
 // ========================================
@@ -885,7 +871,8 @@ app.get('/api/candles/:symbol', async (req, res) => {
     });
   }
 
-  const key = `${symbol}:${granularity}:${limit}`;
+  const key =
+    `${symbol}:${granularity}:${limit}`;
 
   try {
 
@@ -952,7 +939,8 @@ app.get('/api/candles/:symbol', async (req, res) => {
             close: Number(a[4])
           }))
           .filter(c =>
-            Object.values(c).every(Number.isFinite)
+            Object.values(c)
+              .every(Number.isFinite)
           )
           .sort((a, b) =>
             a.time - b.time
@@ -983,7 +971,6 @@ app.get('/api/candles/:symbol', async (req, res) => {
       error: 'Candles unavailable'
     });
   }
-
 });
 
 // ========================================
