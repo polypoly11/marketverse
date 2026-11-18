@@ -334,6 +334,7 @@ let moderationStopped=false;function connect(){if(moderationStopped)return;const
   if(m.type==='chat'){addMessage(m.item);showBubble(m.item);}
   if(m.type==='votes')updateVotes(m.votes);
   if(m.type==='chat_deleted'){document.querySelectorAll('#messages .msg').forEach(el=>{if(el.dataset.messageId===m.id)el.remove();});deleteBubbleByMessage(m.id);}
+  if(m.type==='chat_reset'){$('messages').replaceChildren();for(const id of [...activeBubbles.keys()])removeBubble(id);}
   if(m.type==='notices')renderNotices(m.notices||[]);
   if(m.type==='moderation'){moderationStopped=true;alert(m.message||'관리자에 의해 접속이 종료되었습니다.');socket.close();}
  };
