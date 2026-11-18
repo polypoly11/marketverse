@@ -181,3 +181,25 @@ main {
   z-index: 10;
   border-radius: 8px 8px 0 0;
 }
+
+/* 경제 캘린더 상단 로고·현재시간·날짜 영역 숨김 */
+.econ-frame {
+  position: relative;
+  overflow: hidden;
+  background: #0b1726;
+}
+
+/* 기존에 추가한 남색 덮개 제거 */
+.econ-frame::after {
+  display: none !important;
+}
+
+/* 위젯 상단 약 80px을 잘라내고 표를 위로 올리기 */
+.econ-frame iframe {
+  display: block;
+  width: 100%;
+  height: calc(100% + 80px);
+  margin-top: -80px;
+  border: 0;
+  background: #ffffff;
+}
