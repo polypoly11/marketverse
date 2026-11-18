@@ -2,49 +2,10 @@ import express from 'express';
 import { createServer } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import crypto from 'node:crypto';
-import { OAuth2Client } from 'google-auth-library';
 
 const app = express();
 app.disable('x-powered-by');
 app.use(express.json({limit:'12kb'}));
-const GOOGLE_CLIENT_ID=process.env.GOOGLE_CLIENT_ID||'';
-const ADMIN_EMAILS=(process.env.ADMIN_EMAILS||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
-const SESSION_SECRET=process.env.SESSION_SECRET||'';
-const google=new OAuth2Client(GOOGLE_CLIENT_ID);
-const sessions=new Map();
-const bans=new Map();
-const notices=[];
-const audit=[];
-function logAction(action,detail,email){audit.unshift({time:Date.now(),action,detail,email});if(audit.length>100)audit.pop();}
-function cookies(req){return Object.fromEntries((req.headers.cookie||'').split(';').map(x=>x.trim()).filter(x=>x.includes('=')).map(x=>{const i=x.indexOf('=');return [x.slice(0,i),x.slice(i+1)];}));}
-function cookie(name,value,maxAge,req){const secure=req.secure||req.headers['x-forwarded-proto']==='https';return `${name}=${value}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure?'; Secure':''}`;}
-function guestId(req,res){let id=cookies(req).jmc_guest;if(!/^[a-f0-9]{32}$/.test(id||'')){id=crypto.randomBytes(16).toString('hex');res.append('Set-Cookie',cookie('jmc_guest',id,60*60*24*365,req));}return id;}
-function adminSession(req){const id=cookies(req).jmc_admin;const sess=id&&sessions.get(id);if(!sess)return null;if(sess.expires<Date.now()){sessions.delete(id);return null;}return sess;}
-function requireAdmin(req,res,next){const sess=adminSession(req);if(!sess)return res.status(401).json({error:'관리자 로그인이 필요합니다.'});req.admin=sess;next();}
-function sameOrigin(req,res,next){const origin=req.headers.origin;const host=req.headers.host;if(!origin||!host){return res.status(403).json({error:'요청 출처를 확인할 수 없습니다.'});}try{if(new URL(origin).host!==host)return res.status(403).json({error:'잘못된 요청 출처입니다.'});}catch{return res.status(403).json({error:'잘못된 요청 출처입니다.'});}next();}
-app.get('/api/admin/config',(_req,res)=>res.json({clientId:GOOGLE_CLIENT_ID,configured:Boolean(GOOGLE_CLIENT_ID&&ADMIN_EMAILS.length&&SESSION_SECRET)}));
-app.post('/api/admin/login',sameOrigin,async(req,res)=>{
- if(!GOOGLE_CLIENT_ID||!ADMIN_EMAILS.length||SESSION_SECRET.length<32)return res.status(503).json({error:'서버의 Google 관리자 환경변수를 설정하세요.'});
- try{
-  const credential=String(req.body?.credential||'');if(credential.length>10000)return res.status(400).json({error:'잘못된 인증 정보'});
-  const ticket=await google.verifyIdToken({idToken:credential,audience:GOOGLE_CLIENT_ID});
-  const user=ticket.getPayload();const email=String(user.email||'').toLowerCase();
-  if(!user.email_verified||!ADMIN_EMAILS.includes(email))return res.status(403).json({error:'관리자로 등록된 Google 계정이 아닙니다.'});
-  const sid=crypto.randomBytes(32).toString('hex');sessions.set(sid,{email,expires:Date.now()+8*60*60*1000});
-  res.append('Set-Cookie',cookie('jmc_admin',sid,8*60*60,req));logAction('login','Google 로그인',email);res.json({ok:true,email});
- }catch(e){res.status(401).json({error:'Google 인증에 실패했습니다.'});}
-});
-app.get('/api/admin/me',requireAdmin,(req,res)=>res.json({email:req.admin.email}));
-app.post('/api/admin/logout',sameOrigin,requireAdmin,(req,res)=>{const sid=cookies(req).jmc_admin;sessions.delete(sid);res.append('Set-Cookie',cookie('jmc_admin','',0,req));res.json({ok:true});});
-app.use('/api/admin', (req,res,next)=>{if(req.method!=='GET')return sameOrigin(req,res,next);next();},requireAdmin);
-app.get('/api/admin/state',(req,res)=>{resetChatAtKoreanMidnight();res.json({players:[...clients.values()].filter(p=>p.ready).map(p=>({id:p.id,name:p.name,animal:p.animal,joinedAt:p.joinedAt})),messages:history,notices,audit:audit.slice(0,40)});});
-app.delete('/api/admin/messages/:id',(req,res)=>{const i=history.findIndex(x=>x.id===req.params.id);if(i<0)return res.status(404).json({error:'메시지가 없습니다.'});history.splice(i,1);broadcast({type:'chat_deleted',id:req.params.id});logAction('delete_chat',req.params.id,req.admin.email);res.json({ok:true});});
-app.post('/api/admin/users/:id/kick',(req,res)=>{const entry=[...clients.entries()].find(([,p])=>p.id===req.params.id&&p.ready);if(!entry)return res.status(404).json({error:'접속자가 없습니다.'});const [ws,player]=entry;send(ws,{type:'moderation',message:'관리자에 의해 퇴장 처리되었습니다.'});ws.close(4001,'Kicked');logAction('kick',player.name,req.admin.email);res.json({ok:true});});
-app.post('/api/admin/users/:id/ban',(req,res)=>{const entry=[...clients.entries()].find(([,p])=>p.id===req.params.id&&p.ready);if(!entry)return res.status(404).json({error:'접속자가 없습니다.'});const [ws,player]=entry;bans.set(player.guestId,Date.now()+60*60*1000);send(ws,{type:'moderation',message:'관리자에 의해 1시간 동안 접속이 제한되었습니다.'});ws.close(4003,'Temporarily banned');logAction('ban_1h',player.name,req.admin.email);res.json({ok:true});});
-app.post('/api/admin/notices',(req,res)=>{const text=clean(req.body?.text,500);if(!text)return res.status(400).json({error:'공지 내용을 입력하세요.'});const item={id:crypto.randomUUID(),text,time:Date.now()};notices.unshift(item);if(notices.length>30)notices.pop();broadcast({type:'notices',notices});logAction('notice_create',item.id,req.admin.email);res.json({ok:true,item});});
-app.delete('/api/admin/notices/:id',(req,res)=>{const i=notices.findIndex(n=>n.id===req.params.id);if(i<0)return res.status(404).json({error:'공지가 없습니다.'});notices.splice(i,1);broadcast({type:'notices',notices});logAction('notice_delete',req.params.id,req.admin.email);res.json({ok:true});});
-app.get('/api/notices',(_req,res)=>res.json({notices}));
-app.use((req,res,next)=>{if(req.path==='/'||req.path==='/index.html')guestId(req,res);next();});
 app.use(express.static('public'));
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: '/ws' });
@@ -54,7 +15,7 @@ const clients = new Map();
 const votes = { long: 0, short: 0 };
 const history = [];
 // 한국시간(Asia/Seoul) 기준 날짜가 바뀌면 채팅만 초기화한다.
-// 공지(notices)와 관리자 활동 기록(audit)은 건드리지 않는다.
+// 다른 라운지 상태(접속자·투표 등)는 유지한다.
 const seoulDate = () => new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit'
 }).format(new Date());
@@ -81,14 +42,10 @@ function presence() {
   broadcast({type:'presence',count:players.length,players});
 }
 wss.on('connection', (ws,req) => {
-  const guest=cookies(req).jmc_guest||'';
-  if(!/^[a-f0-9]{32}$/.test(guest)){send(ws,{type:'moderation',message:'새로고침 후 다시 입장해주세요.'});ws.close(4002,'Missing guest cookie');return;}
-  if((bans.get(guest)||0)>Date.now()){send(ws,{type:'moderation',message:'관리자에 의해 일시적으로 접속이 제한되었습니다.'});ws.close(4003,'Banned');return;}
-
-  const p = {guestId:guest,joinedAt:Date.now(),id:crypto.randomUUID(),name:'',animal:'seal',x:0,y:0,z:-8,direction:Math.PI,seated:false,ready:false,vote:null,lastChat:0,lastMove:0};
+  const p = {joinedAt:Date.now(),id:crypto.randomUUID(),name:'',animal:'seal',x:0,y:0,z:-8,direction:Math.PI,seated:false,ready:false,vote:null,lastChat:0,lastMove:0};
   clients.set(ws,p);
   resetChatAtKoreanMidnight();
-  send(ws,{type:'welcome',id:p.id,votes:{...votes},history,notices});
+  send(ws,{type:'welcome',id:p.id,votes:{...votes},history});
   presence();
   ws.on('message',raw => {
     if (raw.length > 2048) return;
