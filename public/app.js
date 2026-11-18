@@ -1813,8 +1813,8 @@ function animate(now){
       Number(held('s')||held('arrowdown'));
 
     const s =
-      Number(held('d')||held('arrowright'))-
-      Number(held('a')||held('arrowleft'));
+      Number(held('d') || held('arrowright')) -
+      Number(held('arrowleft'));
 
     if(
       (f||s) &&
