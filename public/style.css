@@ -225,3 +225,25 @@ main {
 .econ-frame::after {
   display: none !important;
 }
+
+aside {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100%;
+    gap: 12px;
+  }
+
+  /* 메타버스 제목 크기 조정 */
+  .scene-head {
+    padding: 14px !important;
+  }
+
+  .scene-head h1 {
+    font-size: 23px !important;
+  }
+
+  /* 가로 스크롤 방지 */
+  body {
+    overflow-x: hidden;
+  }
+}
