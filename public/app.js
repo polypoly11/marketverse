@@ -64,7 +64,7 @@ const isMobileDevice = window.matchMedia(
 
 const renderPixelRatio = Math.min(
   window.devicePixelRatio || 1,
-  isMobileDevice ? 1 : 2
+  isMobileDevice ? 1.75 : 2
 );
 
 const CHARACTER_SCALE = 0.7;
