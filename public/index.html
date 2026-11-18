@@ -58,6 +58,116 @@
       }
     }
   </style>
+
+  <!-- 모바일 마법 / 점프 / 앉기 버튼 스타일 -->
+  <style>
+    #mobile-actions {
+      display: none;
+      position: absolute;
+      right: 12px;
+      bottom: 16px;
+      z-index: 30;
+
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .mobile-action-btn {
+      width: 64px;
+      height: 54px;
+
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+
+      background: rgba(12, 29, 46, 0.93);
+      border: 1px solid #d4b780;
+      border-radius: 12px;
+
+      color: #f5dfb4;
+
+      padding: 4px;
+
+      cursor: pointer;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+
+      box-shadow: 0 4px 15px rgba(0,0,0,0.35);
+    }
+
+    .mobile-action-btn strong {
+      font-size: 16px;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .mobile-action-btn small {
+      font-size: 10px;
+      color: #a8bfd2;
+      line-height: 1;
+    }
+
+    .mobile-action-btn[data-action="magic"] {
+      border-color: #b98aff;
+    }
+
+    .mobile-action-btn[data-action="magic"] strong {
+      color: #d9bcff;
+    }
+
+    .mobile-action-btn.pressed,
+    .mobile-action-btn:active {
+      background: #7551a4;
+      border-color: #e6cbff;
+      color: #ffffff;
+
+      box-shadow:
+        0 0 12px rgba(162, 103, 255, 0.8),
+        0 0 24px rgba(162, 103, 255, 0.35);
+    }
+
+    .mobile-action-btn.pressed strong,
+    .mobile-action-btn.pressed small {
+      color: white;
+    }
+
+    @media screen and (max-width: 980px),
+           (pointer: coarse) {
+
+      #mobile-actions {
+        display: flex !important;
+      }
+    }
+
+    @media screen and (max-width: 600px) {
+
+      #mobile-actions {
+        right: 8px;
+        bottom: 12px;
+        gap: 7px;
+      }
+
+      .mobile-action-btn {
+        width: 56px;
+        height: 50px;
+      }
+
+      .mobile-action-btn strong {
+        font-size: 14px;
+      }
+
+      .mobile-action-btn small {
+        font-size: 9px;
+      }
+    }
+  </style>
 </head>
 
 <body>
@@ -93,7 +203,7 @@
           </p>
 
           <p>
-            <p>점프 : 스페이스 / 앉기 C</p>
+            이동 : 방향키 / 점프 : 스페이스 / 앉기 : C / 마법 : A
           </p>
         </div>
 
@@ -103,7 +213,10 @@
       <div id="scene">
 
         <!-- 모바일 이동 방향키 -->
-        <div id="mobile-controls" aria-label="모바일 이동 방향키">
+        <div
+          id="mobile-controls"
+          aria-label="모바일 이동 방향키"
+        >
 
           <button
             class="move-btn up"
@@ -114,7 +227,10 @@
 
           <button
             class="move-btn left"
-            data-key="arrowleft" type="button">◀</button>
+            data-key="arrowleft"
+            type="button"
+            aria-label="왼쪽 이동"
+          >◀</button>
 
           <button
             class="move-btn down"
@@ -131,6 +247,48 @@
           >▶</button>
 
         </div>
+
+        <!-- 모바일 액션 버튼 -->
+        <div
+          id="mobile-actions"
+          aria-label="모바일 캐릭터 액션"
+        >
+
+          <!-- A : 마법 공격 -->
+          <button
+            class="mobile-action-btn"
+            data-action="magic"
+            type="button"
+            aria-label="마법 공격"
+          >
+            <strong>A</strong>
+            <small>마법</small>
+          </button>
+
+          <!-- SPACE : 점프 -->
+          <button
+            class="mobile-action-btn"
+            data-action="jump"
+            type="button"
+            aria-label="점프"
+          >
+            <strong>SPACE</strong>
+            <small>점프</small>
+          </button>
+
+          <!-- C : 앉기 -->
+          <button
+            class="mobile-action-btn"
+            data-action="sit"
+            type="button"
+            aria-label="앉기"
+          >
+            <strong>C</strong>
+            <small>앉기</small>
+          </button>
+
+        </div>
+
       </div>
 
       <button
@@ -153,7 +311,10 @@
     <aside>
 
       <!-- 경제 캘린더: PC에만 표시 -->
-      <section class="panel econ-panel" id="econ-panel">
+      <section
+        class="panel econ-panel"
+        id="econ-panel"
+      >
 
         <div class="panel-head">
           <h2>🇺🇸 US ECONOMIC CALENDAR</h2>
@@ -244,11 +405,20 @@
           <span>LONG / SHORT</span>
         </div>
 
-        <p class="sub">지금 시장 방향은?</p>
+        <p class="sub">
+          지금 시장 방향은?
+        </p>
 
         <div class="vote-buttons">
-          <button id="long" type="button">▲ LONG</button>
-          <button id="short" type="button">▼ SHORT</button>
+          <button
+            id="long"
+            type="button"
+          >▲ LONG</button>
+
+          <button
+            id="short"
+            type="button"
+          >▼ SHORT</button>
         </div>
 
         <div class="bar">
@@ -271,7 +441,9 @@
 
     <div class="profile-card">
 
-      <span class="eyebrow">WELCOME TO JMC</span>
+      <span class="eyebrow">
+        WELCOME TO JMC
+      </span>
 
       <h2>나만의 3D 동물 캐릭터</h2>
 
@@ -280,7 +452,9 @@
         미리보기 캐릭터를 손가락이나 마우스로 돌려볼 수 있습니다.
       </p>
 
-      <label for="nickname">닉네임</label>
+      <label for="nickname">
+        닉네임
+      </label>
 
       <input
         id="nickname"
@@ -291,21 +465,32 @@
       >
 
       <div class="preview-wrap">
+
         <div id="animal-preview"></div>
+
         <span class="preview-hint">
           ↔ 드래그하여 360° 회전
         </span>
+
       </div>
 
-      <div id="selected-animal-name">아기물개</div>
+      <div id="selected-animal-name">
+        아기물개
+      </div>
 
       <label class="animal-title">
         동물 캐릭터 15종
       </label>
 
-      <div id="animal-grid" class="animal-grid"></div>
+      <div
+        id="animal-grid"
+        class="animal-grid"
+      ></div>
 
-      <div id="profile-error" class="form-error"></div>
+      <div
+        id="profile-error"
+        class="form-error"
+      ></div>
 
       <button
         id="enter-lounge"
@@ -325,6 +510,7 @@
       </button>
 
     </div>
+
   </div>
 
   <!-- 차트 상세 화면 -->
@@ -332,9 +518,14 @@
 
     <div class="modal-card">
 
-      <button id="close" type="button">✕</button>
+      <button
+        id="close"
+        type="button"
+      >✕</button>
 
-      <span class="eyebrow">ASSET DETAIL</span>
+      <span class="eyebrow">
+        ASSET DETAIL
+      </span>
 
       <h2 id="detail-name"></h2>
 
@@ -342,15 +533,25 @@
 
       <div class="chart-toolbar">
 
-        <button data-range="1h" type="button">
+        <button
+          data-range="1h"
+          type="button"
+        >
           1시간
         </button>
 
-        <button data-range="1d" class="selected" type="button">
+        <button
+          data-range="1d"
+          class="selected"
+          type="button"
+        >
           1일
         </button>
 
-        <button data-range="1w" type="button">
+        <button
+          data-range="1w"
+          type="button"
+        >
           1주
         </button>
 
@@ -369,13 +570,161 @@
       </p>
 
     </div>
+
   </div>
 
+  <!-- 경제 캘린더 설정 -->
   <script src="/investing-widget.js"></script>
+
+  <!-- 기존 메타버스 기능 -->
   <script
     type="module"
     src="/app.js?v=mobile-rescue-20261118-3"
   ></script>
+
+  <!-- ======================================
+       모바일 액션 버튼 키보드 연결
+       ====================================== -->
+  <script>
+    (function () {
+
+      const mobileActionKeys = {
+        magic: {
+          key: 'a',
+          code: 'KeyA'
+        },
+
+        jump: {
+          key: ' ',
+          code: 'Space'
+        },
+
+        sit: {
+          key: 'c',
+          code: 'KeyC'
+        }
+      };
+
+      const activeActions = new Set();
+
+      function dispatchActionKey(action, eventType) {
+
+        const config = mobileActionKeys[action];
+
+        if (!config) return;
+
+        const keyboardEvent = new KeyboardEvent(
+          eventType,
+          {
+            key: config.key,
+            code: config.code,
+            bubbles: true,
+            cancelable: true
+          }
+        );
+
+        window.dispatchEvent(keyboardEvent);
+      }
+
+      const buttons = document.querySelectorAll(
+        '#mobile-actions .mobile-action-btn'
+      );
+
+      buttons.forEach(function (button) {
+
+        const action = button.dataset.action;
+
+        // 버튼 누르기
+        button.addEventListener(
+          'pointerdown',
+          function (event) {
+
+            event.preventDefault();
+            event.stopPropagation();
+
+            // 채팅 입력창의 포커스 해제
+            const focused = document.activeElement;
+
+            if (
+              focused &&
+              (
+                focused.tagName === 'INPUT' ||
+                focused.tagName === 'TEXTAREA'
+              )
+            ) {
+              focused.blur();
+            }
+
+            if (activeActions.has(action)) {
+              return;
+            }
+
+            activeActions.add(action);
+
+            button.classList.add('pressed');
+
+            if (button.setPointerCapture) {
+              button.setPointerCapture(event.pointerId);
+            }
+
+            // 실제 키보드의 키를 누른 것처럼 전달
+            dispatchActionKey(action, 'keydown');
+          }
+        );
+
+        // 버튼 손 떼기
+        function releaseAction(event) {
+
+          if (event) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+
+          if (!activeActions.has(action)) {
+            return;
+          }
+
+          activeActions.delete(action);
+
+          button.classList.remove('pressed');
+
+          dispatchActionKey(action, 'keyup');
+        }
+
+        button.addEventListener(
+          'pointerup',
+          releaseAction
+        );
+
+        button.addEventListener(
+          'pointercancel',
+          releaseAction
+        );
+
+        button.addEventListener(
+          'lostpointercapture',
+          releaseAction
+        );
+
+      });
+
+      // 브라우저가 비활성화되면 모든 버튼 해제
+      window.addEventListener('blur', function () {
+
+        for (const action of activeActions) {
+          dispatchActionKey(action, 'keyup');
+        }
+
+        activeActions.clear();
+
+        buttons.forEach(function (button) {
+          button.classList.remove('pressed');
+        });
+
+      });
+
+    })();
+  </script>
 
 </body>
 </html>
