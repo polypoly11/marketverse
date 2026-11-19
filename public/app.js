@@ -902,11 +902,37 @@ function installSceneLiveChat() {
   toggle.textContent = '펼치기 ▲';
   panel.appendChild(toggle);
 
-  toggle.addEventListener('click',()=>{
-    const collapsed = panel.classList.toggle('jmc-chat-collapsed');
-    toggle.textContent = collapsed ? '펼치기 ▲' : '접기 ▼';
-    toggle.setAttribute('aria-expanded',String(!collapsed));
+
+let chatStage = 0;
+
+toggle.addEventListener('click', () => {
+  chatStage = (chatStage + 1) % 3;
+
+  panel.classList.toggle(
+    'jmc-chat-collapsed',
+    chatStage === 0
+  );
+
+  panel.classList.toggle(
+    'jmc-chat-large',
+    chatStage === 2
+  );
+
+  toggle.textContent =
+    chatStage === 0 ? '펼치기 ▲' :
+    chatStage === 1 ? '더 펼치기 ▲' :
+    '접기 ▼';
+
+  toggle.setAttribute(
+    'aria-expanded',
+    String(chatStage !== 0)
+  );
+
+  requestAnimationFrame(() => {
+    messages.scrollTop = messages.scrollHeight;
   });
+});
+
 
   const style = document.createElement('style');
   style.id = 'jmc-scene-chat-style';
@@ -972,9 +998,10 @@ function installSceneLiveChat() {
       overflow-wrap:normal !important;
     }
 
-    #scene > .jmc-scene-chat #messages > .msg:nth-last-child(n+4) {
-      display:none !important;
-    }
+#scene > .jmc-scene-chat:not(.jmc-chat-large)
+#messages > .msg:nth-last-child(n+4) {
+  display:none !important;
+}
 
     #scene > .jmc-scene-chat #messages > .msg b {
       color:#9ce8ca !important;
@@ -1066,9 +1093,29 @@ function installSceneLiveChat() {
       display:none !important;
     }
 
-    #scene > .jmc-scene-chat.jmc-chat-collapsed #chat-form {
-      display:none !important;
-    }
+/* 채팅 2차 확대: 약 10줄 높이 */
+#scene > .jmc-scene-chat.jmc-chat-large #messages {
+  height:min(245px,45dvh) !important;
+  min-height:min(245px,45dvh) !important;
+  max-height:min(245px,45dvh) !important;
+
+  overflow-x:hidden !important;
+  overflow-y:auto !important;
+
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-y;
+}
+
+/* 모바일: 큰 채팅창을 볼 때 조작 버튼 임시 숨김 */
+@media (max-width:980px),(pointer:coarse) {
+  #scene:has(> .jmc-scene-chat.jmc-chat-large)
+  #mobile-controls,
+  #scene:has(> .jmc-scene-chat.jmc-chat-large)
+  #mobile-actions {
+    display:none !important;
+  }
+}
 
 @media (max-width:980px),(pointer:coarse) {
 #scene > .jmc-scene-chat {
