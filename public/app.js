@@ -2741,60 +2741,102 @@ requestAnimationFrame(updateMagic);
 // 전투 HP HUD / 사망 팝업 / 입장 화면으로 자동 복귀
 // ====================================================
 const hpHud=document.createElement('div');
-hpHud.id='jmc-hp-hud';
+const hpHud = document.createElement('div');
+hpHud.id = 'jmc-hp-hud';
 
-hpHud.style.cssText=`
+hpHud.style.cssText = `
   position:absolute;
-  z-index:20;
+  z-index:25;
   left:12px;
   top:12px;
-  padding:9px 12px;
-  width:min(185px,42%);
+  width:62px;
+  height:min(230px,38%);
+  min-height:145px;
+  padding:9px 5px;
   box-sizing:border-box;
-  border:1px solid rgba(212,183,128,.7);
-  border-radius:10px;
+  border:1px solid rgba(212,183,128,.75);
+  border-radius:14px;
   background:rgba(7,20,33,.91);
   color:white;
   pointer-events:none;
-  font:700 14px Arial,sans-serif;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:7px;
+  font:700 11px Arial,sans-serif;
 `;
 
-hpHud.innerHTML=`
-  <div style="display:flex;justify-content:space-between;gap:8px">
-    <span>❤️ HP</span>
-    <span id="jmc-hp-text">100 / 100</span>
-  </div>
-  <div style="height:9px;margin-top:7px;background:#4e263d;border-radius:6px;overflow:hidden">
-    <div id="jmc-hp-fill" style="height:100%;width:100%;background:#43de9a;transition:width .15s"></div>
+hpHud.innerHTML = `
+  <div style="
+    font-size:12px;
+    font-weight:800;
+    white-space:nowrap;
+  ">❤️ HP</div>
+
+  <div id="jmc-hp-text" style="
+    font-size:11px;
+    color:white;
+    white-space:nowrap;
+  ">100/100</div>
+
+  <div style="
+    position:relative;
+    width:22px;
+    flex:1;
+    min-height:65px;
+    background:#4e263d;
+    border:1px solid rgba(255,255,255,.25);
+    border-radius:12px;
+    overflow:hidden;
+  ">
+    <div id="jmc-hp-fill" style="
+      position:absolute;
+      left:0;
+      bottom:0;
+      width:100%;
+      height:100%;
+      background:#43de9a;
+      border-radius:10px;
+      transition:height .2s ease,background-color .2s ease;
+    "></div>
   </div>
 `;
 
 sceneEl.appendChild(hpHud);
 
 function updateHpHud(hp,maxHp=100){
-  const max=Math.max(1,Number(maxHp)||100);
-  const remaining=Math.max(
+  const max = Math.max(1,Number(maxHp)||100);
+
+  const remaining = Math.max(
     0,
     Math.min(max,Number(hp)||0)
   );
 
-  myHp=remaining;
+  myHp = remaining;
 
-  const percent=(remaining/max)*100;
+  const percent = (remaining/max)*100;
 
-  $('jmc-hp-text').textContent=
-    `${remaining} / ${max}`;
+  $('jmc-hp-text').textContent =
+    `${remaining}/${max}`;
 
-  $('jmc-hp-fill').style.width=
+  // HP가 감소하면 세로 체력바가 아래에서부터 줄어듦
+  $('jmc-hp-fill').style.height =
     percent+'%';
 
-  $('jmc-hp-fill').style.background=
-    percent<=25
-      ?'#f16c7c'
-      :percent<=55
-        ?'#f0bc52'
-        :'#43de9a';
+  // 체력에 따라 색상 자동 변경
+  let hpColor;
 
+  if(percent<=25){
+    hpColor = '#f16c7c'; // 빨간색
+  }else if(percent<=50){
+    hpColor = '#f0a43c'; // 주황색
+  }else{
+    hpColor = '#43de9a'; // 초록색
+  }
+
+  $('jmc-hp-fill').style.backgroundColor = hpColor;
+
+  // 캐릭터 머리 위 HP 표시도 기존처럼 갱신
   if(myAvatar){
     setCharacterHpBar(myAvatar,remaining,max);
   }
