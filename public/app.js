@@ -1239,18 +1239,50 @@ sfxButton.onclick=()=>{
 };
 const loungeBadge = document.querySelector('.scene-head .pill');
 
-if (loungeBadge && !isMobileDevice) {
+
+const loungeBadge = document.querySelector('.scene-head .pill');
+const loungeHeader = document.querySelector('.scene-head');
+
+if (isMobileDevice && loungeHeader) {
+
+  // 모바일 효과음 버튼을 메타버스 화면 밖으로 이동
+  loungeHeader.style.flexDirection = 'column';
+  loungeHeader.style.alignItems = 'stretch';
+
+  const sfxRow = document.createElement('div');
+
+  sfxRow.style.cssText = `
+    display:flex;
+    justify-content:flex-end;
+    width:100%;
+    margin-top:4px;
+  `;
+
+  sfxButton.style.position = 'static';
+  sfxButton.style.top = 'auto';
+  sfxButton.style.right = 'auto';
+  sfxButton.style.whiteSpace = 'nowrap';
+  sfxButton.style.flexShrink = '0';
+
+  sfxRow.appendChild(sfxButton);
+  loungeHeader.appendChild(sfxRow);
+
+} else if (loungeBadge) {
+
+  // PC 효과음 버튼 위치는 기존대로 유지
   loungeBadge.style.position = 'relative';
   loungeBadge.appendChild(sfxButton);
 
-  // VIRTUAL LOUNGE 바로 아래에 효과음 버튼 배치
   sfxButton.style.position = 'absolute';
   sfxButton.style.top = 'calc(100% + 8px)';
   sfxButton.style.right = '0';
   sfxButton.style.whiteSpace = 'nowrap';
   sfxButton.style.zIndex = '40';
+
 } else {
+
   sceneEl.appendChild(sfxButton);
+
 }
 
 const scene=new THREE.Scene();
