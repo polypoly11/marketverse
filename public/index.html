@@ -305,6 +305,55 @@
   }
 </style>
 
+
+<!-- 모바일 상단 메뉴 한 줄 정렬 -->
+<style>
+  @media screen and (max-width: 600px) {
+
+    header {
+      padding: 10px 8px !important;
+      gap: 6px !important;
+    }
+
+    /* 왼쪽 JMC 로고 크기 축소 */
+    header .logo {
+      flex: 1 1 auto;
+      min-width: 0;
+      font-size: 12px !important;
+      letter-spacing: 0 !important;
+      line-height: 1.2;
+    }
+
+    /* 모바일에서 작은 영문 설명 숨김 */
+    header .logo small {
+      display: none !important;
+    }
+
+    /* LIVE / 접속자 / 캐릭터 설정 한 줄 */
+    header .top {
+      display: flex !important;
+      flex: 0 0 auto;
+      flex-wrap: nowrap !important;
+      align-items: center !important;
+      gap: 6px !important;
+      font-size: 10px !important;
+      white-space: nowrap !important;
+    }
+
+    header .top span {
+      flex: 0 0 auto;
+      white-space: nowrap !important;
+    }
+
+    header .top button {
+      flex: 0 0 auto;
+      padding: 7px 8px !important;
+      font-size: 10px !important;
+      white-space: nowrap !important;
+    }
+  }
+</style>
+
 </head>
 
 <body>
