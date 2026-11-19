@@ -354,6 +354,59 @@
   }
 </style>
 
+
+<!-- 모바일 채팅창과 조작 버튼 겹침 방지 -->
+<style>
+  @media (max-width: 980px), (pointer: coarse) {
+
+    /* 채팅이 접혀 있을 때 */
+    #scene #mobile-actions {
+      bottom: 60px !important;
+    }
+
+    #scene #mobile-controls {
+      bottom: 2px !important;
+    }
+
+    /* 채팅을 펼쳤을 때: 버튼을 위로 이동 */
+    #scene:has(
+      > .jmc-scene-chat:not(.jmc-chat-collapsed)
+    ) #mobile-actions {
+      bottom: 170px !important;
+    }
+
+    #scene:has(
+      > .jmc-scene-chat:not(.jmc-chat-collapsed)
+    ) #mobile-controls {
+      bottom: 112px !important;
+    }
+
+    /* 채팅창을 크게 펼치면 조작 버튼 임시 숨김 */
+    #scene:has(
+      > .jmc-scene-chat.jmc-chat-large
+    ) #mobile-actions,
+    #scene:has(
+      > .jmc-scene-chat.jmc-chat-large
+    ) #mobile-controls {
+      display: none !important;
+    }
+  }
+
+  /* 작은 스마트폰에서 방향키의 실제 아랫선 보정 */
+  @media (max-width: 600px) {
+
+    #scene #mobile-controls {
+      bottom: 12px !important;
+    }
+
+    #scene:has(
+      > .jmc-scene-chat:not(.jmc-chat-collapsed)
+    ) #mobile-controls {
+      bottom: 122px !important;
+    }
+  }
+</style>
+
 </head>
 
 <body>
