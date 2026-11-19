@@ -194,7 +194,7 @@ mountAdmin(app, {clients, votes, history, magicShots, send, broadcast, presence,
 const BOSS_TAIL_INTERVAL = 10000;
 const BOSS_TAIL_WARNING = 1400;
 const BOSS_TAIL_DAMAGE = 40;
-
+const BOSS_TAIL_RADIUS = 8;
 let tailRaidId = null;
 let nextTailAttackAt = 0;
 let warnedTailAttackAt = 0;
@@ -246,6 +246,23 @@ function updateBossTailAttack() {
 
   for (const [ws, player] of clients) {
     if (!player.ready || player.hp <= 0) continue;
+
+// 고래 중심(0, -13) 기준 공격 반경 8
+const distanceFromBoss = Math.hypot(
+  player.x,
+  player.z + 13
+);
+
+// 붉은 원 밖에 있으면 공격을 받지 않음
+if (distanceFromBoss > BOSS_TAIL_RADIUS) {
+  send(ws, {
+    type: 'boss_tail_result',
+    outOfRange: true,
+    dodged: true,
+    damage: 0
+  });
+  continue;
+}
 
     // 서버가 기록한 실제 점프 시작 시각으로 판정
     const elapsed = (now - player.lastJumpAt) / 1000;
