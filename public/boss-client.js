@@ -1038,8 +1038,229 @@ updateTailEffects(now);
     }
   });
 
-  return {
-    onMessage,
-    update
-  };
+
+// ==========================================
+// JMC 고래 보스 꼬리 내려치기 및 공격 범위
+// ==========================================
+
+const JMC_TAIL_RADIUS = 8;
+
+let jmcTailWarnEnd = 0;
+let jmcTailSlamAt = -1000000;
+
+// 바닥 공격 범위 표시
+const jmcDangerZone = new THREE.Group();
+jmcDangerZone.position.set(0, 0, -13);
+
+// 원 내부: 반투명 붉은색
+const jmcDangerFill = new THREE.Mesh(
+  new THREE.CircleGeometry(JMC_TAIL_RADIUS, 72),
+  new THREE.MeshBasicMaterial({
+    color: 0xff413c,
+    transparent: true,
+    opacity: 0.14,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  })
+);
+
+jmcDangerFill.rotation.x = -Math.PI / 2;
+jmcDangerFill.position.y = 0.045;
+jmcDangerZone.add(jmcDangerFill);
+
+// 원 테두리
+const jmcDangerEdge = new THREE.Mesh(
+  new THREE.RingGeometry(
+    JMC_TAIL_RADIUS - 0.14,
+    JMC_TAIL_RADIUS,
+    96
+  ),
+  new THREE.MeshBasicMaterial({
+    color: 0xff5645,
+    transparent: true,
+    opacity: 0.92,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  })
+);
+
+jmcDangerEdge.rotation.x = -Math.PI / 2;
+jmcDangerEdge.position.y = 0.07;
+jmcDangerZone.add(jmcDangerEdge);
+
+jmcDangerZone.visible = false;
+scene.add(jmcDangerZone);
+
+// 공격 순간 확산하는 충격파
+const jmcTailWave = new THREE.Mesh(
+  new THREE.RingGeometry(0.93, 1.1, 64),
+  new THREE.MeshBasicMaterial({
+    color: 0xffb357,
+    transparent: true,
+    opacity: 0.9,
+    side: THREE.DoubleSide,
+    depthWrite: false
+  })
+);
+
+jmcTailWave.rotation.x = -Math.PI / 2;
+jmcTailWave.position.set(0, 0.1, -13);
+jmcTailWave.visible = false;
+scene.add(jmcTailWave);
+
+// 공격 경고 문구
+const jmcTailNotice = document.createElement('div');
+
+jmcTailNotice.style.cssText = `
+  position:absolute;
+  z-index:90;
+  left:50%;
+  top:60px;
+  transform:translateX(-50%);
+  width:max-content;
+  max-width:calc(100% - 20px);
+  padding:10px 14px;
+  box-sizing:border-box;
+  border:1px solid #ff885e;
+  border-radius:9px;
+  background:rgba(90,19,19,.94);
+  color:#fff;
+  font:bold 13px Arial,sans-serif;
+  text-align:center;
+  pointer-events:none;
+`;
+
+jmcTailNotice.hidden = true;
+sceneEl.appendChild(jmcTailNotice);
+
+// 서버 공격 메시지 연결
+function jmcTailOnMessage(m) {
+
+  if (m.type === 'boss_tail_warning') {
+    jmcTailWarnEnd =
+      performance.now() +
+      Math.max(0, Number(m.leadMs) || 1400);
+
+    jmcTailNotice.hidden = false;
+    return true;
+  }
+
+  if (m.type === 'boss_tail_strike') {
+    jmcTailWarnEnd = 0;
+    jmcTailSlamAt = performance.now();
+    jmcTailNotice.hidden = true;
+    return true;
+  }
+
+  if (m.type === 'boss_tail_result') {
+
+    if (m.outOfRange) {
+      say('✅ 공격 범위 밖! 피해 0');
+    } else if (m.dodged) {
+      say('✅ 점프 성공! 고래 공격 회피');
+    } else {
+      say('💥 고래 꼬리 공격 적중! HP -40');
+    }
+
+    return true;
+  }
+
+  // 기존 고래 보스 메시지는 그대로 처리
+  return onMessage(m);
+}
+
+// 꼬리 내려치기 애니메이션
+function jmcTailUpdate(now, dt) {
+
+  // 기존 고래 수영 동작과 효과 갱신
+  update(now, dt);
+
+  const active =
+    current.state === 'active' &&
+    !!whale?.root.visible;
+
+  const remaining = jmcTailWarnEnd - now;
+  const strikeAge = now - jmcTailSlamAt;
+
+  if (!active) {
+    jmcTailWarnEnd = 0;
+    jmcDangerZone.visible = false;
+    jmcTailWave.visible = false;
+    jmcTailNotice.hidden = true;
+    return;
+  }
+
+  // 공격 1.4초 전: 원형 범위 표시
+  jmcDangerZone.visible = remaining > 0;
+  jmcTailNotice.hidden = remaining <= 0;
+
+  if (remaining > 0) {
+
+    const progress =
+      1 - Math.min(1, remaining / 1400);
+
+    // 위험 구역 깜빡임
+    jmcDangerFill.material.opacity =
+      0.12 + 0.09 * Math.sin(now * 0.018) ** 2;
+
+    jmcDangerEdge.material.opacity =
+      0.65 + 0.35 * Math.sin(now * 0.018) ** 2;
+
+    jmcTailNotice.textContent =
+      `🐋 꼬리 공격 ${(remaining / 1000).toFixed(1)}초 전! 점프하거나 원 밖으로!`;
+
+    // 꼬리를 위로 들어 올림
+    whale.tail.rotation.z =
+      -0.15 - 0.85 * progress;
+
+    whale.tail.rotation.y = 0;
+
+  } else if (
+    strikeAge >= 0 &&
+    strikeAge < 850
+  ) {
+
+    const progress = strikeAge / 850;
+
+    // 빠르게 내려친 다음 원래 자세로 복귀
+    if (progress < 0.27) {
+
+      whale.tail.rotation.z =
+        -1.0 + 2.25 * (progress / 0.27);
+
+    } else {
+
+      const recover =
+        (progress - 0.27) / 0.73;
+
+      whale.tail.rotation.z =
+        1.25 * (1 - recover);
+    }
+
+    whale.tail.rotation.y = 0;
+  }
+
+  // 내려치는 순간 충격파 생성
+  jmcTailWave.visible =
+    strikeAge >= 0 &&
+    strikeAge < 750;
+
+  if (jmcTailWave.visible) {
+
+    const progress = strikeAge / 750;
+
+    jmcTailWave.scale.setScalar(
+      0.6 + progress * 7.4
+    );
+
+    jmcTailWave.material.opacity =
+      0.9 * (1 - progress);
+  }
+}
+
+// 새 공격 기능과 기존 기능을 함께 실행
+return {
+  onMessage: jmcTailOnMessage,
+  update: jmcTailUpdate
+};
 }
