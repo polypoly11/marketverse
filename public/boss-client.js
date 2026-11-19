@@ -179,6 +179,20 @@ function updateTailEffects(now) {
     pointer-events:none;
   `;
 
+  // 모바일 고래 보스 HP 표시 축소
+  if (window.matchMedia(
+    '(max-width: 980px), (pointer: coarse)'
+  ).matches) {
+    hud.style.cssText += `
+      top:8px;
+      width:min(255px,calc(100% - 24px));
+      box-sizing:border-box;
+      padding:5px 7px;
+      border-radius:6px;
+      font:700 10px Arial,sans-serif;
+      white-space:nowrap;
+    `;
+  }
   hud.hidden=true;
   sceneEl.appendChild(hud);
 
@@ -603,7 +617,17 @@ function updateTailEffects(now) {
     );
 
     hpSprite.position.set(0,1.95,0);
-    hpSprite.scale.set(4.8,0.95,1);
+    
+    // 모바일에서 고래 머리 위 HP 바 축소
+    const isMobileBossHp = window.matchMedia(
+      '(max-width: 980px), (pointer: coarse)'
+    ).matches;
+
+    hpSprite.scale.set(
+      isMobileBossHp ? 3.2 : 4.8,
+      isMobileBossHp ? 0.62 : 0.95,
+      1
+    );
     root.add(hpSprite);
 
     whale={
