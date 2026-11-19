@@ -351,9 +351,10 @@ wss.on('connection', (ws, req) => {
     lastChat: 0,
     lastMove: 0,
 
-lastMagic: 0,
-lastJumpAt: 0,
-hp: MAX_HP
+    lastMagic: 0,
+    lastJumpAt: 0,
+    hp: MAX_HP
+  };
 
   clients.set(ws, p);
 
