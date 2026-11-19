@@ -2270,6 +2270,40 @@ function castMagic(){
   send({type:'magic'});
 }
 
+function createBitcoinMagicTexture(){
+  const canvas = document.createElement('canvas');
+  canvas.width = 256;
+  canvas.height = 256;
+
+  const ctx = canvas.getContext('2d');
+
+  ctx.clearRect(0,0,256,256);
+
+  // 바깥 원
+  ctx.fillStyle = '#f7931a';
+  ctx.beginPath();
+  ctx.arc(128,128,118,0,Math.PI*2);
+  ctx.fill();
+
+  // 안쪽 원 테두리 느낌
+  ctx.strokeStyle = '#ffd27a';
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.arc(128,128,101,0,Math.PI*2);
+  ctx.stroke();
+
+  // 비트코인 문자
+  ctx.fillStyle = '#ffffff';
+  ctx.font = 'bold 150px Arial';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('₿',128,136);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
 function spawnRemoteMagic(m){
   if(!m?.shotId||!m.senderId)return;
 
@@ -2285,25 +2319,60 @@ function spawnRemoteMagic(m){
     Math.sin(facing),0,Math.cos(facing)
   ).normalize();
 
-  const projectile=new THREE.Group();
+  const projectile = new THREE.Group();
 
-  const core=new THREE.Mesh(
-    new THREE.SphereGeometry(.18,12,12),
-    new THREE.MeshBasicMaterial({color:0xb9ffff})
+  // 비트코인 코인 본체
+  const core = new THREE.Mesh(
+    new THREE.CylinderGeometry(.24,.24,.08,32),
+    new THREE.MeshStandardMaterial({
+      color:0xf2a900,
+      emissive:0xa85c00,
+      emissiveIntensity:.45,
+      metalness:.75,
+      roughness:.28
+    })
   );
 
-  const aura=new THREE.Mesh(
-    new THREE.SphereGeometry(.32,12,12),
+  // 코인이 회전하면서 날아가도록 기본 각도 설정
+  core.rotation.z = Math.PI / 2;
+
+  // 앞면 비트코인 로고
+  const frontLogo = new THREE.Mesh(
+    new THREE.PlaneGeometry(.34,.34),
     new THREE.MeshBasicMaterial({
-      color:0x9955ff,
+      map:createBitcoinMagicTexture(),
       transparent:true,
-      opacity:.48,
+      depthWrite:false
+    })
+  );
+  frontLogo.position.z = .045;
+
+  // 뒷면 비트코인 로고
+  const backLogo = new THREE.Mesh(
+    new THREE.PlaneGeometry(.34,.34),
+    new THREE.MeshBasicMaterial({
+      map:createBitcoinMagicTexture(),
+      transparent:true,
+      depthWrite:false
+    })
+  );
+  backLogo.position.z = -.045;
+  backLogo.rotation.y = Math.PI;
+
+  // 마법 오라
+  const aura = new THREE.Mesh(
+    new THREE.TorusGeometry(.34,.05,10,24),
+    new THREE.MeshBasicMaterial({
+      color:0xffb347,
+      transparent:true,
+      opacity:.42,
       blending:THREE.AdditiveBlending,
       depthWrite:false
     })
   );
+  aura.rotation.y = Math.PI / 2;
 
-  projectile.add(core,aura);
+  projectile.add(core,aura,frontLogo,backLogo);
   projectile.position.set(x,y+1.15,z);
   projectile.position.addScaledVector(direction,.85);
   scene.add(projectile);
@@ -2382,10 +2451,24 @@ function advanceVisibleMagic(shot,dt,now){
 
 function disposeMagicProjectile(shot){
   scene.remove(shot.object);
-  shot.core.geometry.dispose();
-  shot.core.material.dispose();
-  shot.aura.geometry.dispose();
-  shot.aura.material.dispose();
+
+  shot.object.traverse(node=>{
+    if(!node.isMesh) return;
+
+    if(node.geometry){
+      node.geometry.dispose();
+    }
+
+    if(Array.isArray(node.material)){
+      node.material.forEach(mat=>{
+        if(mat.map) mat.map.dispose();
+        mat.dispose();
+      });
+    }else if(node.material){
+      if(node.material.map) node.material.map.dispose();
+      node.material.dispose();
+    }
+  });
 }
 
 // 피격: 마법탄 소멸 + 충격파 + 불꽃 + 캐릭터 움찔
@@ -2716,7 +2799,8 @@ function updateMagic(now){
 
     advanceVisibleMagic(shot,dt,now);
     shot.aura.rotation.y+=dt*9;
-
+if(shot.core) shot.core.rotation.x += dt*12;
+    
     const age=now-shot.born;
     const remaining=Math.max(
       0,
