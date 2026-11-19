@@ -1869,36 +1869,155 @@ window.addEventListener('keyup',e=>{
   keys.delete(e.key.toLowerCase());
 });
 
+
 const controls=$('mobile-controls');
 
-controls.querySelectorAll('.move-btn').forEach(b=>{
-  const key=b.dataset.key;
+// 360도 원형 조이스틱
+const mobileJoystick={
+  x:0,
+  y:0,
+  pointerId:null
+};
 
-  b.addEventListener('pointerdown',e=>{
-    e.preventDefault();
-    e.stopPropagation();
-    b.setPointerCapture(e.pointerId);
+controls.classList.add('jmc-joystick');
+controls.innerHTML=`
+  <div class="jmc-joystick-thumb" aria-hidden="true"></div>
+`;
 
-    touchCounts.set(
-      key,
-      (touchCounts.get(key)||0)+1
+const joystickThumb=controls.querySelector(
+  '.jmc-joystick-thumb'
+);
+
+// 원형 조이스틱 디자인
+const joystickStyle=document.createElement('style');
+
+joystickStyle.textContent=`
+  #scene #mobile-controls.jmc-joystick {
+    width:120px !important;
+    height:120px !important;
+    transform:none !important;
+    border-radius:50% !important;
+    border:2px solid rgba(230,200,143,.8);
+    background:radial-gradient(
+      circle at 35% 30%,
+      rgba(47,80,107,.95),
+      rgba(7,20,33,.94)
     );
-    b.classList.add('pressed');
-  });
+    box-shadow:
+      0 4px 18px rgba(0,0,0,.5),
+      inset 0 0 20px rgba(94,164,215,.2);
+    touch-action:none !important;
+    user-select:none;
+    z-index:30 !important;
+  }
 
-  const release=e=>{
-    e.preventDefault();
-    e.stopPropagation();
-
-    touchCounts.set(
-      key,
-      Math.max(0,(touchCounts.get(key)||0)-1)
+  #scene #mobile-controls.jmc-joystick
+  .jmc-joystick-thumb {
+    position:absolute;
+    left:50%;
+    top:50%;
+    width:52px;
+    height:52px;
+    border-radius:50%;
+    transform:translate(-50%,-50%);
+    border:2px solid #e6c88f;
+    background:radial-gradient(
+      circle at 35% 30%,
+      #668eac,
+      #24445f
     );
-    b.classList.remove('pressed');
-  };
+    box-shadow:0 2px 10px rgba(0,0,0,.5);
+    pointer-events:none;
+  }
+`;
 
-  b.addEventListener('pointerup',release);
-  b.addEventListener('pointercancel',release);
+document.head.appendChild(joystickStyle);
+
+// 손가락 위치로 이동 방향 계산
+function updateMobileJoystick(e){
+  const rect=controls.getBoundingClientRect();
+
+  const centerX=rect.left+rect.width/2;
+  const centerY=rect.top+rect.height/2;
+  const radius=Math.min(rect.width,rect.height)*.29;
+
+  const dx=e.clientX-centerX;
+  const dy=e.clientY-centerY;
+  const distance=Math.hypot(dx,dy);
+
+  const scale=distance>radius
+    ?radius/distance
+    :1;
+
+  const offsetX=dx*scale;
+  const offsetY=dy*scale;
+
+  if(Math.hypot(offsetX,offsetY)<10){
+    mobileJoystick.x=0;
+    mobileJoystick.y=0;
+  }else{
+    mobileJoystick.x=offsetX/radius;
+    mobileJoystick.y=offsetY/radius;
+  }
+
+  joystickThumb.style.transform=
+    `translate(calc(-50% + ${offsetX}px),
+               calc(-50% + ${offsetY}px))`;
+}
+
+// 손가락을 떼면 즉시 정지
+function resetMobileJoystick(){
+  mobileJoystick.x=0;
+  mobileJoystick.y=0;
+  mobileJoystick.pointerId=null;
+
+  joystickThumb.style.transform=
+    'translate(-50%,-50%)';
+}
+
+controls.addEventListener('pointerdown',e=>{
+  if(!isMobileDevice)return;
+  if(mobileJoystick.pointerId!==null)return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  mobileJoystick.pointerId=e.pointerId;
+  controls.setPointerCapture(e.pointerId);
+
+  updateMobileJoystick(e);
+});
+
+controls.addEventListener('pointermove',e=>{
+  if(e.pointerId!==mobileJoystick.pointerId)return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  updateMobileJoystick(e);
+});
+
+function finishMobileJoystick(e){
+  if(e.pointerId!==mobileJoystick.pointerId)return;
+  resetMobileJoystick();
+}
+
+controls.addEventListener(
+  'pointerup',finishMobileJoystick
+);
+
+controls.addEventListener(
+  'pointercancel',finishMobileJoystick
+);
+
+controls.addEventListener(
+  'lostpointercapture',finishMobileJoystick
+);
+
+window.addEventListener('blur',resetMobileJoystick);
+
+document.addEventListener('visibilitychange',()=>{
+  if(document.hidden)resetMobileJoystick();
 });
 
 window.addEventListener('blur',()=>{
@@ -1957,13 +2076,17 @@ function animate(now){
     !defeated&&
     !reentryRequired
   ){
-    const f=
-      Number(held('w')||held('arrowup'))-
-      Number(held('s')||held('arrowdown'));
 
-    const s=
-      Number(held('d')||held('arrowright'))-
-      Number(held('arrowleft'));
+const f=
+  Number(held('w')||held('arrowup'))-
+  Number(held('s')||held('arrowdown'))-
+  mobileJoystick.y;
+
+const s=
+  Number(held('d')||held('arrowright'))-
+  Number(held('arrowleft'))+
+  mobileJoystick.x;
+
 
     if((f||s)&&!myAvatar.userData.seated){
       const len=Math.hypot(f,s);
