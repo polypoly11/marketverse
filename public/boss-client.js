@@ -1457,6 +1457,55 @@ function jmcTailUpdate(now, dt) {
     whale.root.rotation.z = 0;
   }
 
+  // ==========================================
+  // GLB 사이버 고래 꼬리 내려치기
+  // 기존 공격 시간과 동기화
+  // ==========================================
+
+  if (cyberPreview.targets.length) {
+    let lift = 0;
+    let slam = 0;
+
+    // 공격 예고: 1.4초 동안 꼬리 들어 올리기
+    if (remaining > 0) {
+      const p = THREE.MathUtils.clamp(
+        1 - remaining / 1400,
+        0,
+        1
+      );
+
+      lift = p * p * (3 - 2 * p);
+
+    // 공격 순간: 0.22초 동안 빠르게 내려치기
+    } else if (
+      strikeAge >= 0 &&
+      strikeAge < 220
+    ) {
+      const p = strikeAge / 220;
+
+      lift = 1 - p;
+      slam = p * p * (3 - 2 * p);
+
+    // 공격 후: 원래 자세로 복귀
+    } else if (
+      strikeAge >= 220 &&
+      strikeAge < 1000
+    ) {
+      const p = (strikeAge - 220) / 780;
+
+      slam = 1 - p * p * (3 - 2 * p);
+    }
+
+    for (const target of cyberPreview.targets) {
+      target.node.morphTargetInfluences[
+        target.lift
+      ] = lift;
+
+      target.node.morphTargetInfluences[
+        target.slam
+      ] = slam;
+    }
+  }
   // 내려치는 순간 충격파 생성
   jmcTailWave.visible =
     strikeAge >= 0 &&
