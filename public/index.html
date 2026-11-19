@@ -2320,7 +2320,14 @@ document.addEventListener('DOMContentLoaded', function () {
   if (!header || !help) return;
 
   // 조작키를 시간·효과음 묶음에서 완전히 분리
+
+if (window.matchMedia('(max-width: 980px), (pointer: coarse)').matches) {
+  // 모바일에서는 조작키 설명을 화면에서 완전히 제거
+  help.remove();
+} else {
+  // PC에서는 기존 헤더 중앙에 유지
   header.appendChild(help);
+}
 
   const style = document.createElement('style');
   style.id = 'jmc-header-final-fix';
