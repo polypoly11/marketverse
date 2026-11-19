@@ -2740,7 +2740,6 @@ requestAnimationFrame(updateMagic);
 // ====================================================
 // 전투 HP HUD / 사망 팝업 / 입장 화면으로 자동 복귀
 // ====================================================
-const hpHud=document.createElement('div');
 const hpHud = document.createElement('div');
 hpHud.id = 'jmc-hp-hud';
 
