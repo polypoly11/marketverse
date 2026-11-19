@@ -850,7 +850,16 @@ function updateTailEffects(now) {
         error
       );
 
-      // 실패하면 기존 고래 외형 유지
+    
+      // GLB 로딩 실패 시에만 기존 고래 표시
+      if (whale && !cyberPreview.object) {
+        for (const child of whale.root.children) {
+          if (!child.isSprite) {
+            child.visible = true;
+          }
+        }
+      }
+
     } finally {
       cyberAutoLoading = false;
     }
@@ -945,8 +954,21 @@ function updateTailEffects(now) {
     const isLoot=current.state==='loot';
 
     
-    if(isBoss && !whale) makeWhale();
+
+    if(isBoss && !whale) {
+      makeWhale();
+
+      // 사이버 고래 로딩 중에는 기존 고래 외형 숨김
+      for (const child of whale.root.children) {
+        if (!child.isSprite) {
+          child.visible = false;
+        }
+      }
+    }
+
+    // 사이버 고래 자동 불러오기
     if(isBoss) loadCyberWhaleAutomatically();
+
     if(whale) whale.root.visible=isBoss;
 
     if(isLoot && !loot) makeLoot();
