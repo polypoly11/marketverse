@@ -2301,6 +2301,186 @@ document.addEventListener('DOMContentLoaded', function () {
   document.body.classList.add('jmc-compact-header');
 });
 </script>
+  
+<!-- JMC 조작키 독립 배치 수정 -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const header = document.querySelector('body > header');
+  const help = document.getElementById('jmc-header-help');
+
+  if (!header || !help) return;
+
+  // 조작키를 시간·효과음 묶음에서 완전히 분리
+  header.appendChild(help);
+
+  const style = document.createElement('style');
+  style.id = 'jmc-header-final-fix';
+
+  style.textContent = `
+    /* 기본 PC 헤더 */
+    html body.jmc-compact-header > header {
+      position: relative !important;
+      display: flex !important;
+      flex-direction: row !important;
+      flex-wrap: nowrap !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      min-height: 82px !important;
+      padding: 10px 20px !important;
+      gap: 12px !important;
+    }
+
+    /* 오른쪽 메뉴 수평 정렬 */
+    html body.jmc-compact-header > header .top {
+      display: flex !important;
+      flex-direction: row !important;
+      flex-wrap: nowrap !important;
+      align-items: center !important;
+      justify-content: flex-end !important;
+      gap: 9px !important;
+      margin-left: auto !important;
+      width: auto !important;
+    }
+
+    /* 시간·효과음 가로 배치 */
+    html body.jmc-compact-header #jmc-header-tools,
+    html body.jmc-compact-header #jmc-header-tools-line {
+      display: flex !important;
+      flex-direction: row !important;
+      align-items: center !important;
+      justify-content: center !important;
+      flex: 0 0 auto !important;
+      width: auto !important;
+      gap: 8px !important;
+      margin: 0 !important;
+    }
+
+    /* LIVE, 접속자, 시간, 효과음, 설정 높이 통일 */
+    html body.jmc-compact-header > header .top > .live,
+    html body.jmc-compact-header > header .top > span:not(.live),
+    html body.jmc-compact-header #lounge-clock,
+    html body.jmc-compact-header #jmc-sfx-toggle,
+    html body.jmc-compact-header > header #rename {
+      position: static !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      box-sizing: border-box !important;
+      flex-shrink: 0 !important;
+      height: 38px !important;
+      min-height: 38px !important;
+      margin: 0 !important;
+      font-size: 12px !important;
+      line-height: 1 !important;
+      white-space: nowrap !important;
+    }
+
+    /* 조작키는 헤더의 정중앙 */
+    html body.jmc-compact-header > header #jmc-header-help {
+      position: absolute !important;
+      left: 50% !important;
+      top: 50% !important;
+      right: auto !important;
+      transform: translate(-50%, -50%) !important;
+      display: block !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      width: max-content !important;
+      font: 600 11px/1.4 Arial, sans-serif !important;
+      color: #b9cde1 !important;
+      background: transparent !important;
+      border: 0 !important;
+      text-align: center !important;
+      white-space: nowrap !important;
+      pointer-events: none !important;
+    }
+
+    /* 중간 크기 PC는 겹침 방지 */
+    @media (min-width: 981px) and (max-width: 1599px) {
+      html body.jmc-compact-header > header {
+        display: grid !important;
+        grid-template-columns: auto minmax(0,1fr) !important;
+        grid-template-rows: auto auto !important;
+        row-gap: 5px !important;
+        padding: 9px 14px !important;
+      }
+
+      html body.jmc-compact-header > header .logo {
+        grid-column: 1 !important;
+        grid-row: 1 !important;
+        font-size: 20px !important;
+      }
+
+      html body.jmc-compact-header > header .top {
+        grid-column: 2 !important;
+        grid-row: 1 !important;
+        flex-wrap: wrap !important;
+        gap: 7px !important;
+      }
+
+      html body.jmc-compact-header > header #jmc-header-help {
+        position: static !important;
+        grid-column: 1 / -1 !important;
+        grid-row: 2 !important;
+        justify-self: center !important;
+        transform: none !important;
+      }
+    }
+
+    /* 모바일: 메뉴와 조작키 분리 */
+    @media (max-width: 980px), (pointer: coarse) {
+      html body.jmc-compact-header > header {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        min-height: 0 !important;
+        gap: 6px !important;
+        padding: 9px 10px !important;
+      }
+
+      html body.jmc-compact-header > header .logo {
+        width: 100% !important;
+        font-size: 16px !important;
+      }
+
+      html body.jmc-compact-header > header .top {
+        width: 100% !important;
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+        gap: 6px !important;
+        margin: 0 !important;
+      }
+
+      html body.jmc-compact-header #jmc-header-tools,
+      html body.jmc-compact-header #jmc-header-tools-line {
+        width: auto !important;
+        flex: 0 0 auto !important;
+      }
+
+      html body.jmc-compact-header #lounge-clock,
+      html body.jmc-compact-header #jmc-sfx-toggle,
+      html body.jmc-compact-header > header #rename {
+        height: 32px !important;
+        min-height: 32px !important;
+        padding: 0 8px !important;
+        font-size: 11px !important;
+      }
+
+      html body.jmc-compact-header > header #jmc-header-help {
+        position: static !important;
+        order: 3 !important;
+        transform: none !important;
+        width: 100% !important;
+        white-space: normal !important;
+        font-size: 10px !important;
+      }
+    }
+  `;
+
+  document.head.appendChild(style);
+});
+</script>
+
 </body>
 
 
