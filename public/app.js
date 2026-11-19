@@ -3272,10 +3272,7 @@ function showDeathPopup(){
     color:#fff;
     box-shadow:0 0 50px rgba(155,38,75,.3);
     font-family:Arial,sans-serif;
-  `;
-
-  const title=document.createElement('h2');
-  
+  `;  
   const title=document.createElement('h2');
   title.textContent='전투 불능';
 
