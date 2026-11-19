@@ -618,6 +618,149 @@ function updateTailEffects(now) {
     updateHp(current.hp);
   }
 
+  // ==========================================
+  // 사이버 고래 GLB 로컬 미리보기
+  // ==========================================
+
+  const cyberPreview = {
+    object: null,
+    targets: []
+  };
+
+  function addCyberPreviewButton() {
+    if (
+      !new URLSearchParams(window.location.search)
+        .has('cyberwhale')
+    ) return;
+
+    const button = document.createElement('button');
+
+    button.textContent = '🐋 사이버 고래 불러오기';
+
+    button.style.cssText = `
+      position:absolute;
+      top:110px;
+      right:12px;
+      z-index:99;
+      padding:10px 13px;
+      border:1px solid #a89dff;
+      border-radius:9px;
+      background:#18213c;
+      color:white;
+      font:bold 13px Arial;
+      cursor:pointer;
+    `;
+
+    sceneEl.appendChild(button);
+
+    button.onclick = () => {
+      if (!whale) {
+        say('고래 보스를 먼저 소환해 주세요.');
+        return;
+      }
+
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.glb';
+
+      input.onchange = async () => {
+        const file = input.files?.[0];
+        if (!file) return;
+
+        button.disabled = true;
+        button.textContent = '🐋 모델 불러오는 중…';
+
+        try {
+          const { GLTFLoader } = await import(
+            'https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/loaders/GLTFLoader.js'
+          );
+
+          const buffer = await file.arrayBuffer();
+          const gltf = await new GLTFLoader()
+            .parseAsync(buffer, '');
+
+          const model = new THREE.Group();
+
+          // 사이버 고래의 방향 및 크기 조정
+          model.rotation.y = 2.34;
+          model.scale.setScalar(1.8);
+          model.add(gltf.scene);
+
+          const center = new THREE.Box3()
+            .setFromObject(model)
+            .getCenter(new THREE.Vector3());
+
+          model.position.sub(center);
+
+          // GLB 안의 꼬리 형태 키 검색
+          const targets = [];
+
+          model.traverse(node => {
+            if (
+              !node.isMesh ||
+              !node.morphTargetDictionary
+            ) return;
+
+            const lift =
+              node.morphTargetDictionary.TailLift;
+
+            const slam =
+              node.morphTargetDictionary.TailSlam;
+
+            if (
+              Number.isInteger(lift) &&
+              Number.isInteger(slam)
+            ) {
+              targets.push({ node, lift, slam });
+            }
+          });
+
+          if (!targets.length) {
+            throw new Error(
+              'TailLift / TailSlam을 찾지 못했습니다.'
+            );
+          }
+
+          // 새 GLB가 준비된 후에만 외형 교체
+          if (cyberPreview.object) {
+            whale.root.remove(cyberPreview.object);
+          }
+
+          whale.root.add(model);
+
+          for (const child of whale.root.children) {
+            if (
+              child !== model &&
+              !child.isSprite
+            ) {
+              child.visible = false;
+            }
+          }
+
+          cyberPreview.object = model;
+          cyberPreview.targets = targets;
+
+          say('✅ 사이버 고래 미리보기 적용 완료!');
+
+        } catch (error) {
+          console.error(
+            '사이버 고래 로딩 실패',
+            error
+          );
+
+          say('모델을 열지 못했습니다. F12 콘솔을 확인해 주세요.');
+
+        } finally {
+          button.disabled = false;
+          button.textContent = '🐋 사이버 고래 불러오기';
+        }
+      };
+
+      input.click();
+    };
+  }
+
+  addCyberPreviewButton();
   function updateHp(value) {
     current.hp=Math.max(
       0,
