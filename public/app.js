@@ -1891,26 +1891,54 @@ const joystickThumb=controls.querySelector(
 // 원형 조이스틱 디자인
 const joystickStyle=document.createElement('style');
 
+
 joystickStyle.textContent=`
+  /* 반투명 글래스 조이스틱 - 외곽 원 */
   #scene #mobile-controls.jmc-joystick {
     width:120px !important;
     height:120px !important;
     transform:none !important;
+    box-sizing:border-box !important;
     border-radius:50% !important;
-    border:2px solid rgba(230,200,143,.8);
+
+    border:1.5px solid rgba(237,213,169,.55);
+
     background:radial-gradient(
-      circle at 35% 30%,
-      rgba(47,80,107,.95),
-      rgba(7,20,33,.94)
+      circle at 35% 28%,
+      rgba(219,239,255,.23) 0%,
+      rgba(104,159,198,.16) 48%,
+      rgba(13,37,57,.25) 100%
     );
+
+    -webkit-backdrop-filter:blur(4px);
+    backdrop-filter:blur(4px);
+
     box-shadow:
-      0 4px 18px rgba(0,0,0,.5),
-      inset 0 0 20px rgba(94,164,215,.2);
+      0 5px 18px rgba(0,0,0,.18),
+      inset 0 0 22px rgba(204,230,255,.08),
+      inset 0 0 0 8px rgba(255,255,255,.025);
+
     touch-action:none !important;
-    user-select:none;
+    user-select:none !important;
+    -webkit-user-select:none !important;
     z-index:30 !important;
   }
 
+  /* 내부의 은은한 원형 가이드 */
+  #scene #mobile-controls.jmc-joystick::before {
+    content:"";
+    position:absolute;
+    left:50%;
+    top:50%;
+    width:84px;
+    height:84px;
+    border-radius:50%;
+    border:1px solid rgba(223,235,249,.14);
+    transform:translate(-50%,-50%);
+    pointer-events:none;
+  }
+
+  /* 손가락으로 움직이는 유리 손잡이 */
   #scene #mobile-controls.jmc-joystick
   .jmc-joystick-thumb {
     position:absolute;
@@ -1918,16 +1946,29 @@ joystickStyle.textContent=`
     top:50%;
     width:52px;
     height:52px;
+    box-sizing:border-box;
     border-radius:50%;
+
     transform:translate(-50%,-50%);
-    border:2px solid #e6c88f;
+    border:1.5px solid rgba(244,224,183,.75);
+
     background:radial-gradient(
-      circle at 35% 30%,
-      #668eac,
-      #24445f
+      circle at 32% 24%,
+      rgba(244,250,255,.55) 0%,
+      rgba(140,194,232,.32) 42%,
+      rgba(50,101,142,.42) 100%
     );
-    box-shadow:0 2px 10px rgba(0,0,0,.5);
+
+    -webkit-backdrop-filter:blur(3px);
+    backdrop-filter:blur(3px);
+
+    box-shadow:
+      0 3px 10px rgba(0,0,0,.22),
+      inset 0 2px 5px rgba(255,255,255,.18);
+
     pointer-events:none;
+    touch-action:none !important;
+    will-change:transform;
   }
 `;
 
