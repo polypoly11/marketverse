@@ -287,6 +287,24 @@
   }
 </style>
 
+
+<!-- 모바일 상단 불필요한 안내 문구 숨기기 -->
+<style>
+  @media screen and (max-width: 980px), (pointer: coarse) {
+
+    /* 점프·앉기·마법공격 안내 문구 숨김 */
+    .scene-wrap .scene-head > div:first-child > p:last-of-type {
+      display: none !important;
+    }
+
+    /* 모바일 정보 펼치기 버튼 숨김 */
+    #jmc-right-toggle {
+      display: none !important;
+    }
+
+  }
+</style>
+
 </head>
 
 <body>
@@ -1009,7 +1027,9 @@
   });
 
   // 처음 접속하면 오른쪽 패널은 접힌 상태
-  setRightPanelCollapsed(true);
+setRightPanelCollapsed(
+  !window.matchMedia('(max-width: 980px), (pointer: coarse)').matches
+);
 
 })();
 </script>
