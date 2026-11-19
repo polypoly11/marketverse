@@ -1239,7 +1239,7 @@ sfxButton.onclick=()=>{
 };
 const loungeBadge = document.querySelector('.scene-head .pill');
 
-if (loungeBadge) {
+if (loungeBadge && !isMobileDevice) {
   loungeBadge.style.position = 'relative';
   loungeBadge.appendChild(sfxButton);
 
