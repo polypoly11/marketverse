@@ -1237,8 +1237,6 @@ sfxButton.onclick=()=>{
   }catch{}
   if(sfxEnabled)getAudioContext();
 };
-const loungeBadge = document.querySelector('.scene-head .pill');
-
 
 const loungeBadge = document.querySelector('.scene-head .pill');
 const loungeHeader = document.querySelector('.scene-head');
