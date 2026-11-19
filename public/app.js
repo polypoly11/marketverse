@@ -3275,48 +3275,54 @@ function showDeathPopup(){
   `;
 
   const title=document.createElement('h2');
-  title.textContent='[사망하셨습니다]';
+  
+  const title=document.createElement('h2');
+  title.textContent='전투 불능';
 
   title.style.cssText=`
-    font-size:28px;
-    color:#ff889d;
-    margin:0 0 15px;
+    font-size:30px;
+    font-weight:800;
+    letter-spacing:1px;
+    color:#ff9eaa;
+    margin:0 0 16px;
   `;
 
   const message=document.createElement('p');
   message.textContent=
-    'HP가 모두 소모되었습니다. 마법 공격을 100회 적중당하면 사망합니다.';
+    '모든 체력이 소진되어 전투가 종료되었습니다. 다음 도전을 준비해 주세요.';
 
   message.style.cssText=`
-    font-size:15px;
-    line-height:1.65;
-    margin:0 0 18px;
+    font-size:14px;
+    line-height:1.8;
+    margin:0 0 22px;
     color:#d5dfeb;
+    word-break:keep-all;
   `;
 
   const countdown=document.createElement('p');
   countdown.textContent=
-    '3초 후 입장 화면으로 이동합니다.';
+    '3초 후 입장 화면으로 돌아갑니다.';
 
   countdown.style.cssText=`
-    font-size:14px;
-    margin:0 0 22px;
-    color:#f1c7d1;
+    font-size:13px;
+    margin:0 0 20px;
+    color:#dfb0bc;
   `;
 
   const button=document.createElement('button');
   button.type='button';
-  button.textContent='지금 입장 화면으로 이동';
+  button.textContent='다시 입장하기';
 
   button.style.cssText=`
     cursor:pointer;
+    width:100%;
     border:0;
     border-radius:10px;
     background:#dfc18d;
     color:#182537;
-    font-size:16px;
-    font-weight:700;
-    padding:13px 28px;
+    font-size:15px;
+    font-weight:800;
+    padding:14px 20px;
   `;
 
   let transitioning=false;
@@ -3363,8 +3369,9 @@ function showDeathPopup(){
     if(seconds<=0){
       returnToEntry();
     }else{
-      countdown.textContent=
-        `${seconds}초 후 입장 화면으로 이동합니다.`;
+countdown.textContent=
+  `${seconds}초 후 입장 화면으로 돌아갑니다.`;
+
     }
   },1000);
 }
