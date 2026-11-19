@@ -1240,6 +1240,80 @@ function jmcTailUpdate(now, dt) {
     whale.tail.rotation.y = 0;
   }
 
+  
+  // 기존 수영 동작보다 나중에 적용하는 큰 꼬리 강타 애니메이션
+  // 꼬리자루 전체를 키우고 몸통도 함께 기울여 움직임을 강조한다.
+  if (remaining > 0) {
+
+    // 공격 예고 1.4초: 꼬리를 높이 들어 올림
+    const lift = Math.max(
+      0,
+      Math.min(1, 1 - remaining / 1400)
+    );
+
+    const eased = lift * lift * (3 - 2 * lift);
+
+    whale.tail.rotation.set(
+      0,
+      -0.14 * eased,
+      -1.45 * eased
+    );
+
+    whale.tail.scale.setScalar(1 + 0.9 * eased);
+
+    whale.root.rotation.z = -0.12 * eased;
+    whale.root.position.y += 0.18 * eased;
+
+  } else if (strikeAge >= 0 && strikeAge < 1200) {
+
+    // 공격 시작 후 0.3초: 꼬리를 빠르게 내려침
+    if (strikeAge < 300) {
+
+      const t = strikeAge / 300;
+      const slam = 1 - (1 - t) * (1 - t) * (1 - t);
+
+      whale.tail.rotation.set(
+        0,
+        -0.14 * (1 - slam),
+        -1.45 + 3.1 * slam
+      );
+
+      whale.tail.scale.setScalar(1.9);
+
+      whale.root.rotation.z = -0.12 + 0.35 * slam;
+      whale.root.position.y += 0.18 - 0.42 * slam;
+
+    } else {
+
+      // 공격 후 0.9초: 원래 자세로 복귀
+      const t = Math.min(
+        1,
+        (strikeAge - 300) / 900
+      );
+
+      const eased = t * t * (3 - 2 * t);
+
+      whale.tail.rotation.set(
+        0,
+        0,
+        1.65 * (1 - eased)
+      );
+
+      whale.tail.scale.setScalar(
+        1 + 0.9 * (1 - eased)
+      );
+
+      whale.root.rotation.z = 0.23 * (1 - eased);
+      whale.root.position.y -= 0.24 * (1 - eased);
+    }
+
+  } else {
+
+    // 공격이 끝나면 평상시 수영 동작 복원
+    whale.tail.scale.setScalar(1);
+    whale.root.rotation.z = 0;
+  }
+
   // 내려치는 순간 충격파 생성
   jmcTailWave.visible =
     strikeAge >= 0 &&
