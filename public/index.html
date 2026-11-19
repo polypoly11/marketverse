@@ -245,6 +245,48 @@
     }
   </style>
 
+
+<!-- PC 조작 안내 위치 변경 및 메타버스 화면 확대 -->
+<style>
+  @media screen and (min-width: 981px) {
+
+    /* 상단 제목 영역을 더 얇게 조정 */
+    .scene-wrap .scene-head {
+      position: relative !important;
+      min-height: 126px !important;
+      padding: 14px 22px !important;
+    }
+
+    /* 기존 조작 안내를 효과음 버튼 왼쪽으로 이동 */
+    .scene-wrap .scene-head > div:first-child > p:last-of-type {
+      position: absolute !important;
+      top: 87px !important;
+      right: 152px !important;
+      left: auto !important;
+
+      margin: 0 !important;
+      padding: 6px 10px !important;
+
+      background: rgba(12, 29, 46, 0.85);
+      border: 1px solid rgba(212, 183, 128, 0.4);
+      border-radius: 8px;
+
+      color: #e7cca0 !important;
+      font-size: 11px !important;
+      line-height: 18px !important;
+      white-space: nowrap !important;
+      z-index: 5;
+    }
+
+    /* 메타버스 3D 화면 확대 */
+    .scene-wrap #scene {
+      height: min(82dvh, 900px) !important;
+      min-height: 540px !important;
+    }
+
+  }
+</style>
+
 </head>
 
 <body>
