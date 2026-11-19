@@ -407,6 +407,118 @@
   }
 </style>
 
+
+<!-- 모바일 방향키 정렬 및 HP 체력바 축소 -->
+<style>
+  @media (max-width: 980px), (pointer: coarse) {
+
+    /* 방향키 아래의 보이지 않는 여백 제거 */
+    #scene #mobile-controls {
+      height: 110px !important;
+    }
+
+    /* 모바일 HP 체력바 전체 크기 축소 */
+    #scene #jmc-hp-hud {
+      left: 8px !important;
+      top: 8px !important;
+
+      width: 44px !important;
+      height: 126px !important;
+      min-height: 0 !important;
+      max-height: 126px !important;
+
+      padding: 6px 2px !important;
+      gap: 4px !important;
+
+      border-radius: 10px !important;
+      font-size: 9px !important;
+    }
+
+    /* HP 제목 크기 축소 */
+    #scene #jmc-hp-hud > div:first-child {
+      font-size: 9px !important;
+    }
+
+    /* 100/100 숫자 크기 축소 */
+    #scene #jmc-hp-text {
+      font-size: 9px !important;
+    }
+
+    /* 초록색 세로 체력 게이지 축소 */
+    #scene #jmc-hp-hud > div:last-child {
+      width: 14px !important;
+      min-height: 0 !important;
+      border-radius: 9px !important;
+    }
+
+  }
+</style>
+
+
+<!-- 모바일 HP 체력바 디자인 정렬 -->
+<style>
+  @media (max-width: 980px), (pointer: coarse) {
+
+    /* HP 체력바 전체 */
+    #scene #jmc-hp-hud {
+      left: 8px !important;
+      top: 8px !important;
+
+      width: 52px !important;
+      height: 145px !important;
+      min-height: 0 !important;
+      max-height: 145px !important;
+
+      padding: 9px 4px !important;
+      gap: 5px !important;
+
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+
+      border-radius: 12px !important;
+      background: rgba(8, 20, 33, 0.94) !important;
+    }
+
+    /* ❤️ HP 제목 */
+    #scene #jmc-hp-hud > div:first-child {
+      width: 100% !important;
+      text-align: center !important;
+      font-size: 10px !important;
+      font-weight: 800 !important;
+      line-height: 16px !important;
+      white-space: nowrap !important;
+    }
+
+    /* 100/100 체력 수치 */
+    #scene #jmc-hp-text {
+      width: 100% !important;
+      text-align: center !important;
+      font-size: 10px !important;
+      font-weight: 700 !important;
+      line-height: 14px !important;
+      letter-spacing: 0 !important;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap !important;
+    }
+
+    /* 세로 체력 게이지 */
+    #scene #jmc-hp-hud > div:last-child {
+      width: 15px !important;
+      flex: 1 1 auto !important;
+      min-height: 0 !important;
+      margin-top: 3px !important;
+      border-radius: 10px !important;
+    }
+
+    /* 게이지 내부 색상 막대 */
+    #scene #jmc-hp-fill {
+      border-radius: 8px !important;
+    }
+
+  }
+</style>
+
 </head>
 
 <body>
