@@ -814,5 +814,164 @@
     })();
   </script>
 
+
+<!-- JMC 오른쪽 정보 패널 전체 접기 / 펼치기 -->
+<script>
+(function () {
+  const main = document.querySelector('main');
+  const sceneWrap = document.querySelector('main > .scene-wrap');
+  const sidebar = document.querySelector('main > aside');
+
+  if (!main || !sceneWrap || !sidebar) return;
+
+  // 중복 생성 방지
+  if (document.getElementById('jmc-right-toggle')) return;
+
+  // 오른쪽 패널 식별자 설정
+  sidebar.id = 'jmc-right-panel';
+
+  // 접기 / 펼치기 버튼 생성
+  const toggle = document.createElement('button');
+
+  toggle.id = 'jmc-right-toggle';
+  toggle.type = 'button';
+  toggle.setAttribute('aria-controls', 'jmc-right-panel');
+
+  // 메타버스 상단 설명 영역 바로 아래에 버튼 삽입
+  const sceneHead = sceneWrap.querySelector('.scene-head');
+
+  if (sceneHead) {
+    sceneHead.insertAdjacentElement('afterend', toggle);
+  } else {
+    sceneWrap.prepend(toggle);
+  }
+
+  // 디자인
+  const style = document.createElement('style');
+  style.id = 'jmc-right-panel-style';
+
+  style.textContent = `
+    /* 오른쪽 패널 접힘 */
+    main.jmc-right-collapsed > aside {
+      display: none !important;
+    }
+
+    /* PC: 접으면 메타버스가 전체 너비 차지 */
+    @media screen and (min-width: 981px) {
+      main.jmc-right-collapsed {
+        grid-template-columns: minmax(0, 1fr) !important;
+      }
+    }
+
+    main.jmc-right-collapsed > .scene-wrap {
+      width: 100% !important;
+      min-width: 0 !important;
+    }
+
+    /* PC 접기 / 펼치기 버튼 */
+    #jmc-right-toggle {
+      position: absolute;
+      top: 50%;
+      right: 0;
+      transform: translateY(-50%);
+      z-index: 80;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      min-width: 106px;
+      min-height: 46px;
+      padding: 11px 12px;
+
+      border: 1px solid #c4a572;
+      border-right: 0;
+      border-radius: 12px 0 0 12px;
+
+      background: rgba(14, 32, 49, 0.96);
+      color: #f0d5a1;
+
+      font-size: 12px;
+      font-weight: 800;
+      white-space: nowrap;
+
+      cursor: pointer;
+      user-select: none;
+
+      box-shadow: 0 4px 18px rgba(0,0,0,0.4);
+    }
+
+    #jmc-right-toggle:hover {
+      background: #29445b;
+    }
+
+    #jmc-right-toggle:focus-visible {
+      outline: 2px solid #f0d5a1;
+      outline-offset: 2px;
+    }
+
+    /* 모바일: 버튼을 메타버스 화면 위에 별도 배치 */
+    @media screen and (max-width: 980px) {
+      #jmc-right-toggle {
+        position: relative;
+        top: auto;
+        right: auto;
+        transform: none;
+
+        display: flex;
+        width: calc(100% - 24px);
+        min-height: 38px;
+        margin: 0 12px 10px;
+
+        border: 1px solid #8b7854;
+        border-radius: 9px;
+
+        font-size: 12px;
+      }
+    }
+  `;
+
+  document.head.appendChild(style);
+
+  // 오른쪽 패널 접기 / 펼치기
+  function setRightPanelCollapsed(collapsed) {
+    main.classList.toggle('jmc-right-collapsed', collapsed);
+
+    toggle.textContent = collapsed
+      ? '❮ 정보 펼치기'
+      : '정보 접기 ❯';
+
+    toggle.setAttribute(
+      'aria-expanded',
+      String(!collapsed)
+    );
+
+    sidebar.setAttribute(
+      'aria-hidden',
+      String(collapsed)
+    );
+
+    // 3D 메타버스의 변경된 화면 크기를 반영
+    requestAnimationFrame(function () {
+      window.dispatchEvent(new Event('resize'));
+    });
+  }
+
+  // 버튼 클릭
+  toggle.addEventListener('click', function () {
+    const collapsed = main.classList.contains(
+      'jmc-right-collapsed'
+    );
+
+    setRightPanelCollapsed(!collapsed);
+  });
+
+  // 처음 접속하면 오른쪽 패널은 접힌 상태
+  setRightPanelCollapsed(true);
+
+})();
+</script>
+
 </body>
+
 </html>
