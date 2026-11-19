@@ -1739,6 +1739,175 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 </script>
 
+<!-- JMC 상단 메뉴 압축: 차트 4개 유지 -->
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const top = document.querySelector('header .top');
+  const sceneHead = document.querySelector('.scene-wrap .scene-head');
+  const clock = document.getElementById('lounge-clock');
+  const sfx = document.getElementById('jmc-sfx-toggle');
+  const help = document.querySelector(
+    '.scene-head > div:first-child > p:last-of-type'
+  );
+  const rename = document.getElementById('rename');
+
+  // 기존 앱이 정상 실행됐을 때만 메뉴 이동
+  if (!top || !sceneHead || !clock || !sfx || !help || !rename) return;
+
+  const tools = document.createElement('div');
+  tools.id = 'jmc-header-tools';
+
+  const firstLine = document.createElement('div');
+  firstLine.id = 'jmc-header-tools-line';
+
+  help.id = 'jmc-header-help';
+  help.textContent = window.matchMedia(
+    '(max-width: 980px), (pointer: coarse)'
+  ).matches
+    ? '이동 방향키 · 점프 SPACE · 공격 A'
+    : '점프 SPACE · 앉기 C · 공격 A';
+
+  // 기존 시간과 효과음 버튼을 상단 헤더로 이동
+  firstLine.append(clock, sfx);
+  tools.append(firstLine, help);
+  top.insertBefore(tools, rename);
+
+  const style = document.createElement('style');
+  style.textContent = `
+    /* 기존 큰 JMC 휴식공간 영역 제거 */
+    body.jmc-compact-header .scene-wrap > .scene-head {
+      display: none !important;
+    }
+
+    /* PC 상단 메뉴 */
+    body.jmc-compact-header header {
+      flex-wrap: wrap;
+      gap: 10px;
+      padding-top: 9px;
+      padding-bottom: 9px;
+    }
+
+    body.jmc-compact-header header .top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    body.jmc-compact-header #jmc-header-tools {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    body.jmc-compact-header #jmc-header-tools-line {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+
+    /* 한국시간 */
+    body.jmc-compact-header #lounge-clock {
+      font-size: 12px;
+      line-height: 1.2;
+      padding: 6px 9px;
+    }
+
+    /* 효과음 버튼 */
+    body.jmc-compact-header #jmc-sfx-toggle {
+      position: static !important;
+      top: auto !important;
+      right: auto !important;
+      padding: 7px 9px !important;
+      font-size: 12px !important;
+      line-height: 1.2 !important;
+      white-space: nowrap !important;
+    }
+
+    /* 조작키 안내 */
+    body.jmc-compact-header #jmc-header-help {
+      position: static !important;
+      display: block !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      color: #a8b9cb !important;
+      font: 11px/1.25 Arial, sans-serif !important;
+      white-space: nowrap !important;
+      text-align: right;
+    }
+
+    /* 모바일 상단 메뉴 최적화 */
+    @media (max-width: 980px), (pointer: coarse) {
+      body.jmc-compact-header header {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 6px !important;
+        padding: 9px 10px !important;
+      }
+
+      body.jmc-compact-header header .logo {
+        width: 100%;
+        flex: 0 1 auto;
+      }
+
+      body.jmc-compact-header header .top {
+        width: 100%;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 6px !important;
+        white-space: normal !important;
+      }
+
+      body.jmc-compact-header header .top > .live {
+        order: 0;
+      }
+
+      body.jmc-compact-header header .top > span:not(.live) {
+        order: 1;
+      }
+
+      body.jmc-compact-header header .top > #rename {
+        order: 2;
+      }
+
+      body.jmc-compact-header #jmc-header-tools {
+        order: 3;
+        width: 100%;
+        flex: 0 0 100%;
+        align-items: flex-end;
+        gap: 3px;
+      }
+
+      body.jmc-compact-header #jmc-header-tools-line {
+        width: 100%;
+        justify-content: flex-end;
+      }
+
+      body.jmc-compact-header #lounge-clock {
+        font-size: 11px;
+        padding: 5px 7px;
+      }
+
+      body.jmc-compact-header #jmc-sfx-toggle {
+        font-size: 11px !important;
+        padding: 5px 8px !important;
+      }
+
+      body.jmc-compact-header #jmc-header-help {
+        font-size: 10px !important;
+      }
+    }
+  `;
+
+  document.head.appendChild(style);
+  document.body.classList.add('jmc-compact-header');
+});
+</script>
 </body>
 
 
