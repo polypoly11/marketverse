@@ -1822,9 +1822,14 @@ window.addEventListener('keydown',e=>{
     !myAvatar.userData.seated&&
     onGround
   ){
-    jumpVelocity=JUMP_SPEED;
-    onGround=false;
-    sendMove(true);
+jumpVelocity=JUMP_SPEED;
+onGround=false;
+
+// 고래 광역공격 회피용 점프 신호
+send({type:'jump'});
+
+sendMove(true);
+
   }
 
   keys.add(k);
