@@ -1190,7 +1190,21 @@ sfxButton.onclick=()=>{
   }catch{}
   if(sfxEnabled)getAudioContext();
 };
-sceneEl.appendChild(sfxButton);
+const loungeBadge = document.querySelector('.scene-head .pill');
+
+if (loungeBadge) {
+  loungeBadge.style.position = 'relative';
+  loungeBadge.appendChild(sfxButton);
+
+  // VIRTUAL LOUNGE 바로 아래에 효과음 버튼 배치
+  sfxButton.style.position = 'absolute';
+  sfxButton.style.top = 'calc(100% + 8px)';
+  sfxButton.style.right = '0';
+  sfxButton.style.whiteSpace = 'nowrap';
+  sfxButton.style.zIndex = '40';
+} else {
+  sceneEl.appendChild(sfxButton);
+}
 
 const scene=new THREE.Scene();
 scene.background=new THREE.Color('#080f1b');
