@@ -760,7 +760,101 @@ function updateTailEffects(now) {
     };
   }
 
-  addCyberPreviewButton();
+  
+  // 테스트용 파일 선택 버튼 비활성화
+  // addCyberPreviewButton();
+
+  // 사이버 고래 자동 로딩
+  let cyberAutoLoading = false;
+
+  async function loadCyberWhaleAutomatically() {
+    if (
+      !whale ||
+      cyberAutoLoading ||
+      cyberPreview.object
+    ) return;
+
+    cyberAutoLoading = true;
+
+    try {
+      const { GLTFLoader } = await import(
+        'https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/loaders/GLTFLoader.js'
+      );
+
+      const gltf = await new GLTFLoader().loadAsync(
+        '/models/whale-boss.glb'
+      );
+
+      const model = new THREE.Group();
+
+      // 기존 테스트에서 사용한 크기와 방향 유지
+      model.rotation.y = 2.34;
+      model.scale.setScalar(1.8);
+      model.add(gltf.scene);
+
+      const center = new THREE.Box3()
+        .setFromObject(model)
+        .getCenter(new THREE.Vector3());
+
+      model.position.sub(center);
+
+      // 기존 꼬리 내려치기 형태 키 연결
+      const targets = [];
+
+      model.traverse(node => {
+        if (
+          !node.isMesh ||
+          !node.morphTargetDictionary
+        ) return;
+
+        const lift =
+          node.morphTargetDictionary.TailLift;
+
+        const slam =
+          node.morphTargetDictionary.TailSlam;
+
+        if (
+          Number.isInteger(lift) &&
+          Number.isInteger(slam)
+        ) {
+          targets.push({ node, lift, slam });
+        }
+      });
+
+      if (!targets.length) {
+        throw new Error(
+          'TailLift / TailSlam을 찾지 못했습니다.'
+        );
+      }
+
+      // 새 모델 로딩 성공 후 기존 외형 숨김
+      whale.root.add(model);
+
+      for (const child of whale.root.children) {
+        if (
+          child !== model &&
+          !child.isSprite
+        ) {
+          child.visible = false;
+        }
+      }
+
+      cyberPreview.object = model;
+      cyberPreview.targets = targets;
+
+      console.info('사이버 고래 자동 소환 성공');
+
+    } catch (error) {
+      console.error(
+        '사이버 고래 자동 로딩 실패',
+        error
+      );
+
+      // 실패하면 기존 고래 외형 유지
+    } finally {
+      cyberAutoLoading = false;
+    }
+  }
   function updateHp(value) {
     current.hp=Math.max(
       0,
@@ -850,7 +944,9 @@ function updateTailEffects(now) {
     const isBoss=current.state==='active';
     const isLoot=current.state==='loot';
 
+    
     if(isBoss && !whale) makeWhale();
+    if(isBoss) loadCyberWhaleAutomatically();
     if(whale) whale.root.visible=isBoss;
 
     if(isLoot && !loot) makeLoot();
