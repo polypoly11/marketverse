@@ -187,6 +187,136 @@ const raid = await createBossRaid({clients, send, broadcast});
 mountAdmin(app, {clients, votes, history, magicShots, send, broadcast, presence, raid});
 
 // ========================================
+// 고래 보스 꼬리 광역공격
+// 10초 주기 / 피해 40 / 점프 회피
+// ========================================
+
+const BOSS_TAIL_INTERVAL = 10000;
+const BOSS_TAIL_WARNING = 1400;
+const BOSS_TAIL_DAMAGE = 40;
+
+let tailRaidId = null;
+let nextTailAttackAt = 0;
+let warnedTailAttackAt = 0;
+
+function updateBossTailAttack() {
+  const state = raid.snapshot();
+
+  // 고래가 없거나 사망했다면 공격 중지
+  if (state.state !== 'active' || !state.id) {
+    tailRaidId = null;
+    nextTailAttackAt = 0;
+    warnedTailAttackAt = 0;
+    return;
+  }
+
+  const now = Date.now();
+
+  // 새로운 고래가 소환되면 10초 후 첫 공격
+  if (tailRaidId !== state.id) {
+    tailRaidId = state.id;
+    nextTailAttackAt = now + BOSS_TAIL_INTERVAL;
+    warnedTailAttackAt = 0;
+    return;
+  }
+
+  // 공격 1.4초 전 전체 이용자에게 경고
+  if (
+    warnedTailAttackAt !== nextTailAttackAt &&
+    now >= nextTailAttackAt - BOSS_TAIL_WARNING
+  ) {
+    warnedTailAttackAt = nextTailAttackAt;
+
+    broadcast({
+      type: 'boss_tail_warning',
+      leadMs: Math.max(0, nextTailAttackAt - now),
+      damage: BOSS_TAIL_DAMAGE
+    });
+  }
+
+  if (now < nextTailAttackAt) return;
+
+  // 전체 이용자에게 꼬리 공격 및 충격파 표시
+  broadcast({
+    type: 'boss_tail_strike',
+    damage: BOSS_TAIL_DAMAGE
+  });
+
+  let someoneDied = false;
+
+  for (const [ws, player] of clients) {
+    if (!player.ready || player.hp <= 0) continue;
+
+    // 서버가 기록한 실제 점프 시작 시각으로 판정
+    const elapsed = (now - player.lastJumpAt) / 1000;
+
+    // 기존 점프 물리값과 동일하게 높이 계산
+    // 점프 속도 8 / 중력 19
+    const jumpHeight =
+      elapsed > 0 && elapsed < 0.85
+        ? 8 * elapsed - 9.5 * elapsed * elapsed
+        : 0;
+
+    // 충격파가 발생한 순간 공중에 있으면 회피
+    const dodged = jumpHeight >= 0.55;
+
+    send(ws, {
+      type: 'boss_tail_result',
+      dodged,
+      damage: dodged ? 0 : BOSS_TAIL_DAMAGE
+    });
+
+    if (dodged) continue;
+
+    // 회피 실패: HP 40 감소
+    player.hp = Math.max(
+      0,
+      player.hp - BOSS_TAIL_DAMAGE
+    );
+
+    // 본인의 HP 바 갱신
+    send(ws, {
+      type: 'hp',
+      hp: player.hp,
+      maxHp: MAX_HP
+    });
+
+    // 다른 참가자의 캐릭터 HP 바 갱신
+    broadcast({
+      type: 'player_hp',
+      id: player.id,
+      hp: player.hp,
+      maxHp: MAX_HP
+    });
+
+    // 체력이 0이면 기존 사망 및 퇴장 처리
+    if (player.hp === 0) {
+      player.ready = false;
+
+      send(ws, {
+        type: 'death',
+        message: '사망하셨습니다',
+        hp: 0
+      });
+
+      ws.close(4001, 'HP depleted');
+      someoneDied = true;
+    }
+  }
+
+  if (someoneDied) {
+    presence();
+  }
+
+  // 다음 광역공격은 10초 후
+  nextTailAttackAt = now + BOSS_TAIL_INTERVAL;
+  warnedTailAttackAt = 0;
+}
+
+// 서버가 공격 시간을 관리
+setInterval(updateBossTailAttack, 50).unref();
+
+// ========================================
 // WebSocket 멀티플레이 서버
 // ========================================
 
@@ -221,9 +351,9 @@ wss.on('connection', (ws, req) => {
     lastChat: 0,
     lastMove: 0,
 
-    lastMagic: 0,
-    hp: MAX_HP
-  };
+lastMagic: 0,
+lastJumpAt: 0,
+hp: MAX_HP
 
   clients.set(ws, p);
 
@@ -300,6 +430,23 @@ wss.on('connection', (ws, req) => {
       return;
     }
 
+    
+// 고래 광역공격 회피를 위한 점프 시작 시각 기록
+if (m.type === 'jump') {
+  const now = Date.now();
+
+  // 앉은 상태에서는 점프 불가
+  // 점프 연타로 회피 판정을 조작하지 못하도록 제한
+  if (
+    p.hp > 0 &&
+    !p.seated &&
+    now - p.lastJumpAt >= 850
+  ) {
+    p.lastJumpAt = now;
+  }
+
+  return;
+}
     if(m.type==='loot_pickup'){
       void raid.pickup(ws,p);
       return;
