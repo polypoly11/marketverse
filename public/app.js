@@ -1933,6 +1933,46 @@ joystickStyle.textContent=`
 
 document.head.appendChild(joystickStyle);
 
+  // ==========================================
+  // 모바일 조이스틱 화면 흔들림 방지
+  // ==========================================
+
+  if (isMobileDevice) {
+
+    // 조이스틱 조작 중 브라우저 화면 스크롤 방지
+    document.addEventListener('touchmove', function(e) {
+      if (
+        mobileJoystick.pointerId !== null &&
+        e.cancelable
+      ) {
+        e.preventDefault();
+      }
+    }, {
+      passive: false,
+      capture: true
+    });
+
+    // 모바일 주소창 변화로 인한 화면 높이 흔들림 방지
+    joystickStyle.textContent += `
+      @media (max-width: 980px), (pointer: coarse) {
+
+        html body #scene {
+          height: 65svh !important;
+          touch-action: none !important;
+          overscroll-behavior: none !important;
+        }
+
+        html body #mobile-controls.jmc-joystick,
+        html body #mobile-controls.jmc-joystick * {
+          touch-action: none !important;
+          user-select: none !important;
+          -webkit-user-select: none !important;
+        }
+
+      }
+    `;
+  }
+
 // 손가락 위치로 이동 방향 계산
 function updateMobileJoystick(e){
   const rect=controls.getBoundingClientRect();
