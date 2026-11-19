@@ -25,6 +25,141 @@ export function createBossClient({
   const bossPos=new THREE.Vector3(0,1.7,-13);
   const effects=[];
 
+// ========================================
+// 고래 꼬리 광역공격 시각 효과
+// ========================================
+
+let tailWarningUntil = 0;
+let tailStrikeTime = -1000000;
+
+const tailShockwaves = [];
+
+// 광역공격 경고 문구
+const tailWarning = document.createElement('div');
+
+tailWarning.style.cssText = `
+  position:absolute;
+  z-index:75;
+  left:50%;
+  top:70px;
+  transform:translateX(-50%);
+  width:max-content;
+  max-width:calc(100% - 20px);
+  padding:10px 14px;
+  box-sizing:border-box;
+  border:1px solid #ffad68;
+  border-radius:10px;
+  background:rgba(99,27,22,.94);
+  color:#fff4db;
+  font:bold 13px Arial,sans-serif;
+  text-align:center;
+  pointer-events:none;
+  box-shadow:0 0 20px rgba(255,80,35,.35);
+`;
+
+tailWarning.hidden = true;
+sceneEl.appendChild(tailWarning);
+
+// 고래 꼬리 공격 충격파 생성
+function createTailShockwave() {
+  const mesh = new THREE.Mesh(
+    new THREE.RingGeometry(0.7,0.95,64),
+    new THREE.MeshBasicMaterial({
+      color:0xff8745,
+      transparent:true,
+      opacity:0.85,
+      side:THREE.DoubleSide,
+      depthWrite:false
+    })
+  );
+
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.set(0,0.1,-13);
+
+  scene.add(mesh);
+
+  tailShockwaves.push({
+    mesh,
+    born:performance.now()
+  });
+}
+
+// 고래 꼬리 움직임과 충격파 갱신
+function updateTailEffects(now) {
+
+  if (current.state !== 'active') {
+    tailWarningUntil = 0;
+    tailWarning.hidden = true;
+  }
+
+  if (whale?.root.visible) {
+
+    // 공격 전: 꼬리를 뒤로 크게 젖힘
+    if (tailWarningUntil > now) {
+      const remaining = tailWarningUntil - now;
+
+      const progress = Math.max(
+        0,
+        Math.min(1,1 - remaining / 1400)
+      );
+
+      whale.tail.rotation.y =
+        -0.15 - progress * 0.95;
+
+      whale.tail.rotation.z =
+        0.15 + progress * 0.35;
+
+      tailWarning.textContent =
+        `🐋 꼬리 광역공격! ${(remaining/1000).toFixed(1)}초 후 · 점프! (HP -40)`;
+    }
+
+    // 공격 순간: 꼬리를 반대 방향으로 휘두름
+    else if (
+      now - tailStrikeTime >= 0 &&
+      now - tailStrikeTime < 500
+    ) {
+      const progress =
+        (now - tailStrikeTime) / 500;
+
+      whale.tail.rotation.y =
+        -1.1 +
+        Math.sin(progress * Math.PI / 2) * 2.2;
+
+      whale.tail.rotation.z =
+        0.5 * (1 - progress);
+    }
+  }
+
+  if (
+    tailWarningUntil > 0 &&
+    now >= tailWarningUntil
+  ) {
+    tailWarningUntil = 0;
+    tailWarning.hidden = true;
+  }
+
+  // 충격파가 라운지 전체로 퍼지는 효과
+  for (let i = tailShockwaves.length - 1; i >= 0; i--) {
+    const wave = tailShockwaves[i];
+    const progress = (now - wave.born) / 900;
+
+    if (progress >= 1) {
+      scene.remove(wave.mesh);
+      wave.mesh.geometry.dispose();
+      wave.mesh.material.dispose();
+      tailShockwaves.splice(i,1);
+      continue;
+    }
+
+    wave.mesh.scale.setScalar(
+      1 + progress * 48
+    );
+
+    wave.mesh.material.opacity =
+      0.85 * (1 - progress);
+  }
+}
+
   const hud=document.createElement('div');
 
   hud.style.cssText=`
@@ -765,6 +900,32 @@ export function createBossClient({
         showReward(m);
         return true;
 
+case 'boss_tail_warning':
+  tailWarningUntil =
+    performance.now() +
+    Math.max(0, Number(m.leadMs) || 1400);
+
+  tailWarning.hidden = false;
+  tailWarning.textContent =
+    '🐋 고래 꼬리 광역공격 준비! 점프해서 피하세요!';
+  return true;
+
+case 'boss_tail_strike':
+  tailWarningUntil = 0;
+  tailWarning.hidden = true;
+
+  tailStrikeTime = performance.now();
+
+  createTailShockwave();
+  return true;
+
+case 'boss_tail_result':
+  if (m.dodged) {
+    say('✅ 점프 성공! 고래 공격 회피 · 피해 0');
+  } else {
+    say('💥 고래 꼬리 공격 적중! HP -40');
+  }
+  return true;
       case 'raid_notice':
         say(m.message);
         return true;
@@ -819,6 +980,8 @@ export function createBossClient({
 
       whale.root.scale.setScalar(scale);
     }
+
+updateTailEffects(now);
 
     if(loot?.root.visible) {
       loot.root.rotation.y+=dt*1.2;
