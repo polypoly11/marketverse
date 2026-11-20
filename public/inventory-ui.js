@@ -13,42 +13,48 @@
     toggle.type = 'button';
     toggle.textContent = '🎒 아이템';
 
-    toggle.style.cssText = `
-      position:fixed;
-      right:15px;
-      top:85px;
-      z-index:9998;
-      padding:10px 14px;
-      border:1px solid #d8ba80;
-      border-radius:24px;
-      background:rgba(15,29,47,.94);
-      color:#ffe2a0;
-      font:700 13px Arial;
-      cursor:pointer;
-      box-shadow:0 5px 24px #0005;
-    `;
+toggle.style.cssText = `
+  position:fixed;
+  left:15px;
+  top:320px;
+  z-index:9998;
+  width:62px;
+  min-height:48px;
+  padding:7px 3px;
+  box-sizing:border-box;
+  border:1px solid #d8ba80;
+  border-radius:12px;
+  background:rgba(15,29,47,.94);
+  color:#ffe2a0;
+  font:700 11px Arial;
+  text-align:center;
+  white-space:normal;
+  line-height:1.4;
+  cursor:pointer;
+  box-shadow:0 5px 24px #0005;
+`;
 
     const panel = document.createElement('section');
     panel.id = 'jmc-inventory-panel';
     panel.hidden = true;
 
-    panel.style.cssText = `
-      position:fixed;
-      right:15px;
-      top:135px;
-      z-index:9999;
-      width:min(350px,calc(100vw - 30px));
-      max-height:70dvh;
-      overflow-y:auto;
-      box-sizing:border-box;
-      padding:20px;
-      background:rgba(13,27,45,.98);
-      color:#f6f6f6;
-      border:1px solid #c3a475;
-      border-radius:17px;
-      box-shadow:0 15px 60px #0009;
-      font:14px Arial;
-    `;
+panel.style.cssText = `
+  position:fixed;
+  left:15px;
+  top:374px;
+  z-index:9999;
+  width:min(350px,calc(100vw - 30px));
+  max-height:70dvh;
+  overflow-y:auto;
+  box-sizing:border-box;
+  padding:20px;
+  background:rgba(13,27,45,.98);
+  color:#f6f6f6;
+  border:1px solid #c3a475;
+  border-radius:17px;
+  box-shadow:0 15px 60px #0009;
+  font:14px Arial;
+`;
 
     panel.innerHTML = `
       <div style="
@@ -144,6 +150,47 @@
     `;
 
     document.body.append(toggle, panel);
+
+// HP바의 실제 화면 위치에 맞춰
+// 인벤토리 버튼과 패널을 자동 정렬
+function alignInventoryToHp() {
+  const hp = document.getElementById('jmc-hp-hud');
+
+  if (!hp) return;
+
+  const rect = hp.getBoundingClientRect();
+
+  // HP바와 왼쪽 정렬 통일
+  const left = Math.max(8, rect.left);
+
+  // HP바 아래 8px 간격
+  const buttonTop = rect.bottom + 8;
+
+  toggle.style.left = `${left}px`;
+  toggle.style.top = `${buttonTop}px`;
+  toggle.style.width = `${rect.width}px`;
+
+  // 인벤토리창도 같은 왼쪽 기준선 사용
+  panel.style.left = `${left}px`;
+  panel.style.top =
+    `${buttonTop + toggle.offsetHeight + 8}px`;
+
+  // 화면 밖으로 넘어가지 않도록 높이 제한
+  const panelTop = buttonTop + toggle.offsetHeight + 8;
+
+  panel.style.maxHeight =
+    `${Math.max(120, window.innerHeight - panelTop - 12)}px`;
+}
+
+// 최초 위치 계산
+alignInventoryToHp();
+
+// 화면 크기 및 스크롤 변경 시 다시 정렬
+window.addEventListener('resize', alignInventoryToHp);
+window.addEventListener('scroll', alignInventoryToHp, true);
+
+// HP바가 늦게 생성되는 경우에도 위치 계산
+requestAnimationFrame(alignInventoryToHp);
 
     const $ = id => document.getElementById(id);
 
