@@ -1,6 +1,6 @@
 
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
-import {createBossClient} from './boss-client.js?v=20261120-whale-scale-2';
+import {createBossClient} from './boss-client.js?v=20261120-whale-scale-99';
 const $ = id => document.getElementById(id);
 
 const animals = [
