@@ -1,8 +1,11 @@
 
 import crypto from 'node:crypto';
 import { createItemInventory } from './item-inventory.js';
+
 // 독립적인 보스 레이드 상태.
-// 실제 쿠폰 이벤트에는 DATABASE_URL + pg가 필요합니다.
+// 고래의 파편을 재접속 후에도 보관하려면 DATABASE_URL + pg가 필요합니다.
+// DATABASE_URL이 없을 때는 연습 모드로만 보상을 처리합니다.
+
 const MAX_HP = 10000;
 const BOSS = {x:0,y:1.7,z:-13,radius:2.25};
 const LOOT = {x:0,z:-13,radius:1.6};
@@ -46,7 +49,10 @@ export async function createBossRaid({clients,send,broadcast}) {
       )
     `);
   }
-const inventory = await createItemInventory(pool, send);
+
+  // 기존 인벤토리 모듈의 데이터 구조와 지급 로직을 그대로 사용합니다.
+  const inventory = await createItemInventory(pool, send);
+
   let run = {
     id:null,
     state:'idle',
@@ -306,13 +312,17 @@ const inventory = await createItemInventory(pool, send);
         message:'다른 획득 요청을 처리 중입니다.'
       });
     }
-if (pool && !player.inventoryHash) {
-  send(ws, {
-    type: 'raid_notice',
-    message: '인벤토리 인증 오류입니다. 새로고침해 주세요.'
-  });
-  return;
-}
+
+    // 저장형 보상에는 안정적인 소유자 식별값이 필수입니다.
+    // server.js의 inventoryToken(또는 서버 발급 쿠키)과 연결됩니다.
+    if (pool && !player.inventoryHash) {
+      send(ws, {
+        type:'raid_notice',
+        message:'인벤토리 인증 오류입니다. 새로고침해 주세요.'
+      });
+      return;
+    }
+
     claiming=true;
 
     try {
@@ -320,13 +330,14 @@ if (pool && !player.inventoryHash) {
       const code=crypto.randomBytes(18).toString('base64url');
 
       if (pool) {
+        // 이전 HP 저장 작업 완료 후 실제 보상을 확정합니다.
         await deathSaved;
-
         const db=await pool.connect();
 
         try {
           await db.query('BEGIN');
 
+          // 같은 레이드에 대해 첫 획득자 한 명만 성공합니다.
           const update=await db.query(`
             UPDATE jmc_raid_runs
             SET state='claimed',
@@ -339,11 +350,11 @@ if (pool && !player.inventoryHash) {
 
           if (update.rowCount!==1) {
             await db.query('ROLLBACK');
-
-            return send(ws,{
+            send(ws,{
               type:'raid_notice',
               message:'이미 획득된 아이템입니다.'
             });
+            return;
           }
 
           await db.query(`
@@ -357,20 +368,27 @@ if (pool && !player.inventoryHash) {
             player.name,
             sha(code)
           ]);
-await inventory.grant(db, run.id, player);
+
+          // 파편 지급과 당첨자 확정을 같은 트랜잭션으로 처리합니다.
+          // 중간에 오류가 발생하면 양쪽 모두 취소됩니다.
+          await inventory.grant(db,run.id,player);
           await db.query('COMMIT');
 
         } catch(e) {
-          await db.query('ROLLBACK');
+          try {
+            await db.query('ROLLBACK');
+          } catch(rollbackError) {
+            console.error('[RAID] rollback:',rollbackError.message);
+          }
           throw e;
 
         } finally {
           db.release();
         }
-      }
 
-      // 연습 모드에서도 아이템 획득 내역을 기록합니다.
-      if (!pool) {
+      } else {
+        // DB를 연결하지 않은 경우 연습 당첨 기록만 생성합니다.
+        // 실제 고래의 파편을 지급하거나 영구 저장하지 않습니다.
         testRewards.unshift({
           id:rewardId,
           run_id:run.id,
@@ -381,7 +399,6 @@ await inventory.grant(db, run.id, player);
           paid_at:null
         });
 
-        // 최근 30건까지만 메모리에 보관
         if (testRewards.length>30) {
           testRewards.length=30;
         }
@@ -394,11 +411,26 @@ await inventory.grant(db, run.id, player);
         );
       }
 
+      // 데이터베이스 확정이 끝난 뒤 레이드 상태를 갱신합니다.
       run.state='claimed';
       run.winnerName=player.name;
+      publish();
 
-      // 수령 코드는 당첨자에게만 전달합니다.
-      // 연습 모드에서는 실제 쿠폰 수령 코드를 발급하지 않습니다.
+      // DB 저장 성공 여부와 UI 갱신 오류를 구분합니다.
+      // DB 저장이 성공했다면 UI 오류 때문에 보상이 사라지지 않습니다.
+      if (pool) {
+        try {
+          await inventory.sendSnapshot(ws,player);
+        } catch(syncError) {
+          console.error('[RAID] inventory sync:',syncError.message);
+          send(ws,{
+            type:'raid_notice',
+            message:'파편은 저장됐지만 아이템창 갱신에 실패했습니다. 다시 접속해 주세요.'
+          });
+        }
+      }
+
+      // 지급 확정 안내. 연습 모드에서는 파편을 지급했다고 표시하지 않습니다.
       send(ws,{
         type:'reward_result',
         rewardId,
@@ -406,15 +438,15 @@ await inventory.grant(db, run.id, player);
         testMode:!pool
       });
 
-// 획득한 아이템을 인벤토리에 반영
-await inventory.sendSnapshot(ws, player);
-
-// 전체 참가자 및 관리자 상태 업데이트
-publish();
+      if (!pool) {
+        send(ws,{
+          type:'raid_notice',
+          message:'연습 모드입니다. 파편은 저장되지 않습니다. DATABASE_URL을 연결해 주세요.'
+        });
+      }
 
     } catch(e) {
       console.error('[RAID] claim failed:',e.message);
-
       send(ws,{
         type:'raid_notice',
         message:'보상 저장에 실패했습니다. 다시 시도하세요.'
@@ -481,9 +513,9 @@ publish();
     cancel,
     collision,
     hit,
-pickup,
-inventory,
-rewards,
+    pickup,
+    inventory,
+    rewards,
     verify,
     markPaid,
 
