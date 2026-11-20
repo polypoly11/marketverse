@@ -364,8 +364,9 @@ wss.on('connection', (ws, req) => {
 
     id: crypto.randomUUID(),
 
-    name: '',
-    animal: 'seal',
+name: '',
+animal: 'seal',
+inventoryHash: null,
 
     x: 0,
     y: 0,
@@ -444,14 +445,30 @@ wss.on('connection', (ws, req) => {
         ? m.animal
         : 'seal';
 
-      p.ready = true;
 
 const firstJoin = !p.ready;
+
+if (firstJoin) {
+  const token =
+    typeof m.inventoryToken === 'string'
+      ? m.inventoryToken.toLowerCase()
+      : '';
+
+  p.inventoryHash =
+    /^[0-9a-f]{64}$/.test(token)
+      ? crypto.createHash('sha256')
+          .update(token)
+          .digest('hex')
+      : null;
+}
+
 p.ready = true;
 
 if (firstJoin) {
   void visitorStats.record(m.visitorId);
 }
+
+void raid.inventory.sendSnapshot(ws, p);
 
       send(ws, {
         type: 'hp',
@@ -489,7 +506,10 @@ if (m.type === 'jump') {
       void raid.pickup(ws,p);
       return;
     }
-
+if (m.type === 'inventory_craft') {
+  void raid.inventory.craft(ws, p);
+  return;
+}
     // ====================================
     // 캐릭터 이동 동기화
     // ====================================
