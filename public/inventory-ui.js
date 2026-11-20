@@ -214,7 +214,7 @@ function alignInventoryToHp() {
   ).matches;
 
 const gap = mobile ? 4 : 8;
-const buttonHeight = mobile ? 52 : 72;
+const buttonHeight = mobile ? 60 : 72;
   // HP바 실제 위치 기준
   const left = rect.left;
   const top = rect.bottom + gap;
@@ -443,18 +443,41 @@ refreshInventoryPosition();
 
       const enabled = state.enabled === true;
 
- toggle.innerHTML = `
+toggle.innerHTML = `
   <span style="
-    display:flex;
-    flex-direction:column;
+    display:grid;
+    grid-template-rows:20px 12px 18px;
+    justify-items:center;
     align-items:center;
-    justify-content:center;
-    gap:1px;
-    line-height:1.05;
+    width:100%;
+    height:50px;
+    margin:0;
+    padding:0;
+    overflow:visible;
   ">
-    <span class="jmc-item-icon">🎒</span>
-    <span class="jmc-item-label">ITEM</span>
-    <strong class="jmc-item-count">${count}</strong>
+    <span class="jmc-item-icon" style="
+      display:block;
+      font-size:17px;
+      line-height:20px;
+      height:20px;
+    ">🎒</span>
+
+    <span class="jmc-item-label" style="
+      display:block;
+      font-size:10px;
+      line-height:12px;
+      height:12px;
+      letter-spacing:.5px;
+      color:#f5cf87;
+    ">ITEM</span>
+
+    <strong class="jmc-item-count" style="
+      display:block;
+      font-size:16px;
+      line-height:18px;
+      height:18px;
+      color:white;
+    ">${count}</strong>
   </span>
 `;
 
