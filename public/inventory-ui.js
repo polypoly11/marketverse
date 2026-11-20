@@ -296,9 +296,9 @@
       craftButton.disabled = !enabled || count < REQUIRED_COUNT;
       craftButton.style.opacity = craftButton.disabled ? '.45' : '1';
       craftButton.style.cursor = craftButton.disabled ? 'not-allowed' : 'pointer';
-      note.textContent = enabled
-        ? `${ITEM_NAME} ${REQUIRED_COUNT}개를 조합하면 메가MGC커피 기프티콘 교환 신청권 1개가 생성됩니다. 쿠폰은 운영자 확인 후 지급합니다.`
-        : '정식 아이템 보관을 사용하려면 서버에 PostgreSQL 연결이 필요합니다.';
+note.textContent = enabled
+  ? `${ITEM_NAME} ${REQUIRED_COUNT}개를 조합하면 행운의 선물 교환 신청권 1개가 생성됩니다. 행운의 선물은 운영자 확인 후 지급합니다.`
+  : '정식 아이템 보관을 사용하려면 서버에 PostgreSQL 연결이 필요합니다.';
 
       const history = $('jmc-inventory-history');
       history.replaceChildren();
@@ -336,7 +336,7 @@
       } else if (m.type==='inventory_crafted') {
         panel.hidden = false;
         refreshInventoryPosition();
-        alert(`🎉 조합 성공!\n교환 신청 번호: ${m.claimId}\n운영자 확인 후 기프티콘을 지급합니다.`);
+alert(`🎉 조합 성공!\n교환 신청 번호: ${m.claimId}\n운영자 확인 후 행운의 선물을 지급합니다.`);
       } else if (m.type==='inventory_notice') {
         alert(m.message || '인벤토리 오류');
         render();
