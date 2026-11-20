@@ -1,14 +1,12 @@
-
 import crypto from 'node:crypto';
 import { createItemInventory } from './item-inventory.js';
 
 // 독립적인 보스 레이드 상태.
-// 고래의 파편을 재접속 후에도 보관하려면 DATABASE_URL + pg가 필요합니다.
-// DATABASE_URL이 없을 때는 연습 모드로만 보상을 처리합니다.
-
+// 실제 쿠폰 이벤트에는 DATABASE_URL + pg가 필요합니다.
 const MAX_HP = 10000;
 const BOSS = {x:0,y:1.7,z:-13,radius:2.25};
 const LOOT = {x:0,z:-13,radius:1.6};
+const LOOT_ITEM_NAME = '고래의 비늘';
 
 const sha = text =>
   crypto.createHash('sha256').update(text).digest('hex');
@@ -50,8 +48,30 @@ export async function createBossRaid({clients,send,broadcast}) {
     `);
   }
 
-  // 기존 인벤토리 모듈의 데이터 구조와 지급 로직을 그대로 사용합니다.
-  const inventory = await createItemInventory(pool, send);
+  // 인벤토리의 기존 내부 아이템 ID와 저장 구조는 유지합니다.
+  // 서버가 전달하는 아이템 이름만 새 이름으로 통일합니다.
+  function renameInventoryText(value) {
+    if (typeof value === 'string') {
+      return value.replaceAll('고래의 파편', LOOT_ITEM_NAME);
+    }
+    if (Array.isArray(value)) {
+      return value.map(renameInventoryText);
+    }
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, item]) => [
+          key,
+          renameInventoryText(item)
+        ])
+      );
+    }
+    return value;
+  }
+
+  const inventory = await createItemInventory(
+    pool,
+    (ws, data) => send(ws, renameInventoryText(data))
+  );
 
   let run = {
     id:null,
@@ -83,9 +103,6 @@ export async function createBossRaid({clients,send,broadcast}) {
     }
   }
 
-  // 연습 모드 당첨 기록 보관
-  // DATABASE_URL이 없어도 관리자 페이지에서 조회할 수 있습니다.
-  // 서버가 재시작되면 초기화됩니다.
   const testRewards = [];
 
   let claiming = false;
@@ -104,6 +121,7 @@ export async function createBossRaid({clients,send,broadcast}) {
     damage:run.damage,
     boss:BOSS,
     loot:LOOT,
+    lootItemName:LOOT_ITEM_NAME,
     winnerName:run.winnerName,
     prizeEnabled:!!pool
   });
@@ -194,7 +212,6 @@ export async function createBossRaid({clients,send,broadcast}) {
     return snapshot();
   }
 
-  // 마법탄 이동 구간에서 고래 충돌 지점 계산
   function collision(shot,x1,z1,x2,z2) {
     if (run.state!=='active') return null;
     if (Math.abs(shot.y-BOSS.y)>1.8) return null;
@@ -227,7 +244,6 @@ export async function createBossRaid({clients,send,broadcast}) {
     };
   }
 
-  // 실제 HP 감소는 서버에서만 처리
   function hit(shot,point) {
     if (run.state!=='active') return;
 
@@ -283,7 +299,6 @@ export async function createBossRaid({clients,send,broadcast}) {
     }
   }
 
-  // 선착순 보상 획득
   async function pickup(ws,player) {
     if (run.state!=='loot') {
       return send(ws,{
@@ -313,12 +328,10 @@ export async function createBossRaid({clients,send,broadcast}) {
       });
     }
 
-    // 저장형 보상에는 안정적인 소유자 식별값이 필수입니다.
-    // server.js의 inventoryToken(또는 서버 발급 쿠키)과 연결됩니다.
     if (pool && !player.inventoryHash) {
       send(ws, {
-        type:'raid_notice',
-        message:'인벤토리 인증 오류입니다. 새로고침해 주세요.'
+        type: 'raid_notice',
+        message: '인벤토리 인증 오류입니다. 새로고침해 주세요.'
       });
       return;
     }
@@ -330,14 +343,13 @@ export async function createBossRaid({clients,send,broadcast}) {
       const code=crypto.randomBytes(18).toString('base64url');
 
       if (pool) {
-        // 이전 HP 저장 작업 완료 후 실제 보상을 확정합니다.
         await deathSaved;
+
         const db=await pool.connect();
 
         try {
           await db.query('BEGIN');
 
-          // 같은 레이드에 대해 첫 획득자 한 명만 성공합니다.
           const update=await db.query(`
             UPDATE jmc_raid_runs
             SET state='claimed',
@@ -350,11 +362,11 @@ export async function createBossRaid({clients,send,broadcast}) {
 
           if (update.rowCount!==1) {
             await db.query('ROLLBACK');
-            send(ws,{
+
+            return send(ws,{
               type:'raid_notice',
               message:'이미 획득된 아이템입니다.'
             });
-            return;
           }
 
           await db.query(`
@@ -369,26 +381,19 @@ export async function createBossRaid({clients,send,broadcast}) {
             sha(code)
           ]);
 
-          // 파편 지급과 당첨자 확정을 같은 트랜잭션으로 처리합니다.
-          // 중간에 오류가 발생하면 양쪽 모두 취소됩니다.
-          await inventory.grant(db,run.id,player);
+          await inventory.grant(db, run.id, player);
           await db.query('COMMIT');
 
         } catch(e) {
-          try {
-            await db.query('ROLLBACK');
-          } catch(rollbackError) {
-            console.error('[RAID] rollback:',rollbackError.message);
-          }
+          await db.query('ROLLBACK');
           throw e;
 
         } finally {
           db.release();
         }
+      }
 
-      } else {
-        // DB를 연결하지 않은 경우 연습 당첨 기록만 생성합니다.
-        // 실제 고래의 파편을 지급하거나 영구 저장하지 않습니다.
+      if (!pool) {
         testRewards.unshift({
           id:rewardId,
           run_id:run.id,
@@ -411,45 +416,28 @@ export async function createBossRaid({clients,send,broadcast}) {
         );
       }
 
-      // 데이터베이스 확정이 끝난 뒤 레이드 상태를 갱신합니다.
       run.state='claimed';
       run.winnerName=player.name;
-      publish();
 
-      // DB 저장 성공 여부와 UI 갱신 오류를 구분합니다.
-      // DB 저장이 성공했다면 UI 오류 때문에 보상이 사라지지 않습니다.
-      if (pool) {
-        try {
-          await inventory.sendSnapshot(ws,player);
-        } catch(syncError) {
-          console.error('[RAID] inventory sync:',syncError.message);
-          send(ws,{
-            type:'raid_notice',
-            message:'파편은 저장됐지만 아이템창 갱신에 실패했습니다. 다시 접속해 주세요.'
-          });
-        }
-      }
-
-      // 지급 확정 안내. 연습 모드에서는 파편을 지급했다고 표시하지 않습니다.
       send(ws,{
         type:'reward_result',
         rewardId,
         claimCode:pool?code:null,
-        testMode:!pool
+        testMode:!pool,
+        itemName:LOOT_ITEM_NAME,
+        quantity:pool?1:0
       });
 
-      if (!pool) {
-        send(ws,{
-          type:'raid_notice',
-          message:'연습 모드입니다. 파편은 저장되지 않습니다. DATABASE_URL을 연결해 주세요.'
-        });
-      }
+      await inventory.sendSnapshot(ws, player);
+
+      publish();
 
     } catch(e) {
       console.error('[RAID] claim failed:',e.message);
+
       send(ws,{
         type:'raid_notice',
-        message:'보상 저장에 실패했습니다. 다시 시도하세요.'
+        message:'고래의 비늘 저장에 실패했습니다. 다시 시도하세요.'
       });
 
     } finally {
@@ -457,10 +445,7 @@ export async function createBossRaid({clients,send,broadcast}) {
     }
   }
 
-  // 관리자 페이지 당첨 기록 조회
   async function rewards() {
-    // PostgreSQL을 연결하지 않은 연습 모드에서도
-    // 서버 메모리에 기록된 당첨자 목록을 반환합니다.
     if (!pool) {
       return testRewards.slice();
     }
