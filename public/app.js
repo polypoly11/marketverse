@@ -3336,17 +3336,17 @@ function positionMobileHp() {
     'top', `${rect.top + 6}px`, 'important'
   );
 
-  hpHud.style.setProperty(
-    'width', '62px', 'important'
-  );
+hpHud.style.setProperty(
+  'width', '48px', 'important'
+);
 
-  hpHud.style.setProperty(
-    'height', '112px', 'important'
-  );
+hpHud.style.setProperty(
+  'height', '96px', 'important'
+);
 
-  hpHud.style.setProperty(
-    'min-height', '112px', 'important'
-  );
+hpHud.style.setProperty(
+  'min-height', '96px', 'important'
+);
 
   hpHud.style.setProperty(
     'padding', '5px 3px', 'important'
