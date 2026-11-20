@@ -816,6 +816,31 @@ function updateTailEffects(now) {
       model.scale.setScalar(1.8);
       model.add(gltf.scene);
 
+      // 원래 사이버 고래의 파란색 텍스처 복원
+      // 메타버스의 초록색 조명이 고래 색상을 바꾸지 않도록 처리
+      gltf.scene.traverse(node => {
+        if (!node.isMesh || !node.material) return;
+
+        const restoreTexture = original => {
+          if (!original?.map) return original;
+
+          return new THREE.MeshBasicMaterial({
+            map: original.map,
+            color: 0xffffff,
+            side: original.side,
+            transparent: original.transparent,
+            opacity: original.opacity,
+            alphaTest: original.alphaTest,
+            depthWrite: original.depthWrite,
+            toneMapped: false
+          });
+        };
+
+        node.material = Array.isArray(node.material)
+          ? node.material.map(restoreTexture)
+          : restoreTexture(node.material);
+      });
+
       const center = new THREE.Box3()
         .setFromObject(model)
         .getCenter(new THREE.Vector3());
