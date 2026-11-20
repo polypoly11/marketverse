@@ -1035,103 +1035,17 @@ function updateTailEffects(now) {
   }
 
   function showReward(m) {
-    if(m.testMode) {
-      say(
-        '연습용 보상 획득! 실제 쿠폰은 지급되지 않습니다.'
-      );
-      return;
-    }
-
-    const overlay=document.createElement('div');
-
-    overlay.style.cssText=`
-      position:fixed;
-      inset:0;
-      z-index:100100;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding:24px;
-      background:rgba(0,0,0,.85);
-    `;
-
-    const card=document.createElement('div');
-
-    card.style.cssText=`
-      width:min(430px,100%);
-      border:1px solid #e9c786;
-      border-radius:18px;
-      background:#152338;
-      color:#fff;
-      padding:28px;
-      text-align:center;
-      font:14px Arial,sans-serif;
-    `;
-
-    const title=document.createElement('h2');
-    title.textContent='🎉 스타벅스 쿠폰 당첨!';
-
-    const explain=document.createElement('p');
-
-    explain.textContent=
-      '운영자에게 아래 보상 ID와 수령 증명 코드를 전달하세요. 실제 쿠폰은 운영자가 확인한 뒤 지급합니다.';
-
-    const receipt=document.createElement('code');
-
-    receipt.textContent=
-      `보상 ID: ${m.rewardId}\n수령 코드: ${m.claimCode}`;
-
-    receipt.style.cssText=`
-      white-space:pre-wrap;
-      overflow-wrap:anywhere;
-      display:block;
-      padding:14px;
-      background:#0a1828;
-      border-radius:9px;
-      line-height:1.9;
-    `;
-
-    const copy=document.createElement('button');
-    copy.textContent='수령 코드 복사';
-
-    copy.style.cssText=`
-      margin:14px;
-      padding:11px 18px;
-      background:#e9c786;
-      border:0;
-      border-radius:9px;
-      cursor:pointer;
-    `;
-
-    copy.onclick=()=>navigator.clipboard?.writeText(
-      `보상 ID: ${m.rewardId}\n수령 코드: ${m.claimCode}`
+    if (m.testMode) {
+    say(
+      '연습용 보상입니다. 실제 파편은 저장되지 않습니다.'
     );
-
-    const close=document.createElement('button');
-    close.textContent='닫기';
-
-    close.style.cssText=`
-      padding:11px 18px;
-      background:#34485c;
-      color:#fff;
-      border:0;
-      border-radius:9px;
-      cursor:pointer;
-    `;
-
-    close.onclick=()=>overlay.remove();
-
-    card.append(
-      title,
-      explain,
-      receipt,
-      copy,
-      close
-    );
-
-    overlay.append(card);
-    document.body.append(overlay);
+    return;
   }
+
+  say(
+    '💠 고래의 파편 1개 획득! 아이템창에서 확인하세요.'
+  );
+}
 
   function impact(m) {
     if(!whale || current.state!=='active') return;
