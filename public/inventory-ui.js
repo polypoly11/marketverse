@@ -206,8 +206,8 @@ function alignInventoryToHp() {
     '(max-width:980px), (pointer:coarse)'
   ).matches;
 
-  const gap = mobile ? 4 : 8;
-  const buttonHeight = mobile ? 57 : 72;
+const gap = mobile ? 4 : 8;
+const buttonHeight = mobile ? 52 : 72;
 
   // HP바 실제 위치 기준
   const left = rect.left;
