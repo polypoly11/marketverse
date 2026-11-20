@@ -1,6 +1,6 @@
 
 import crypto from 'node:crypto';
-
+import { createItemInventory } from './item-inventory.js';
 // 독립적인 보스 레이드 상태.
 // 실제 쿠폰 이벤트에는 DATABASE_URL + pg가 필요합니다.
 const MAX_HP = 10000;
@@ -46,7 +46,7 @@ export async function createBossRaid({clients,send,broadcast}) {
       )
     `);
   }
-
+const inventory = await createItemInventory(pool, send);
   let run = {
     id:null,
     state:'idle',
@@ -306,7 +306,13 @@ export async function createBossRaid({clients,send,broadcast}) {
         message:'다른 획득 요청을 처리 중입니다.'
       });
     }
-
+if (pool && !player.inventoryHash) {
+  send(ws, {
+    type: 'raid_notice',
+    message: '인벤토리 인증 오류입니다. 새로고침해 주세요.'
+  });
+  return;
+}
     claiming=true;
 
     try {
@@ -351,7 +357,7 @@ export async function createBossRaid({clients,send,broadcast}) {
             player.name,
             sha(code)
           ]);
-
+await inventory.grant(db, run.id, player);
           await db.query('COMMIT');
 
         } catch(e) {
@@ -400,8 +406,11 @@ export async function createBossRaid({clients,send,broadcast}) {
         testMode:!pool
       });
 
-      // 전체 참가자 및 관리자 상태 업데이트
-      publish();
+// 획득한 아이템을 인벤토리에 반영
+await inventory.sendSnapshot(ws, player);
+
+// 전체 참가자 및 관리자 상태 업데이트
+publish();
 
     } catch(e) {
       console.error('[RAID] claim failed:',e.message);
@@ -472,8 +481,9 @@ export async function createBossRaid({clients,send,broadcast}) {
     cancel,
     collision,
     hit,
-    pickup,
-    rewards,
+pickup,
+inventory,
+rewards,
     verify,
     markPaid,
 
