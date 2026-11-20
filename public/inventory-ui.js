@@ -430,8 +430,7 @@ refreshInventoryPosition();
 
       const enabled = state.enabled === true;
 
-     toggle.innerHTML = `
-toggle.innerHTML = `
+ toggle.innerHTML = `
   <span style="
     display:flex;
     flex-direction:column;
