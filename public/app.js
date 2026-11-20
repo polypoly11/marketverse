@@ -3269,17 +3269,29 @@ hpHud.innerHTML = `
 `;
 
 sceneEl.appendChild(hpHud);
-const hpPulseMobileStyle = document.createElement('style');
 
-hpPulseMobileStyle.textContent = `
-  @media (max-width:980px), (pointer:coarse) {
-    #jmc-hp-hud .jmc-hp-pulse-icon {
-      display:none !important;
-    }
+// 모바일에서는 HP 심전도 아이콘 완전히 숨기기
+function updateMobileHpIcon() {
+  const mobile = window.matchMedia(
+    '(max-width: 980px), (pointer: coarse)'
+  ).matches;
+
+  const icon = hpHud.querySelector('svg');
+
+  if (icon) {
+    icon.style.setProperty(
+      'display',
+      mobile ? 'none' : 'block',
+      'important'
+    );
   }
-`;
+}
 
-document.head.appendChild(hpPulseMobileStyle);
+// 최초 적용
+updateMobileHpIcon();
+
+// 화면 크기가 변경될 때도 적용
+window.addEventListener('resize', updateMobileHpIcon);
 function updateHpHud(hp,maxHp=100){
   const max = Math.max(1,Number(maxHp)||100);
 
