@@ -3208,10 +3208,36 @@ hpHud.style.cssText = `
 
 hpHud.innerHTML = `
   <div style="
-    font-size:12px;
-    font-weight:800;
-    white-space:nowrap;
-  ">❤️ HP</div>
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:3px;
+  ">
+    <svg
+      width="23"
+      height="23"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="#50dfbc"
+      stroke-width="2.2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      style="
+        display:block;
+        filter:drop-shadow(0 0 4px rgba(80,223,188,.35));
+      "
+    >
+      <path d="M2 12h4l3-7 5 14 3-7h5"/>
+    </svg>
+
+    <span style="
+      font-size:11px;
+      font-weight:800;
+      letter-spacing:1px;
+      color:#e9f4f5;
+    ">HP</span>
+  </div>
 
   <div id="jmc-hp-text" style="
     font-size:11px;
