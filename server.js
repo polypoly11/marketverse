@@ -17,6 +17,61 @@ const app = express();
 app.disable('x-powered-by');
 
 app.use(express.json({limit:'12kb'}));
+
+// ========================================
+// 아이템 저장용 브라우저 식별값
+// 기존 클라이언트가 inventoryToken을 보내지 않아도
+// 같은 브라우저의 재접속 시 아이템 소유자를 식별한다.
+// ========================================
+
+const INVENTORY_COOKIE_NAME = 'jmc_inventory_v1';
+const INVENTORY_COOKIE_MAX_AGE = 60 * 60 * 24 * 365;
+const INVENTORY_TOKEN_PATTERN = /^[0-9a-f]{64}$/;
+
+function inventoryTokenFromCookie(req) {
+  const cookies = String(req.headers.cookie || '').split(';');
+
+  for (const entry of cookies) {
+    const equal = entry.indexOf('=');
+    if (equal < 0) continue;
+
+    const name = entry.slice(0, equal).trim();
+    if (name !== INVENTORY_COOKIE_NAME) continue;
+
+    const token = entry.slice(equal + 1).trim();
+    return INVENTORY_TOKEN_PATTERN.test(token) ? token : null;
+  }
+
+  return null;
+}
+
+function hashInventoryToken(token) {
+  return crypto.createHash('sha256')
+    .update(token)
+    .digest('hex');
+}
+
+// 첫 방문 때만 보안 토큰을 발급한다.
+// HttpOnly 쿠키이므로 브라우저 JavaScript에서 노출되지 않는다.
+app.use((req, res, next) => {
+  if (!inventoryTokenFromCookie(req)) {
+    const token = crypto.randomBytes(32).toString('hex');
+    const secure = req.secure ||
+      String(req.headers['x-forwarded-proto'] || '')
+        .split(',')[0].trim() === 'https';
+
+    const cookie =
+      `${INVENTORY_COOKIE_NAME}=${token}; ` +
+      `Path=/; Max-Age=${INVENTORY_COOKIE_MAX_AGE}; ` +
+      'HttpOnly; SameSite=Lax' +
+      (secure ? '; Secure' : '');
+
+    res.append('Set-Cookie', cookie);
+  }
+
+  next();
+});
+
 app.use(express.static('public'));
 
 const server = createServer(app);
@@ -367,6 +422,11 @@ wss.on('connection', (ws, req) => {
 name: '',
 animal: 'seal',
 inventoryHash: null,
+// 브라우저가 최초 접속할 때 쿠키에 저장해 둔 익명 식별값
+cookieInventoryHash: (() => {
+  const token = inventoryTokenFromCookie(req);
+  return token ? hashInventoryToken(token) : null;
+})(),
 
     x: 0,
     y: 0,
@@ -455,11 +515,16 @@ if (firstJoin) {
       : '';
 
   p.inventoryHash =
-    /^[0-9a-f]{64}$/.test(token)
-      ? crypto.createHash('sha256')
-          .update(token)
-          .digest('hex')
-      : null;
+    INVENTORY_TOKEN_PATTERN.test(token)
+      ? hashInventoryToken(token)
+      : p.cookieInventoryHash;
+
+  if (!p.inventoryHash) {
+    send(ws, {
+      type: 'raid_notice',
+      message: '아이템 저장 식별값이 없습니다. 새로고침 후 다시 입장해 주세요.'
+    });
+  }
 }
 
 p.ready = true;
@@ -485,7 +550,7 @@ void raid.inventory.sendSnapshot(ws, p);
       return;
     }
 
-    
+
 // 고래 광역공격 회피를 위한 점프 시작 시각 기록
 if (m.type === 'jump') {
   const now = Date.now();
@@ -503,11 +568,40 @@ if (m.type === 'jump') {
   return;
 }
     if(m.type==='loot_pickup'){
-      void raid.pickup(ws,p);
+      // 서버가 지급 판정 및 영구 저장을 완료한 후
+      // 현재 인벤토리를 다시 보내 아이템창을 즉시 갱신한다.
+      // 이곳에서는 파편을 추가 지급하지 않으므로 중복 지급되지 않는다.
+      void (async () => {
+        try {
+          await raid.pickup(ws,p);
+          if (p.ready && ws.readyState === WebSocket.OPEN) {
+            await raid.inventory.sendSnapshot(ws,p);
+          }
+        } catch (error) {
+          console.error('[JMC] 보스 보상 수령 오류:', error);
+          send(ws, {
+            type: 'raid_notice',
+            message: '아이템 처리에 실패했습니다. 다시 시도해 주세요.'
+          });
+        }
+      })();
       return;
     }
 if (m.type === 'inventory_craft') {
-  void raid.inventory.craft(ws, p);
+  void (async () => {
+    try {
+      await raid.inventory.craft(ws, p);
+      if (p.ready && ws.readyState === WebSocket.OPEN) {
+        await raid.inventory.sendSnapshot(ws, p);
+      }
+    } catch (error) {
+      console.error('[JMC] 아이템 제작 오류:', error);
+      send(ws, {
+        type: 'raid_notice',
+        message: '아이템 제작에 실패했습니다. 다시 시도해 주세요.'
+      });
+    }
+  })();
   return;
 }
     // ====================================
