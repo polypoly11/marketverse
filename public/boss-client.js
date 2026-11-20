@@ -198,7 +198,7 @@ function updateTailEffects(now) {
 
   const pickupButton=document.createElement('button');
 
-  pickupButton.textContent='🎁 보상 아이템 획득 (E)';
+  pickupButton.textContent='🐋 고래의 비늘 획득 (E)';
   pickupButton.style.cssText=`
     position:absolute;
     z-index:50;
@@ -958,43 +958,252 @@ function updateTailEffects(now) {
   }
 
   function makeLoot() {
-    const root=new THREE.Group();
-    root.position.set(0,.85,-13);
+    // ========================================
+// 고래의 비늘 이미지 생성
+// ========================================
 
-    const chest=new THREE.Mesh(
-      new THREE.OctahedronGeometry(.58,0),
-      new THREE.MeshStandardMaterial({
-        color:0xffc54b,
-        metalness:.6,
-        roughness:.2,
-        emissive:0x7a4b00,
-        emissiveIntensity:.5
-      })
+function createScaleTexture() {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+
+  const ctx = canvas.getContext('2d');
+
+  const shape = new Path2D();
+
+  shape.moveTo(256,56);
+  shape.bezierCurveTo(351,75,421,169,393,271);
+  shape.bezierCurveTo(373,342,307,413,256,445);
+  shape.bezierCurveTo(205,413,139,342,119,271);
+  shape.bezierCurveTo(91,169,161,75,256,56);
+  shape.closePath();
+
+  ctx.save();
+
+  ctx.shadowColor = 'rgba(38,194,255,.85)';
+  ctx.shadowBlur = 34;
+
+  const base = ctx.createLinearGradient(
+    120,80,395,435
+  );
+
+  base.addColorStop(0,'#d8ffff');
+  base.addColorStop(.2,'#47d6ef');
+  base.addColorStop(.53,'#177cbf');
+  base.addColorStop(.77,'#4258b3');
+  base.addColorStop(1,'#0b2857');
+
+  ctx.fillStyle = base;
+  ctx.fill(shape);
+
+  ctx.restore();
+
+  // 비늘 표면 광택
+  ctx.save();
+  ctx.clip(shape);
+
+  const shine = ctx.createRadialGradient(
+    199,128,12,
+    228,207,252
+  );
+
+  shine.addColorStop(
+    0,'rgba(255,255,255,.83)'
+  );
+
+  shine.addColorStop(
+    .28,'rgba(98,251,255,.37)'
+  );
+
+  shine.addColorStop(
+    .72,'rgba(63,127,231,.04)'
+  );
+
+  shine.addColorStop(
+    1,'rgba(0,18,69,.24)'
+  );
+
+  ctx.fillStyle = shine;
+  ctx.fillRect(70,35,380,440);
+
+  ctx.lineWidth = 9;
+
+  for(let i=0;i<4;i++) {
+    ctx.beginPath();
+
+    ctx.ellipse(
+      256,
+      164+i*60,
+      121-i*15,
+      35,
+      0,
+      0,
+      Math.PI
     );
 
-    root.add(chest);
+    ctx.strokeStyle = i%2
+      ? 'rgba(111,234,255,.38)'
+      : 'rgba(211,251,255,.30)';
 
-    const ring=new THREE.Mesh(
-      new THREE.TorusGeometry(.9,.06,8,32),
-      new THREE.MeshBasicMaterial({
-        color:0xffedaa
-      })
-    );
-
-    ring.rotation.x=Math.PI/2;
-    root.add(ring);
-
-    const light=new THREE.PointLight(
-      0xffd273,
-      4,
-      6
-    );
-
-    root.add(light);
-    scene.add(root);
-
-    loot={root,ring};
+    ctx.stroke();
   }
+
+  ctx.beginPath();
+  ctx.moveTo(166,121);
+
+  ctx.bezierCurveTo(
+    198,91,
+    220,87,
+    253,82
+  );
+
+  ctx.strokeStyle = 'rgba(255,255,255,.7)';
+  ctx.lineWidth = 15;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  ctx.restore();
+
+  ctx.strokeStyle = 'rgba(200,255,255,.96)';
+  ctx.lineWidth = 10;
+  ctx.stroke(shape);
+
+  // 반짝임 효과
+  ctx.strokeStyle = 'rgba(250,255,255,.94)';
+  ctx.lineWidth = 7;
+
+  ctx.beginPath();
+
+  ctx.moveTo(124,111);
+  ctx.lineTo(124,171);
+
+  ctx.moveTo(94,141);
+  ctx.lineTo(154,141);
+
+  ctx.stroke();
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+
+  return texture;
+}
+
+// ========================================
+// 고래의 비늘 이름표 생성
+// ========================================
+
+function createLootLabelTexture() {
+  const canvas = document.createElement('canvas');
+
+  canvas.width = 512;
+  canvas.height = 116;
+
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = 'rgba(5,26,47,.82)';
+
+  ctx.beginPath();
+  ctx.roundRect(13,10,486,96,22);
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(129,238,255,.78)';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  ctx.fillStyle = '#d9fbff';
+  ctx.font = 'bold 45px sans-serif';
+
+  ctx.fillText(
+    '고래의 비늘',
+    256,
+    59
+  );
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+
+  return texture;
+}
+
+// ========================================
+// 고래 처치 후 비늘 아이템 드롭
+// ========================================
+
+function makeLoot() {
+  const root = new THREE.Group();
+
+  root.position.set(0,.7,-13);
+
+  // 고래 비늘 이미지
+  const scaleSprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map:createScaleTexture(),
+      transparent:true,
+      alphaTest:.02,
+      depthWrite:false
+    })
+  );
+
+  scaleSprite.position.set(0,.55,0);
+  scaleSprite.scale.set(1.55,1.55,1);
+
+  root.add(scaleSprite);
+
+  // 아이템 이름표
+  const nameSprite = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map:createLootLabelTexture(),
+      transparent:true,
+      depthWrite:false,
+      depthTest:false
+    })
+  );
+
+  nameSprite.position.set(0,1.48,0);
+  nameSprite.scale.set(2.3,.53,1);
+
+  root.add(nameSprite);
+
+  // 바닥에 파란색 획득 범위 표시
+  const ring = new THREE.Mesh(
+    new THREE.TorusGeometry(
+      .9,.055,8,48
+    ),
+    new THREE.MeshBasicMaterial({
+      color:0x6cdaff,
+      transparent:true,
+      opacity:.9,
+      depthWrite:false
+    })
+  );
+
+  ring.rotation.x = Math.PI/2;
+  ring.position.y = -.58;
+
+  root.add(ring);
+
+  // 고래 비늘의 푸른빛
+  const light = new THREE.PointLight(
+    0x5bbdff,
+    2.3,
+    5
+  );
+
+  light.position.y = .55;
+  root.add(light);
+
+  scene.add(root);
+
+  loot = {
+    root,
+    ring,
+    scaleSprite,
+    nameSprite
+  };
+}
 
   function showState(message) {
     current={...current,...message};
@@ -1059,16 +1268,16 @@ function updateTailEffects(now) {
     send({type:'loot_pickup'});
   }
 
-  function showReward(m) {
-    if (m.testMode) {
+function showReward(m) {
+  if (m.testMode) {
     say(
-      '연습용 보상입니다. 실제 파편은 저장되지 않습니다.'
+      '연습용 보상입니다. 고래의 비늘은 저장되지 않습니다.'
     );
     return;
   }
 
   say(
-    '💠 고래의 파편 1개 획득! 아이템창에서 확인하세요.'
+    '🐋 고래의 비늘 1개 획득! 아이템창에서 확인하세요.'
   );
 }
 
@@ -1207,12 +1416,12 @@ case 'boss_tail_result':
 
 updateTailEffects(now);
 
-    if(loot?.root.visible) {
-      loot.root.rotation.y+=dt*1.2;
+if(loot?.root.visible) {
+  loot.root.rotation.y += dt * .35;
 
-      loot.root.position.y=
-        .85+Math.sin(now*.003)*.14;
-    }
+  loot.root.position.y =
+    .7 + Math.sin(now * .003) * .12;
+}
 
     const me=getAvatar();
 
