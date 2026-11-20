@@ -177,20 +177,27 @@ inventoryStyle.textContent = `
     font-variant-numeric:tabular-nums;
   }
 
-  @media (max-width:980px), (pointer:coarse) {
-    #jmc-inventory-toggle .jmc-item-icon {
-      font-size:15px;
-    }
-
-    #jmc-inventory-toggle .jmc-item-label {
-      font-size:9px;
-      letter-spacing:.5px;
-    }
-
-    #jmc-inventory-toggle .jmc-item-count {
-      font-size:14px;
-    }
+@media (max-width:980px), (pointer:coarse) {
+  #jmc-inventory-toggle {
+    overflow:hidden;
   }
+
+  #jmc-inventory-toggle .jmc-item-icon {
+    font-size:14px;
+    line-height:16px;
+  }
+
+  #jmc-inventory-toggle .jmc-item-label {
+    font-size:9px;
+    line-height:11px;
+    letter-spacing:.5px;
+  }
+
+  #jmc-inventory-toggle .jmc-item-count {
+    font-size:13px;
+    line-height:15px;
+  }
+}
 `;
 
 document.head.appendChild(inventoryStyle);
@@ -208,7 +215,6 @@ function alignInventoryToHp() {
 
 const gap = mobile ? 4 : 8;
 const buttonHeight = mobile ? 52 : 72;
-
   // HP바 실제 위치 기준
   const left = rect.left;
   const top = rect.bottom + gap;
