@@ -268,6 +268,23 @@ let nextTailAttackAt = 0;
 let warnedTailAttackAt = 0;
 
 function updateBossTailAttack() {
+
+  // ========================================
+  // 접속자 0명일 때 고래 자동공격 중지
+  // ========================================
+
+  const hasActivePlayer = [...clients.values()].some(
+    player => player.ready && player.hp > 0
+  );
+
+  // 이용자가 아무도 없으면 공격 대기 상태
+  if (!hasActivePlayer) {
+    tailRaidId = null;
+    nextTailAttackAt = 0;
+    warnedTailAttackAt = 0;
+    return;
+  }
+
   const state = raid.snapshot();
 
   // 고래가 없거나 사망했다면 공격 중지
@@ -399,8 +416,9 @@ if (distanceFromBoss > BOSS_TAIL_RADIUS) {
 }
 
 // 서버가 공격 시간을 관리
-setInterval(updateBossTailAttack, 50).unref();
-
+// 고래 공격 상태를 0.2초마다 확인
+// 기존 0.05초 대비 검사 횟수 75% 감소
+setInterval(updateBossTailAttack, 200).unref();
 // ========================================
 // WebSocket 멀티플레이 서버
 // ========================================
