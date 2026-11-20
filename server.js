@@ -3,6 +3,7 @@ import express from 'express';
 import { createServer } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
 import crypto from 'node:crypto';
+import { createVisitorStats } from './visitor-stats.js';
 import {
   mountAdmin,
   isBlocked,
@@ -46,6 +47,7 @@ const ANIMALS = [
 ];
 
 const clients = new Map();
+const visitorStats = await createVisitorStats();
 
 const votes = {
   long: 0,
@@ -185,6 +187,18 @@ function presence() {
 
 const raid = await createBossRaid({clients, send, broadcast});
 mountAdmin(app, {clients, votes, history, magicShots, send, broadcast, presence, raid});
+
+mountAdmin(app, {
+  clients,
+  votes,
+  history,
+  magicShots,
+  send,
+  broadcast,
+  presence,
+  raid,
+  visitorStats
+});
 
 // ========================================
 // 고래 보스 꼬리 광역공격
@@ -432,6 +446,13 @@ wss.on('connection', (ws, req) => {
         : 'seal';
 
       p.ready = true;
+
+const firstJoin = !p.ready;
+p.ready = true;
+
+if (firstJoin) {
+  void visitorStats.record(m.visitorId);
+}
 
       send(ws, {
         type: 'hp',
