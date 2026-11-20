@@ -3239,10 +3239,15 @@ hpHud.innerHTML = `
     ">HP</span>
   </div>
 
-  <div id="jmc-hp-text" style="
+<div id="jmc-hp-text" style="
     font-size:11px;
     color:white;
     white-space:nowrap;
+    width:100%;
+    box-sizing:border-box;
+    text-align:center;
+    line-height:1.2;
+    font-variant-numeric:tabular-nums;
   ">100/100</div>
 
   <div style="
@@ -3416,9 +3421,22 @@ jmcMobileHpStyle.textContent = `
       display:none !important;
     }
 
-    #jmc-hp-hud #jmc-hp-text {
-      font-size:10px !important;
-    }
+#jmc-hp-hud #jmc-hp-text {
+  display:block !important;
+  width:100% !important;
+  max-width:100% !important;
+  min-width:0 !important;
+  box-sizing:border-box !important;
+  padding:0 !important;
+  margin:0 !important;
+  font-size:8px !important;
+  font-weight:700 !important;
+  letter-spacing:-0.5px !important;
+  line-height:11px !important;
+  text-align:center !important;
+  white-space:nowrap !important;
+  flex-shrink:0 !important;
+}
   }
 `;
 
