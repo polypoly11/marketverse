@@ -1,4 +1,3 @@
-
 (() => {
   function init() {
     if (document.getElementById('jmc-inventory-toggle')) return;
@@ -209,41 +208,85 @@
 
     function createScaleIcon() {
       const canvas = document.createElement('canvas');
-      canvas.width = 96;
-      canvas.height = 96;
+      canvas.width = 128;
+      canvas.height = 128;
       canvas.style.cssText = 'width:34px;height:34px;display:block;margin:auto';
+
       const ctx = canvas.getContext('2d');
-      const shape = new Path2D();
-      shape.moveTo(48,9);
-      shape.bezierCurveTo(69,14,83,32,77,51);
-      shape.bezierCurveTo(72,67,58,81,48,88);
-      shape.bezierCurveTo(38,81,24,67,19,51);
-      shape.bezierCurveTo(13,32,27,14,48,9);
-      shape.closePath();
+      const scale = new Path2D();
+      scale.moveTo(105, 13);
+      scale.bezierCurveTo(111, 33, 114, 67, 95, 88);
+      scale.bezierCurveTo(74, 109, 42, 113, 13, 116);
+      scale.bezierCurveTo(22, 87, 25, 57, 48, 39);
+      scale.bezierCurveTo(66, 25, 91, 24, 105, 13);
+      scale.closePath();
+
+      // 심해빛 외곽 발광
       ctx.save();
-      ctx.shadowColor = '#38dcff';
-      ctx.shadowBlur = 12;
-      const gradient = ctx.createLinearGradient(18,12,79,86);
-      gradient.addColorStop(0,'#e6ffff');
-      gradient.addColorStop(.2,'#65eaff');
-      gradient.addColorStop(.5,'#249dce');
-      gradient.addColorStop(.8,'#4759b4');
-      gradient.addColorStop(1,'#152d68');
+      ctx.shadowColor = '#00eaff';
+      ctx.shadowBlur = 17;
+      ctx.fillStyle = '#073c65';
+      ctx.fill(scale);
+      ctx.restore();
+
+      // 심해 남색과 청록색 그라디언트
+      const gradient = ctx.createLinearGradient(30, 20, 100, 112);
+      gradient.addColorStop(0, '#8fffff');
+      gradient.addColorStop(0.18, '#18b9e5');
+      gradient.addColorStop(0.38, '#126ca5');
+      gradient.addColorStop(0.65, '#123e79');
+      gradient.addColorStop(0.85, '#0a285a');
+      gradient.addColorStop(1, '#041329');
       ctx.fillStyle = gradient;
-      ctx.fill(shape);
-      ctx.restore();
+      ctx.fill(scale);
+
+      // 비늘 표면의 심해 결
       ctx.save();
-      ctx.clip(shape);
-      const shine = ctx.createRadialGradient(34,24,2,43,48,50);
-      shine.addColorStop(0,'rgba(255,255,255,.85)');
-      shine.addColorStop(.5,'rgba(128,245,255,.20)');
-      shine.addColorStop(1,'rgba(0,24,70,.15)');
+      ctx.clip(scale);
+      for (let i = 0; i < 5; i++) {
+        ctx.beginPath();
+        ctx.moveTo(30 + i * 9, 29 + i * 11);
+        ctx.bezierCurveTo(
+          55 + i * 6, 38 + i * 9,
+          84 + i * 3, 49 + i * 9,
+          108 - i * 4, 63 + i * 8
+        );
+        ctx.strokeStyle = i % 2 === 0
+          ? 'rgba(77,240,255,0.55)'
+          : 'rgba(174,181,255,0.35)';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+      }
+
+      // 수중 광택
+      const shine = ctx.createRadialGradient(47, 43, 2, 65, 65, 76);
+      shine.addColorStop(0, 'rgba(155,255,255,0.65)');
+      shine.addColorStop(0.35, 'rgba(0,217,255,0.18)');
+      shine.addColorStop(1, 'rgba(0,0,0,0)');
       ctx.fillStyle = shine;
-      ctx.fillRect(10,5,80,85);
+      ctx.fillRect(0, 0, 128, 128);
+
+      const particles = [
+        [83,32,2.1], [93,47,1.5], [72,57,1.8],
+        [100,68,1.5], [54,78,1.7], [70,91,1.3], [37,97,1.4]
+      ];
+      for (const [x, y, r] of particles) {
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fillStyle = '#8dfaff';
+        ctx.shadowColor = '#00eaff';
+        ctx.shadowBlur = 9;
+        ctx.fill();
+      }
       ctx.restore();
-      ctx.strokeStyle = '#c8ffff';
-      ctx.lineWidth = 2.5;
-      ctx.stroke(shape);
+
+      ctx.save();
+      ctx.strokeStyle = '#48eaff';
+      ctx.lineWidth = 3;
+      ctx.shadowColor = '#00cfff';
+      ctx.shadowBlur = 8;
+      ctx.stroke(scale);
+      ctx.restore();
       return canvas;
     }
 
@@ -319,7 +362,7 @@ note.textContent = enabled
 
     craftButton.onclick = () => {
       if (craftButton.disabled) return;
-      if (!confirm(`${ITEM_NAME} ${REQUIRED_COUNT}개를 사용해 기프티콘 교환 신청권을 만들까요?`)) return;
+      if (!confirm(`${ITEM_NAME} ${REQUIRED_COUNT}개를 사용해 행운의 선물 교환 신청권을 만들까요?`)) return;
       craftButton.disabled = true;
       window.dispatchEvent(new Event('jmc-inventory-craft'));
     };
