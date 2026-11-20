@@ -186,7 +186,6 @@ function presence() {
 // ========================================
 
 const raid = await createBossRaid({clients, send, broadcast});
-mountAdmin(app, {clients, votes, history, magicShots, send, broadcast, presence, raid});
 
 mountAdmin(app, {
   clients,
