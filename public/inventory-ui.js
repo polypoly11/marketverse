@@ -19,7 +19,7 @@ toggle.style.cssText = `
   top:320px;
   z-index:9998;
   width:62px;
-  min-height:48px;
+  min-height:72px;
   padding:7px 3px;
   box-sizing:border-box;
   border:1px solid #d8ba80;
@@ -305,7 +305,28 @@ requestAnimationFrame(alignInventoryToHp);
 
       const enabled = state.enabled === true;
 
-      toggle.textContent = `🎒 아이템 ${count}`;
+     toggle.innerHTML = `
+  <span style="
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:2px;
+    line-height:1.1;
+  ">
+    <span style="font-size:19px">🎒</span>
+    <span style="
+      font-size:10px;
+      letter-spacing:1.2px;
+      color:#f5cf87;
+    ">ITEM</span>
+    <strong style="
+      font-size:17px;
+      color:#ffffff;
+      font-variant-numeric:tabular-nums;
+    ">${count}</strong>
+  </span>
+`;
 
       $('jmc-inventory-count').textContent =
         `보유 ${count}개 · 조합까지 ${
