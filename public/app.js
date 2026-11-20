@@ -507,6 +507,25 @@ function resizePreview(){
 
 new ResizeObserver(resizePreview).observe(previewEl);
 
+let visitorId = null;
+
+try {
+  visitorId = localStorage.getItem('jmc-visitor-id');
+
+  if (
+    !visitorId ||
+    !/^[0-9a-f-]{36}$/i.test(visitorId)
+  ) {
+    visitorId = crypto.randomUUID();
+
+    localStorage.setItem(
+      'jmc-visitor-id',
+      visitorId
+    );
+  }
+} catch (error) {
+  console.warn('[JMC] Visitor ID unavailable:', error);
+}
 let profile = null;
 let myAvatar = null;
 let activeSymbol = null;
@@ -2296,11 +2315,12 @@ function send(m){
 function sendProfile(){
   if(!profile||defeated||reentryRequired)return;
 
-  send({
-    type:'join',
-    name:profile.name,
-    animal:profile.animal
-  });
+send({
+  type:'join',
+  name:profile.name,
+  animal:profile.animal,
+  visitorId
+});
 
   if(myAvatar){
     send({
