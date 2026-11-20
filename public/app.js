@@ -3270,6 +3270,35 @@ hpHud.innerHTML = `
 
 sceneEl.appendChild(hpHud);
 
+// 모바일 전용 HP HUD 위치 및 크기
+const jmcMobileHpStyle = document.createElement('style');
+
+jmcMobileHpStyle.textContent = `
+  @media (max-width:980px), (pointer:coarse) {
+    #jmc-hp-hud {
+      position:absolute !important;
+      left:6px !important;
+      top:6px !important;
+      width:62px !important;
+      height:120px !important;
+      min-height:120px !important;
+      padding:6px 4px !important;
+      gap:4px !important;
+      border-radius:11px !important;
+    }
+
+    #jmc-hp-hud svg {
+      display:none !important;
+    }
+
+    #jmc-hp-hud #jmc-hp-text {
+      font-size:10px !important;
+    }
+  }
+`;
+
+document.head.appendChild(jmcMobileHpStyle);
+
 // 모바일에서는 HP 심전도 아이콘 완전히 숨기기
 function updateMobileHpIcon() {
   const mobile = window.matchMedia(
