@@ -573,4 +573,51 @@ visitors: visitorStats.snapshot(),
     }
   );
 
+  // 5개 조합 완료자 조회
+  app.get(
+    '/api/admin/inventory/requests',
+    requireAdmin,
+    async (_req, res) => {
+      try {
+        res.json({
+          ok: true,
+          enabled: raid.inventory.enabled,
+          requests: await raid.inventory.requests()
+        });
+      } catch (error) {
+        console.error('[Inventory admin]', error);
+
+        res.status(500).json({
+          error: '교환 신청 조회에 실패했습니다.'
+        });
+      }
+    }
+  );
+
+  // 실제 쿠폰 지급 완료 처리
+  app.post(
+    '/api/admin/inventory/paid',
+    safeOrigin,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const claimId = String(
+          req.body?.claimId || ''
+        );
+
+        await raid.inventory.markPaid(claimId);
+
+        remember('기프티콘 지급 완료');
+
+        res.json({
+          ok: true
+        });
+      } catch (error) {
+        res.status(400).json({
+          error: error.message
+        });
+      }
+    }
+  );
+
 }
