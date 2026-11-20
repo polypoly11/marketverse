@@ -3476,8 +3476,99 @@ function updateHpHud(hp,maxHp=100){
 
   const percent = (remaining/max)*100;
 
-  $('jmc-hp-text').textContent =
-    `${remaining}/${max}`;
+const hpText = document.getElementById('jmc-hp-text');
+
+hpText.textContent = `${remaining}/${max}`;
+
+const isMobileHp = window.matchMedia(
+  '(max-width:980px), (pointer:coarse)'
+).matches;
+
+if (isMobileHp) {
+  // HP바 내부 영역 고정
+  hpHud.style.setProperty(
+    'overflow', 'hidden', 'important'
+  );
+
+  hpHud.style.setProperty(
+    'box-sizing', 'border-box', 'important'
+  );
+
+  hpHud.style.setProperty(
+    'gap', '2px', 'important'
+  );
+
+  // 100/100 숫자가 테두리 밖으로 나가지 않도록 고정
+  hpText.style.setProperty(
+    'display', 'block', 'important'
+  );
+
+  hpText.style.setProperty(
+    'font-size', '8px', 'important'
+  );
+
+  hpText.style.setProperty(
+    'line-height', '11px', 'important'
+  );
+
+  hpText.style.setProperty(
+    'letter-spacing', '-0.6px', 'important'
+  );
+
+  hpText.style.setProperty(
+    'width', '100%', 'important'
+  );
+
+  hpText.style.setProperty(
+    'max-width', '100%', 'important'
+  );
+
+  hpText.style.setProperty(
+    'min-width', '0', 'important'
+  );
+
+  hpText.style.setProperty(
+    'text-align', 'center', 'important'
+  );
+
+  hpText.style.setProperty(
+    'white-space', 'nowrap', 'important'
+  );
+
+  hpText.style.setProperty(
+    'overflow', 'hidden', 'important'
+  );
+
+  hpText.style.setProperty(
+    'flex-shrink', '0', 'important'
+  );
+
+  // 초록색 HP 게이지도 테두리 안에 고정
+  const hpTrack = document.getElementById('jmc-hp-fill')
+    ?.parentElement;
+
+  if (hpTrack) {
+    hpTrack.style.setProperty(
+      'min-height', '0', 'important'
+    );
+
+    hpTrack.style.setProperty(
+      'flex', '1 1 0', 'important'
+    );
+
+    hpTrack.style.setProperty(
+      'width', '15px', 'important'
+    );
+
+    hpTrack.style.setProperty(
+      'max-height', '100%', 'important'
+    );
+
+    hpTrack.style.setProperty(
+      'overflow', 'hidden', 'important'
+    );
+  }
+}
 
   // HP가 감소하면 세로 체력바가 아래에서부터 줄어듦
   $('jmc-hp-fill').style.height =
