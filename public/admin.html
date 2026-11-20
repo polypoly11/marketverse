@@ -489,6 +489,20 @@
             <small>실시간 접속 인원</small>
             <strong id="metric-online">—</strong>
           </div>
+<div class="card">
+  <small>누적 순사용자</small>
+  <strong id="metric-total-users">—</strong>
+</div>
+
+<div class="card">
+  <small>누적 입장 횟수</small>
+  <strong id="metric-total-visits">—</strong>
+</div>
+
+<div class="card">
+  <small>오늘 방문자</small>
+  <strong id="metric-today-users">—</strong>
+</div>
           <div class="card">
             <small>WebSocket 연결</small>
             <strong id="metric-connections">—</strong>
@@ -1070,6 +1084,15 @@ function showLogin() {
 
       $('metric-online').textContent =
         data.online;
+
+$('metric-total-users').textContent =
+  (data.visitors?.totalUsers ?? 0).toLocaleString();
+
+$('metric-total-visits').textContent =
+  (data.visitors?.totalVisits ?? 0).toLocaleString();
+
+$('metric-today-users').textContent =
+  (data.visitors?.todayUsers ?? 0).toLocaleString();
 
       $('metric-connections').textContent =
         data.connections;
