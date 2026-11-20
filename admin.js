@@ -142,7 +142,7 @@ export function mountAdmin(app, context) {
     magicShots,
     send,
     broadcast,
-    presence, raid
+presence, raid, visitorStats
   } = context;
 
   app.set('trust proxy', 1);
@@ -234,6 +234,7 @@ export function mountAdmin(app, context) {
       uptime: Math.round(process.uptime()),
       memoryMB: Math.round(mem.rss / 1024 / 1024),
       online: players.length,
+visitors: visitorStats.snapshot(),
       connections: clients.size,
       shots: magicShots.length,
       chatCount: history.length,
