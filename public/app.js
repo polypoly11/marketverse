@@ -526,6 +526,30 @@ try {
 } catch (error) {
   console.warn('[JMC] Visitor ID unavailable:', error);
 }
+
+const INVENTORY_TOKEN_KEY = 'jmc-inventory-token';
+let inventoryToken = '';
+
+try {
+  inventoryToken =
+    localStorage.getItem(INVENTORY_TOKEN_KEY) || '';
+
+  if (!/^[0-9a-f]{64}$/i.test(inventoryToken)) {
+    const bytes = new Uint8Array(32);
+    crypto.getRandomValues(bytes);
+
+    inventoryToken = Array.from(bytes)
+      .map(value => value.toString(16).padStart(2, '0'))
+      .join('');
+
+    localStorage.setItem(
+      INVENTORY_TOKEN_KEY,
+      inventoryToken
+    );
+  }
+} catch (error) {
+  console.warn('[JMC] Inventory token unavailable:', error);
+}
 let profile = null;
 let myAvatar = null;
 let activeSymbol = null;
@@ -2311,7 +2335,9 @@ function send(m){
     socket.send(JSON.stringify(m));
   }
 }
-
+window.addEventListener('jmc-inventory-craft', () => {
+  send({ type: 'inventory_craft' });
+});
 function sendProfile(){
   if(!profile||defeated||reentryRequired)return;
 
@@ -2319,7 +2345,8 @@ send({
   type:'join',
   name:profile.name,
   animal:profile.animal,
-  visitorId
+  visitorId,
+  inventoryToken
 });
 
   if(myAvatar){
@@ -2406,7 +2433,18 @@ function connect(){
     }catch{
       return;
     }
-
+if (
+  m.type === 'inventory_state' ||
+  m.type === 'inventory_crafted' ||
+  m.type === 'inventory_notice'
+) {
+  window.dispatchEvent(
+    new CustomEvent('jmc-inventory', {
+      detail: m
+    })
+  );
+  return;
+}
     if(raidClient.onMessage(m))return;
 
     if(m.type==='position_correct'&&myAvatar){
