@@ -267,7 +267,14 @@ window.addEventListener(
   'resize',
   refreshInventoryPosition
 );
-
+// HP바 위치 변경 시 ITEM 버튼도 다시 정렬
+const inventoryPositionTimer = setInterval(() => {
+  if (window.matchMedia(
+    '(max-width:980px), (pointer:coarse)'
+  ).matches) {
+    alignInventoryToHp();
+  }
+}, 500);
 window.addEventListener(
   'scroll',
   refreshInventoryPosition,
