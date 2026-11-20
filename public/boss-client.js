@@ -1424,14 +1424,11 @@ if(loot?.root.visible) {
 
     const me=getAvatar();
 
-    pickupButton.hidden=!(
-      current.state==='loot' &&
-      me &&
-      Math.hypot(
-        me.position.x,
-        me.position.z+13
-      )<=2.1
-    );
+// 보상이 떨어진 상태라면 거리와 관계없이 획득 버튼 표시
+pickupButton.hidden = !(
+  current.state === 'loot' &&
+  me
+);
 
     if(noticeUntil && now>=noticeUntil) {
       notice.hidden=true;
