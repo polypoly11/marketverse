@@ -214,7 +214,7 @@ function alignInventoryToHp() {
   ).matches;
 
 const gap = mobile ? 4 : 8;
-const buttonHeight = mobile ? 60 : 72;
+const buttonHeight = mobile ? 52 : 72;
   // HP바 실제 위치 기준
   const left = rect.left;
   const top = rect.bottom + gap;
