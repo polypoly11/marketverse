@@ -3270,6 +3270,131 @@ hpHud.innerHTML = `
 
 sceneEl.appendChild(hpHud);
 
+// ========================================
+// 모바일 HP바 메타버스 좌측 상단 고정
+// ========================================
+
+function positionMobileHp() {
+  const mobile = window.matchMedia(
+    '(max-width:980px), (pointer:coarse)'
+  ).matches;
+
+  if (!mobile) {
+    if (hpHud.parentElement !== sceneEl) {
+      sceneEl.appendChild(hpHud);
+    }
+
+    [
+      'position', 'left', 'top',
+      'width', 'height', 'min-height',
+      'padding', 'gap'
+    ].forEach(name => {
+      hpHud.style.removeProperty(name);
+    });
+
+    hpHud.style.cssText = `
+      position:absolute;
+      z-index:25;
+      left:12px;
+      top:12px;
+      width:62px;
+      height:min(230px,38%);
+      min-height:145px;
+      padding:9px 5px;
+      box-sizing:border-box;
+      border:1px solid rgba(212,183,128,.75);
+      border-radius:14px;
+      background:rgba(7,20,33,.91);
+      color:white;
+      pointer-events:none;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:7px;
+      font:700 11px Arial,sans-serif;
+    `;
+
+    return;
+  }
+
+  // 모바일에서는 화면 기준으로 직접 배치
+  if (hpHud.parentElement !== document.body) {
+    document.body.appendChild(hpHud);
+  }
+
+  const rect = sceneEl.getBoundingClientRect();
+
+  hpHud.style.setProperty(
+    'position', 'fixed', 'important'
+  );
+
+  hpHud.style.setProperty(
+    'left', `${rect.left + 6}px`, 'important'
+  );
+
+  hpHud.style.setProperty(
+    'top', `${rect.top + 6}px`, 'important'
+  );
+
+  hpHud.style.setProperty(
+    'width', '62px', 'important'
+  );
+
+  hpHud.style.setProperty(
+    'height', '112px', 'important'
+  );
+
+  hpHud.style.setProperty(
+    'min-height', '112px', 'important'
+  );
+
+  hpHud.style.setProperty(
+    'padding', '5px 3px', 'important'
+  );
+
+  hpHud.style.setProperty(
+    'gap', '3px', 'important'
+  );
+
+  hpHud.style.setProperty(
+    'z-index', '9997', 'important'
+  );
+
+  // 모바일 심전도 아이콘 숨김
+  const icon = hpHud.querySelector('svg');
+
+  if (icon) {
+    icon.style.setProperty(
+      'display', 'none', 'important'
+    );
+  }
+}
+
+// 초기 배치
+positionMobileHp();
+
+// 화면 크기 및 방향 변경 대응
+window.addEventListener(
+  'resize',
+  positionMobileHp
+);
+
+window.addEventListener(
+  'scroll',
+  positionMobileHp,
+  {passive:true}
+);
+
+window.visualViewport?.addEventListener(
+  'resize',
+  positionMobileHp
+);
+
+window.addEventListener(
+  'load',
+  positionMobileHp
+);
+
 // 모바일 전용 HP HUD 위치 및 크기
 const jmcMobileHpStyle = document.createElement('style');
 
