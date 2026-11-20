@@ -3269,7 +3269,17 @@ hpHud.innerHTML = `
 `;
 
 sceneEl.appendChild(hpHud);
+const hpPulseMobileStyle = document.createElement('style');
 
+hpPulseMobileStyle.textContent = `
+  @media (max-width:980px), (pointer:coarse) {
+    #jmc-hp-hud .jmc-hp-pulse-icon {
+      display:none !important;
+    }
+  }
+`;
+
+document.head.appendChild(hpPulseMobileStyle);
 function updateHpHud(hp,maxHp=100){
   const max = Math.max(1,Number(maxHp)||100);
 
