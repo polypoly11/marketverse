@@ -957,8 +957,7 @@ function updateTailEffects(now) {
       `🐋 고래 보스 HP ${current.hp.toLocaleString()} / ${current.maxHp.toLocaleString()}`;
   }
 
-  function makeLoot() {
-    // ========================================
+// ========================================
 // 고래의 비늘 이미지 생성
 // ========================================
 
