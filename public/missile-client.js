@@ -670,7 +670,7 @@ export function installMissileClient({
     getMissileAudio
   );
 
-  function startMissileSound(id) {
+   function startMissileSound(id) {
     if (
       !missileSoundEnabled() ||
       missileSounds.has(id)
@@ -685,24 +685,26 @@ export function installMissileClient({
       const filter = ctx.createBiquadFilter();
       const gain = ctx.createGain();
 
-      // 로켓 엔진 특유의 낮은 추진음
-      engine.type = 'sawtooth';
+      // 부드러운 로켓 추진음
+      engine.type = 'triangle';
+
       engine.frequency.setValueAtTime(
-        95,
+        170,
         ctx.currentTime
       );
 
+      // 높은 주파수 제거
       filter.type = 'lowpass';
-      filter.frequency.value = 420;
+      filter.frequency.value = 280;
 
-      // 귀에 부담되지 않도록 낮은 음량
+      // 자연스럽게 시작하는 작은 음량
       gain.gain.setValueAtTime(
         0,
         ctx.currentTime
       );
 
       gain.gain.linearRampToValueAtTime(
-        0.025,
+        0.008,
         ctx.currentTime + 0.12
       );
 
