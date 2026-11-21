@@ -1,4 +1,3 @@
-
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
 import {createBossClient} from './boss-client.js?v=20261120-whale-scale-99';
 const $ = id => document.getElementById(id);
@@ -585,7 +584,7 @@ function showProfile(editing=false){
   $('profile-error').textContent = '';
   $('cancel-profile').hidden = !editing;
   $('enter-lounge').textContent =
-    editing ? '설정 저장하기' : 'JMC 라운지 입장하기';
+    editing ? '설정 저장하기' : '게스트로 입장하기';
 
   $('profile-modal').hidden = false;
   resizePreview();
@@ -630,6 +629,95 @@ function saveProfile(){
 }
 
 $('enter-lounge').onclick = saveProfile;
+
+// ========================================
+// Google 로그인 + 게스트 입장
+// 기존 닉네임 선택/입장 및 게임 로직은 변경하지 않는다.
+// ========================================
+const jmcGoogleButton = document.createElement('button');
+jmcGoogleButton.type = 'button';
+jmcGoogleButton.id = 'jmc-google-login';
+jmcGoogleButton.textContent = 'Google 계정으로 로그인';
+jmcGoogleButton.style.cssText = `
+  display:block;width:100%;margin-top:9px;padding:11px 10px;
+  border:1px solid #b7c7d6;border-radius:10px;
+  background:#fff;color:#223246;font:bold 13px Arial,sans-serif;
+  cursor:pointer;box-sizing:border-box;
+`;
+$('enter-lounge').insertAdjacentElement('afterend',jmcGoogleButton);
+
+const jmcAuthNote = document.createElement('div');
+jmcAuthNote.id = 'jmc-google-auth-note';
+jmcAuthNote.style.cssText = 'padding:7px 3px;font:12px Arial,sans-serif;text-align:center;color:#9bb7c9;';
+jmcGoogleButton.insertAdjacentElement('afterend',jmcAuthNote);
+
+const jmcAccountButton = document.createElement('button');
+jmcAccountButton.type = 'button';
+jmcAccountButton.id = 'jmc-account-button';
+jmcAccountButton.textContent = '게스트 · 로그인';
+jmcAccountButton.style.cssText = `
+  margin-left:8px;padding:6px 9px;border:1px solid #7290a5;
+  border-radius:8px;background:#15283c;color:#fff;
+  font:11px Arial,sans-serif;cursor:pointer;
+`;
+$('rename').insertAdjacentElement('afterend',jmcAccountButton);
+
+let jmcGoogleUser = null;
+let jmcGoogleEnabled = false;
+
+async function jmcLoadGoogleStatus() {
+  try {
+    const response = await fetch('/api/auth/me',{credentials:'same-origin',cache:'no-store'});
+    if (!response.ok) throw new Error('인증 서버 응답 실패');
+    const data = await response.json();
+    jmcGoogleUser = data.user || null;
+    jmcGoogleEnabled = data.configured === true;
+    jmcGoogleButton.hidden = !jmcGoogleEnabled && !jmcGoogleUser;
+    jmcGoogleButton.textContent = jmcGoogleUser ? 'Google 계정 로그아웃' : 'Google 계정으로 로그인';
+    jmcAuthNote.textContent = jmcGoogleUser
+      ? `${jmcGoogleUser.name || 'Google 이용자'} · 비늘은 Google 계정에 보관됩니다.`
+      : '게스트 입장은 기존 버튼을 이용하세요. 선물 신청은 Google 로그인이 필요합니다.';
+    jmcAccountButton.textContent = jmcGoogleUser
+      ? `Google · ${jmcGoogleUser.name || '로그인'}`
+      : '게스트 · 로그인';
+  } catch(error) {
+    jmcAuthNote.textContent = '계정 상태를 불러오지 못했습니다. 게스트로는 입장할 수 있습니다.';
+    jmcGoogleButton.hidden = true;
+  }
+}
+
+jmcGoogleButton.onclick = async () => {
+  jmcGoogleButton.disabled = true;
+  try {
+    if (jmcGoogleUser) {
+      const response = await fetch('/api/auth/logout', {
+        method:'POST',credentials:'same-origin'
+      });
+      if (!response.ok) throw new Error('로그아웃 실패');
+      location.reload();
+      return;
+    }
+    const response = await fetch('/api/auth/google/start', {
+      method:'POST',credentials:'same-origin',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({inventoryToken})
+    });
+    const data = await response.json();
+    if (!response.ok || !data.url) throw new Error(data.error || 'Google 인증을 시작할 수 없습니다.');
+    location.assign(data.url);
+  } catch(error) {
+    jmcAuthNote.textContent = error.message;
+    jmcGoogleButton.disabled = false;
+  }
+};
+
+jmcAccountButton.onclick = () => {
+  showProfile(true);
+  jmcGoogleButton.hidden = !jmcGoogleEnabled && !jmcGoogleUser;
+};
+
+void jmcLoadGoogleStatus();
+
 
 $('cancel-profile').onclick = ()=>{
   if(profile){
