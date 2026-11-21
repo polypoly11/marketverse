@@ -41,7 +41,62 @@ export function installMissileClient({
   `;
 
   indicator.textContent = '🚀 유도 미사일 0/3';
-  sceneEl.appendChild(indicator);
+  // ========================================
+// 미사일 인벤토리: ITEM 버튼 바로 아래
+// ========================================
+
+document.body.appendChild(indicator);
+
+indicator.id = 'jmc-missile-inventory';
+
+indicator.style.cssText = `
+  position:fixed;
+  z-index:9998;
+  width:62px;
+  min-height:56px;
+  box-sizing:border-box;
+  padding:6px 3px;
+  border:1px solid #d8ba80;
+  border-radius:11px;
+  background:rgba(15,29,47,.96);
+  color:#fff;
+  font:700 11px Arial,sans-serif;
+  line-height:1.3;
+  text-align:center;
+  white-space:pre-line;
+  cursor:help;
+  box-shadow:0 5px 24px #0005;
+`;
+
+indicator.title =
+  '🚀 유도 미사일 사용법\n' +
+  'S키를 0.7초 이상 누르면 조준합니다.\n' +
+  'S키를 떼면 유도 미사일이 발사됩니다.\n' +
+  '다른 이용자 및 고래 보스를 공격할 수 있습니다.\n' +
+  '명중 피해: HP 40\n' +
+  '20분마다 1개 지급 · 최대 3개 보유';
+
+function positionMissileInventory() {
+  const item = document.getElementById(
+    'jmc-inventory-toggle'
+  );
+
+  if (!item) {
+    indicator.style.display = 'none';
+    return;
+  }
+
+  const rect = item.getBoundingClientRect();
+
+  indicator.style.display = 'block';
+  indicator.style.left = `${rect.left}px`;
+  indicator.style.top = `${rect.bottom + 6}px`;
+  indicator.style.width = `${rect.width}px`;
+}
+
+positionMissileInventory();
+
+setInterval(positionMissileInventory, 300);
 
   // ========================================
   // 조준 표시
@@ -360,8 +415,8 @@ export function installMissileClient({
         )
       : 20;
 
-    indicator.textContent =
-      `🚀 ${count}/3 · 다음 지급 ${remaining}분`;
+indicator.textContent =
+  `🚀\nMISSILE\n${count}/3\n${remaining}분`;
 
     for (const [id, shot] of shots) {
       const target = shot.targetId === 'boss'
