@@ -200,33 +200,110 @@ indicator.textContent =
   mobileButton.textContent = '🚀';
 
 mobileButton.style.cssText = `
-  position:absolute;
-  right:14px;
-  bottom:178px;
-  z-index:41;
-  width:54px;
-  height:54px;
+  position:fixed;
+  z-index:45;
+  width:48px;
+  height:48px;
   padding:0;
   background:rgba(134,47,61,.96);
   color:#fff;
   border:1px solid #ffe1a2;
-  border-radius:14px;
+  border-radius:12px;
   box-shadow:0 4px 14px rgba(0,0,0,.35);
   font:700 22px Arial,sans-serif;
-  line-height:54px;
-  text-align:center;
-  touch-action:none;
   display:none;
+  align-items:center;
+  justify-content:center;
+  touch-action:none;
+  user-select:none;
   cursor:pointer;
 `;
 
-  sceneEl.appendChild(mobileButton);
+document.body.appendChild(mobileButton);
+
+// ========================================
+// 모바일 미사일 버튼을 A 공격 버튼 위에 배치
+// ========================================
+
+const missileMobileQuery = window.matchMedia(
+  '(max-width:980px), (pointer:coarse)'
+);
+
+function positionMobileMissileButton() {
+
+  if (!missileMobileQuery.matches) {
+    mobileButton.style.display = 'none';
+    return;
+  }
+
+  const actionBar = document.getElementById(
+    'mobile-actions'
+  );
 
   if (
-    window.matchMedia('(pointer:coarse)').matches
+    !actionBar ||
+    actionBar.getClientRects().length === 0
   ) {
-    mobileButton.style.display = 'block';
+    mobileButton.style.display = 'none';
+    return;
   }
+
+  const rect = actionBar.getBoundingClientRect();
+
+  if (!rect.width || !rect.height) {
+    mobileButton.style.display = 'none';
+    return;
+  }
+
+  const buttonSize = 48;
+  const gap = 12;
+
+  // 기존 공격 버튼 묶음의 중앙에 정렬
+  const left = Math.max(
+    8,
+    Math.min(
+      window.innerWidth - buttonSize - 8,
+      rect.left + rect.width / 2 - buttonSize / 2
+    )
+  );
+
+  // 공격 버튼 묶음 바로 위에 배치
+  let top = rect.top - buttonSize - gap;
+
+  // 화면 위쪽 공간이 부족할 경우 왼쪽으로 배치
+  if (top < 8) {
+    top = Math.max(
+      8,
+      rect.top + rect.height / 2 - buttonSize / 2
+    );
+
+    mobileButton.style.left =
+      `${Math.max(8,rect.left - buttonSize - gap)}px`;
+
+  } else {
+    mobileButton.style.left = `${left}px`;
+  }
+
+  mobileButton.style.top = `${top}px`;
+  mobileButton.style.display = 'flex';
+}
+
+positionMobileMissileButton();
+
+window.addEventListener(
+  'resize',
+  positionMobileMissileButton
+);
+
+window.addEventListener(
+  'orientationchange',
+  positionMobileMissileButton
+);
+
+setInterval(
+  positionMobileMissileButton,
+  300
+);
 
   // ========================================
   // 조준 가능한 대상 검색
