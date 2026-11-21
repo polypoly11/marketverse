@@ -307,29 +307,41 @@ function makeAnimal(id){
 root.userData.jumpHeight = 0;
 
 // ========================================
-// 캐릭터 배에 전적 보기 표시
+// ========================================
+// 캐릭터 배 중앙: 미니멀 전적 아이콘
 // ========================================
 
 const markerCanvas = document.createElement('canvas');
-markerCanvas.width = 256;
-markerCanvas.height = 88;
+markerCanvas.width = 128;
+markerCanvas.height = 128;
 
 const markerCtx = markerCanvas.getContext('2d');
 
-markerCtx.fillStyle = 'rgba(13,28,45,.93)';
+// 반투명 원형 배경
 markerCtx.beginPath();
-markerCtx.roundRect(6,6,244,76,19);
+markerCtx.arc(64, 64, 50, 0, Math.PI * 2);
+markerCtx.fillStyle = 'rgba(12, 32, 53, 0.58)';
 markerCtx.fill();
 
-markerCtx.strokeStyle = '#e8c58b';
-markerCtx.lineWidth = 5;
+// 얇은 테두리
+markerCtx.strokeStyle = 'rgba(190, 226, 255, 0.7)';
+markerCtx.lineWidth = 3;
 markerCtx.stroke();
 
-markerCtx.fillStyle = '#ffffff';
-markerCtx.font = 'bold 40px sans-serif';
-markerCtx.textAlign = 'center';
-markerCtx.textBaseline = 'middle';
-markerCtx.fillText('전적 보기',128,45);
+// 막대그래프 아이콘
+markerCtx.fillStyle = '#d6efff';
+
+markerCtx.fillRect(35, 65, 12, 25);
+markerCtx.fillRect(58, 49, 12, 41);
+markerCtx.fillRect(81, 36, 12, 54);
+
+// 아이콘 아래 기준선
+markerCtx.strokeStyle = '#d6efff';
+markerCtx.lineWidth = 3;
+markerCtx.beginPath();
+markerCtx.moveTo(30, 94);
+markerCtx.lineTo(99, 94);
+markerCtx.stroke();
 
 const markerTexture = new THREE.CanvasTexture(
   markerCanvas
@@ -339,15 +351,16 @@ markerTexture.colorSpace = THREE.SRGBColorSpace;
 
 const marker = new THREE.Sprite(
   new THREE.SpriteMaterial({
-    map:markerTexture,
-    transparent:true,
-    depthTest:false,
-    depthWrite:false
+    map: markerTexture,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false
   })
 );
 
-marker.position.set(0,1.06,.57);
-marker.scale.set(.85,.29,1);
+// 기존 위치 유지, 크기만 축소
+marker.position.set(0, 1.06, 0.57);
+marker.scale.set(0.40, 0.40, 1);
 marker.renderOrder = 85;
 
 root.add(marker);
