@@ -2522,7 +2522,263 @@ transform: translate(-50%, -50%) !important;
   document.head.appendChild(style);
 });
 </script>
+<!-- ==========================================
+ JMC 채팅창 옆 프리미엄 조작 안내 패널
+ PC 전용 / 기존 게임 기능 변경 없음
+=========================================== -->
 
+<style>
+  /* 상단 기존 조작 안내 제거 */
+  @media (min-width: 981px) and (pointer: fine) {
+    html body #jmc-header-help {
+      display: none !important;
+    }
+
+    html body .scene-wrap .scene-head
+    > div:first-child > p:last-of-type {
+      display: none !important;
+    }
+  }
+
+  /* 채팅창 오른쪽 반투명 조작 패널 */
+  #jmc-glass-controls {
+    position: absolute;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+    box-sizing: border-box;
+
+    width: 300px;
+    height: 96px;
+    padding: 10px 8px;
+
+    background: rgba(13, 35, 57, 0.43);
+
+    border: 1px solid rgba(198, 229, 255, 0.42);
+    border-radius: 16px;
+
+    box-shadow:
+      0 6px 24px rgba(0, 0, 0, 0.20),
+      inset 0 1px 0 rgba(255, 255, 255, 0.17);
+
+    backdrop-filter: blur(15px) saturate(145%);
+    -webkit-backdrop-filter: blur(15px) saturate(145%);
+
+    z-index: 46;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  #jmc-glass-controls .jmc-glass-action {
+    flex: 1;
+    min-width: 0;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+
+    color: #ffffff;
+    font-family: Arial, sans-serif;
+    text-align: center;
+  }
+
+  #jmc-glass-controls .jmc-glass-action + .jmc-glass-action {
+    border-left: 1px solid rgba(230, 245, 255, 0.24);
+  }
+
+  #jmc-glass-controls .jmc-glass-icon {
+    width: 29px;
+    height: 29px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #e2f4ff;
+
+    filter: drop-shadow(
+      0 0 5px rgba(144, 211, 255, 0.28)
+    );
+  }
+
+  #jmc-glass-controls .jmc-glass-icon svg {
+    width: 27px;
+    height: 27px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  #jmc-glass-controls .jmc-glass-name {
+    font-size: 13px;
+    font-weight: 700;
+    line-height: 17px;
+  }
+
+  #jmc-glass-controls .jmc-glass-key {
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(224, 238, 250, 0.83);
+    line-height: 14px;
+  }
+
+  /* 모바일에서는 기존 터치 조작 유지 */
+  @media (max-width: 980px), (pointer: coarse) {
+    #jmc-glass-controls {
+      display: none !important;
+    }
+  }
+</style>
+
+<script>
+(function () {
+  'use strict';
+
+  function initGlassControls() {
+    if (document.getElementById('jmc-glass-controls')) {
+      return;
+    }
+
+    const scene = document.getElementById('scene');
+
+    if (!scene) return;
+
+    const controls = document.createElement('div');
+    controls.id = 'jmc-glass-controls';
+
+    controls.setAttribute(
+      'aria-label',
+      'PC 캐릭터 조작 안내'
+    );
+
+    controls.innerHTML = `
+      <div class="jmc-glass-action">
+        <span class="jmc-glass-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="4" r="2"></circle>
+            <path d="M10 9l3 2 3 0"></path>
+            <path d="M10 9l-3 4-3 1"></path>
+            <path d="M13 11l2 4 4 3"></path>
+            <path d="M11 12l-3 5-3 3"></path>
+          </svg>
+        </span>
+        <span class="jmc-glass-name">점프</span>
+        <span class="jmc-glass-key">SPACE</span>
+      </div>
+
+      <div class="jmc-glass-action">
+        <span class="jmc-glass-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="5" r="2"></circle>
+            <path d="M9 9l-1 5 4 2"></path>
+            <path d="M15 9l1 5-4 2"></path>
+            <path d="M8 14l-4 4h7"></path>
+            <path d="M16 14l4 4h-7"></path>
+            <path d="M4 20h16"></path>
+          </svg>
+        </span>
+        <span class="jmc-glass-name">앉기</span>
+        <span class="jmc-glass-key">C</span>
+      </div>
+
+      <div class="jmc-glass-action">
+        <span class="jmc-glass-icon">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5 3l16 16-2 2L3 5z"></path>
+            <path d="M19 3L3 19l2 2L21 5z"></path>
+            <path d="M3 3l4 1-3 3z"></path>
+            <path d="M21 3l-4 1 3 3z"></path>
+          </svg>
+        </span>
+        <span class="jmc-glass-name">공격</span>
+        <span class="jmc-glass-key">A</span>
+      </div>
+    `;
+
+    scene.appendChild(controls);
+
+    function updatePosition() {
+      const isMobile = window.matchMedia(
+        '(max-width:980px), (pointer:coarse)'
+      ).matches;
+
+      if (isMobile) {
+        controls.style.display = 'none';
+        return;
+      }
+
+      // 실제 메타버스 채팅창 기준으로 위치 계산
+      const chat = scene.querySelector(
+        '.jmc-scene-chat'
+      );
+
+      if (!chat || !chat.getClientRects().length) {
+        controls.style.display = 'none';
+        return;
+      }
+
+      const chatRect = chat.getBoundingClientRect();
+      const sceneRect = scene.getBoundingClientRect();
+
+      const panelWidth = 300;
+      const panelHeight = 96;
+      const gap = 12;
+
+      // 채팅창 바로 오른쪽
+      const left =
+        chatRect.right - sceneRect.left + gap;
+
+      // 채팅창 하단에 맞춰 배치
+      const top =
+        chatRect.bottom -
+        sceneRect.top -
+        panelHeight;
+
+      // 화면 공간이 부족하면 숨겨 겹침 방지
+      const fits =
+        left + panelWidth <= sceneRect.width - 12 &&
+        top >= 8;
+
+      if (!fits) {
+        controls.style.display = 'none';
+        return;
+      }
+
+      controls.style.display = 'flex';
+      controls.style.left = `${left}px`;
+      controls.style.top = `${top}px`;
+    }
+
+    updatePosition();
+
+    window.addEventListener(
+      'resize',
+      updatePosition
+    );
+
+    window.addEventListener(
+      'orientationchange',
+      updatePosition
+    );
+
+    // 기존 채팅창 펼침/접힘 및 이동에 대응
+    setInterval(updatePosition, 300);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener(
+      'DOMContentLoaded',
+      initGlassControls
+    );
+  } else {
+    initGlassControls();
+  }
+})();
+</script>
+
+<!-- JMC 채팅창 옆 조작 안내 끝 -->
 </body>
 
 
