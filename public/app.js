@@ -327,7 +327,7 @@ function addCharacterHpBar(avatar,hp=100,maxHp=100){
     })
   );
 
-  sprite.position.set(0,3.6,0);
+  sprite.position.set(0,2.8,0);
   sprite.scale.set(2.4,.75,1);
   sprite.renderOrder=90;
   avatar.add(sprite);
@@ -421,7 +421,7 @@ function setCharacterName(avatar, value) {
   const sprite=new THREE.Sprite(new THREE.SpriteMaterial({
     map:texture,transparent:true,depthTest:false,depthWrite:false
   }));
-  sprite.position.set(0,4.52,0);
+  sprite.position.set(0,3.55,0);
   sprite.scale.set(2.75,.68,1);
   sprite.renderOrder=95;
   avatar.add(sprite);
@@ -2198,7 +2198,7 @@ function showBubble(item){
   });
 
   const sprite=new THREE.Sprite(material);
-  sprite.position.set(0,5.15,0);
+  sprite.position.set(0,4.7,0);
   sprite.scale.set(3.8,1.58,1);
   sprite.renderOrder=100;
   avatar.add(sprite);
