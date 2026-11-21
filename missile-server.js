@@ -1,4 +1,3 @@
-
 import crypto from 'node:crypto';
 
 const REWARD_MS = 10 * 60 * 1000;
@@ -438,81 +437,189 @@ export function createMissileSystem({
       );
 
       // ====================================
-      // 유도 미사일 발사
+      // 실제 유도 미사일 비행 / 회피 판정
       // ====================================
 
       const id = crypto.randomUUID();
+      const SPEED = 12;
+      const TICK_MS = 50;
+      const MAX_FLIGHT_MS = 2800;
+      const BODY_RADIUS = 0.45;
+      const NEAR_RADIUS = 0.8;
+      const SPLASH_RADIUS = 1.6;
+      const BOSS_RADIUS = 2.25;
 
-      const distance = Math.hypot(
-        target.x - p.x,
-        target.z - p.z
-      );
+      const originX = Number(p.x) || 0;
+      const originZ = Number(p.z) || 0;
 
-      const flightMs = Math.max(
-        600,
-        Math.min(
-          2000,
-          Math.round(distance / 9 * 1000)
-        )
-      );
+      const missile = {
+        x: originX,
+        y: (Number(p.y) || 0) + 1.2,
+        z: originZ,
+        angle: Math.atan2(
+          target.x - originX,
+          target.z - originZ
+        ),
+        targetId: target.id,
+        startedAt: Date.now(),
+        finished: false
+      };
+
+      const clamp = (value, min, max) =>
+        Math.max(min, Math.min(max, value));
+
+      const angleDelta = (a, b) =>
+        Math.atan2(
+          Math.sin(b - a),
+          Math.cos(b - a)
+        );
+
+      // 미사일 이동 경로에서 목표까지 가장 가까운 지점
+      function sweptClosest(
+        ax, az, bx, bz, tx, tz
+      ) {
+        const dx = bx - ax;
+        const dz = bz - az;
+        const len2 = dx * dx + dz * dz;
+
+        const t = len2 > 0.000001
+          ? clamp(
+              (
+                (tx - ax) * dx +
+                (tz - az) * dz
+              ) / len2,
+              0,
+              1
+            )
+          : 0;
+
+        const x = ax + t * dx;
+        const z = az + t * dz;
+
+        return {
+          x,
+          z,
+          distance: Math.hypot(
+            tx - x,
+            tz - z
+          )
+        };
+      }
+
+      // 목표와 폭발 위치의 거리별 피해량
+      function damageAt(distance) {
+        const surfaceDistance = Math.max(
+          0,
+          distance -
+            (missile.targetId === 'boss'
+              ? BOSS_RADIUS
+              : 0)
+        );
+
+        if (surfaceDistance <= BODY_RADIUS) {
+          return 40;
+        }
+
+        if (surfaceDistance <= NEAR_RADIUS) {
+          return 25;
+        }
+
+        if (surfaceDistance <= SPLASH_RADIUS) {
+          return 10;
+        }
+
+        return 0;
+      }
 
       broadcast({
         type: 'missile_launch',
         id,
         shooterId: p.id,
-        targetId: target.id,
-        x: p.x,
-        y: p.y + 1.2,
-        z: p.z,
-        flightMs
+        targetId: missile.targetId,
+        x: missile.x,
+        y: missile.y,
+        z: missile.z,
+        angle: missile.angle,
+        flightMs: MAX_FLIGHT_MS
       });
 
-      setTimeout(() => {
-        const liveTarget = targetFor(
-          p,
-          target.id
-        );
+      let flightTimer = null;
 
-        if (!liveTarget) {
-          broadcast({
-            type: 'missile_end',
-            id
-          });
+      function finishMissile(point) {
+        if (missile.finished) return;
 
-          return;
+        missile.finished = true;
+
+        if (flightTimer) {
+          clearInterval(flightTimer);
         }
 
+        const liveTarget = targetFor(
+          p,
+          missile.targetId
+        );
+
+        const distance = liveTarget
+          ? Math.hypot(
+              liveTarget.x - point.x,
+              liveTarget.z - point.z
+            )
+          : Infinity;
+
+        const damage = liveTarget
+          ? damageAt(distance)
+          : 0;
+
         const impact = {
-          x: liveTarget.x,
-          y: 1.1,
-          z: liveTarget.z
+          x: point.x,
+          y: missile.y,
+          z: point.z
         };
+
+        if (damage === 0) {
+          broadcast({
+            type: 'missile_end',
+            id,
+            targetId: missile.targetId,
+            ...impact,
+            damage: 0,
+            exploded: true
+          });
+          return;
+        }
 
         broadcast({
           type: 'missile_hit',
           id,
-          targetId: target.id,
+          targetId: missile.targetId,
           ...impact,
-          damage: DAMAGE
+          damage
         });
 
-        // 고래 보스 공격
-        if (target.id === 'boss') {
+        // 고래 보스 피해 처리
+        if (missile.targetId === 'boss') {
           raid.hit(
             { id },
             impact,
-            DAMAGE
+            damage
           );
-
           return;
         }
 
-        // 이용자 공격
+        // 이용자 피해 처리
         const victim = liveTarget.player;
+
+        if (
+          !victim ||
+          !victim.ready ||
+          victim.hp <= 0
+        ) {
+          return;
+        }
 
         victim.hp = Math.max(
           0,
-          victim.hp - DAMAGE
+          victim.hp - damage
         );
 
         const victimWs = [...clients].find(
@@ -534,10 +641,7 @@ export function createMissileSystem({
           maxHp: 100
         });
 
-        // ==================================
-        // PVP 사망 및 전적 기록
-        // ==================================
-
+        // PVP 사망 시 킬·데스 기록
         if (victim.hp === 0) {
           if (
             p.googleSub &&
@@ -574,8 +678,143 @@ export function createMissileSystem({
 
           presence();
         }
+      }
 
-      }, flightMs).unref?.();
+      // ====================================
+      // 서버에서 50ms마다 미사일 위치 계산
+      // ====================================
+
+      let lastTick = Date.now();
+
+      flightTimer = setInterval(() => {
+        if (missile.finished) {
+          clearInterval(flightTimer);
+          return;
+        }
+
+        const now = Date.now();
+
+        const dt = Math.min(
+          (now - lastTick) / 1000,
+          0.1
+        );
+
+        lastTick = now;
+
+        const liveTarget = targetFor(
+          p,
+          missile.targetId
+        );
+
+        if (!liveTarget) {
+          finishMissile({
+            x: missile.x,
+            z: missile.z
+          });
+          return;
+        }
+
+        const dx =
+          liveTarget.x - missile.x;
+
+        const dz =
+          liveTarget.z - missile.z;
+
+        const distance =
+          Math.hypot(dx, dz);
+
+        const desired = Math.atan2(
+          dx,
+          dz
+        );
+
+        // 가까울수록 회전 속도가 느려져 회피 가능
+        const turnRate =
+          distance < 3 ? 1.1 : 2.2;
+
+        missile.angle += clamp(
+          angleDelta(
+            missile.angle,
+            desired
+          ),
+          -turnRate * dt,
+          turnRate * dt
+        );
+
+        const oldX = missile.x;
+        const oldZ = missile.z;
+
+        missile.x +=
+          Math.sin(missile.angle) *
+          SPEED * dt;
+
+        missile.z +=
+          Math.cos(missile.angle) *
+          SPEED * dt;
+
+        // 빠른 미사일의 관통 방지
+        const nearest = sweptClosest(
+          oldX,
+          oldZ,
+          missile.x,
+          missile.z,
+          liveTarget.x,
+          liveTarget.z
+        );
+
+        const directRadius =
+          BODY_RADIUS +
+          (missile.targetId === 'boss'
+            ? BOSS_RADIUS
+            : 0);
+
+        broadcast({
+          type: 'missile_position',
+          id,
+          x: missile.x,
+          y: missile.y,
+          z: missile.z,
+          angle: missile.angle
+        });
+
+        if (nearest.distance <= directRadius) {
+          finishMissile({
+            x: nearest.x,
+            z: nearest.z
+          });
+          return;
+        }
+
+        // 목표를 지나친 경우 가장 가까운 지점에서 폭발
+        const forwardDot =
+          (
+            liveTarget.x - missile.x
+          ) * Math.sin(missile.angle) +
+          (
+            liveTarget.z - missile.z
+          ) * Math.cos(missile.angle);
+
+        if (forwardDot < -0.15) {
+          finishMissile({
+            x: nearest.x,
+            z: nearest.z
+          });
+          return;
+        }
+
+        // 최대 비행시간 초과
+        if (
+          now - missile.startedAt >=
+          MAX_FLIGHT_MS
+        ) {
+          finishMissile({
+            x: missile.x,
+            z: missile.z
+          });
+        }
+      }, TICK_MS);
+
+      flightTimer.unref?.();
 
     })().catch(error => {
       console.error(
