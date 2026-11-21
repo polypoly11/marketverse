@@ -2932,7 +2932,45 @@ $('chat-form').onsubmit=e=>{
     input.value='';
   }
 };
+// ========================================
+// Enter키 채팅 바로가기
+// ========================================
 
+window.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || e.repeat) return;
+
+  if (
+    !$('profile-modal').hidden ||
+    defeated ||
+    reentryRequired ||
+    !profile
+  ) return;
+
+  const chatInput = $('chat-input');
+  const active = document.activeElement;
+
+  // 다른 입력창을 사용하고 있다면 방해하지 않음
+  if (
+    active?.matches('input, textarea, select, [contenteditable="true"]')
+  ) return;
+
+  e.preventDefault();
+  keys.clear();
+  magicPressed = false;
+  chatInput.focus();
+});
+
+$('chat-input').addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    e.preventDefault();
+    $('chat-input').blur();
+  }
+
+  if (e.key === 'Enter' && !e.isComposing) {
+    // 기존 채팅 전송 함수가 처리하도록 유지
+    setTimeout(() => $('chat-input').blur(), 0);
+  }
+});
 renderAssets();
 updatePrices();
 updateCandles();
