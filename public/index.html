@@ -2820,6 +2820,21 @@ transform: translate(-50%, -50%) !important;
 
 }
 </style>
+  <!-- 상단 점프·앉기·공격 조작 안내 완전히 숨김 -->
+<style>
+  /* 홈페이지 최상단 조작키 안내 */
+  html body #jmc-header-help,
+  html body.jmc-compact-header #jmc-header-help,
+  html body.jmc-compact-header > header #jmc-header-help {
+    display: none !important;
+  }
+
+  /* 메타버스 상단의 기존 조작 안내 문구 */
+  html body .scene-wrap .scene-head
+  > div:first-child > p:last-of-type {
+    display: none !important;
+  }
+</style>
 </body>
 
 
