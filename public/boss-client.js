@@ -167,13 +167,13 @@ function updateTailEffects(now) {
     left:50%;
     top:14px;
     transform:translateX(-50%);
-    width:min(420px,65%);
-    padding:10px 12px;
+ width:min(260px,70%);
+padding:6px 9px;
     border-radius:10px;
     border:1px solid #5c9cd3;
     background:rgba(10,21,36,.93);
     color:#fff;
-    font:700 13px Arial,sans-serif;
+    font:700 11px Arial,sans-serif;
     text-align:center;
     pointer-events:none;
   `;
@@ -184,7 +184,7 @@ function updateTailEffects(now) {
   ).matches) {
     hud.style.cssText += `
       top:8px;
-      width:min(255px,calc(100% - 24px));
+      width:min(200px,calc(100% - 24px));
       box-sizing:border-box;
       padding:5px 7px;
       border-radius:6px;
@@ -622,11 +622,11 @@ function updateTailEffects(now) {
       '(max-width: 980px), (pointer: coarse)'
     ).matches;
 
-    hpSprite.scale.set(
-      isMobileBossHp ? 3.2 : 4.8,
-      isMobileBossHp ? 0.62 : 0.95,
-      1
-    );
+hpSprite.scale.set(
+  isMobileBossHp ? 2.2 : 3.2,
+  isMobileBossHp ? 0.43 : 0.63,
+  1
+);
     root.add(hpSprite);
 
     whale={
