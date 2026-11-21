@@ -29,7 +29,7 @@ export function createMissileSystem({
       return state(ws, p);
     }
 
-    p.missileCount = 0;
+    p.missileCount = 1;
     p.missileNextAt = Date.now() + REWARD_MS;
     p.missileAimAt = 0;
 
