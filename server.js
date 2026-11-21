@@ -670,17 +670,25 @@ wss.on('connection', async (ws, req) => {
         return;
       }
 
-      const name = clean(m.name, 16);
+// 구글 사용자는 계정 프로필 하나만 사용
+// 게스트는 기존 캐릭터 닉네임 사용
+const name = p.googleSub
+  ? clean(p.accountNickname, 16)
+  : clean(m.name, 16);
 
-      if (!name) {
-        return;
-      }
+if (!name) {
+  return;
+}
 
-      p.name = name;
+p.name = name;
 
-      p.animal = ANIMALS.includes(m.animal)
-        ? m.animal
-        : 'seal';
+const selectedAnimal = p.googleSub
+  ? p.accountAnimal
+  : m.animal;
+
+p.animal = ANIMALS.includes(selectedAnimal)
+  ? selectedAnimal
+  : 'seal';
 
       const firstJoin = !p.ready;
 
