@@ -381,7 +381,8 @@ mountAdmin(app, {
   broadcast,
   presence,
   raid,
-  visitorStats
+  visitorStats,
+  missileSystem
 });
 
 // ========================================
