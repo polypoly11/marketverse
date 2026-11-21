@@ -817,8 +817,20 @@ jmcNicknameInput.style.cssText=
 const jmcCheckButton=document.createElement('button');
 jmcCheckButton.type='button';
 jmcCheckButton.textContent='닉네임 중복 확인';
-jmcCheckButton.style.cssText=
-  'margin-top:8px;padding:9px 12px;border-radius:8px;cursor:pointer';
+jmcCheckButton.style.cssText=`
+  display:block;
+  width:100%;
+  margin-top:10px;
+  padding:13px 12px;
+  border:1px solid #ffe2a3;
+  border-radius:10px;
+  background:linear-gradient(135deg,#dfbd72,#f3d99e);
+  color:#202d3c;
+  font:800 14px Arial,sans-serif;
+  cursor:pointer;
+  box-shadow:0 0 14px rgba(240,200,119,.35);
+  transition:background .2s,box-shadow .2s,transform .2s;
+`;
 
 const jmcNicknameMessage=document.createElement('div');
 jmcNicknameMessage.style.cssText=
@@ -868,7 +880,53 @@ document.body.appendChild(jmcAccountModal);
 
 let jmcCheckedNickname='';
 let jmcProfileRequired=false;
+// 닉네임 중복 확인 유도
+const jmcCheckStyle = document.createElement('style');
 
+jmcCheckStyle.textContent = `
+  @keyframes jmcNicknamePulse {
+    0%, 100% {
+      box-shadow:0 0 8px rgba(240,200,119,.25);
+    }
+    50% {
+      box-shadow:0 0 22px rgba(240,200,119,.75);
+    }
+  }
+
+  #jmc-account-profile-modal .jmc-check-needed {
+    animation:jmcNicknamePulse 1.6s ease-in-out infinite;
+  }
+
+  @media (prefers-reduced-motion:reduce) {
+    #jmc-account-profile-modal .jmc-check-needed {
+      animation:none;
+    }
+  }
+`;
+
+document.head.appendChild(jmcCheckStyle);
+
+function jmcUpdateCheckGuide(checked) {
+  jmcCheckButton.classList.toggle(
+    'jmc-check-needed',
+    !checked
+  );
+
+  if (checked) {
+    jmcCheckButton.textContent = '✓ 닉네임 중복 확인 완료';
+    jmcCheckButton.style.background = '#245d4c';
+    jmcCheckButton.style.color = '#baffdc';
+    jmcCheckButton.style.borderColor = '#63e6ae';
+    jmcCheckButton.style.boxShadow = 'none';
+  } else {
+    jmcCheckButton.textContent = '① 닉네임 중복 확인하기';
+    jmcCheckButton.style.background =
+      'linear-gradient(135deg,#dfbd72,#f3d99e)';
+    jmcCheckButton.style.color = '#202d3c';
+    jmcCheckButton.style.borderColor = '#ffe2a3';
+    jmcCheckButton.style.boxShadow = '';
+  }
+}
 function jmcOpenAccountProfile(required=false) {
   if(!jmcGoogleUser)return;
 
@@ -880,6 +938,7 @@ function jmcOpenAccountProfile(required=false) {
   jmcAnimalSelector.value=jmcGoogleUser.accountAnimal || 'seal';
   jmcCheckedNickname='';
   jmcAccountSave.disabled=true;
+  jmcUpdateCheckGuide(false);
   jmcNicknameMessage.textContent='닉네임 중복 확인을 눌러주세요.';
   jmcNicknameMessage.style.color='#b5cad9';
   jmcAccountCancel.textContent=
@@ -918,6 +977,7 @@ jmcCheckButton.onclick=async()=>{
     if(result.available) {
       jmcCheckedNickname=nickname;
       jmcAccountSave.disabled=false;
+      jmcUpdateCheckGuide(true);
       jmcNicknameMessage.textContent='사용 가능한 닉네임입니다.';
       jmcNicknameMessage.style.color='#63e6ae';
     } else {
