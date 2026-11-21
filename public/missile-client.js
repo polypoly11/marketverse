@@ -619,16 +619,186 @@ export function installMissileClient({
       material => material.dispose()
     );
   }
+  // ========================================
+  // 유도 미사일 비행 효과음
+  // ========================================
 
-  function removeMissile(id) {
-    const shot = shots.get(id);
+  let missileAudioCtx = null;
+  const missileSounds = new Map();
 
-    if (!shot) return;
-
-    disposeObject(shot.object);
-
-    shots.delete(id);
+  function missileSoundEnabled() {
+    try {
+      return localStorage.getItem(
+        'jmc-sfx-enabled'
+      ) !== '0';
+    } catch {
+      return true;
+    }
   }
+
+  function getMissileAudio() {
+    try {
+      if (!missileAudioCtx) {
+        const AudioClass =
+          window.AudioContext ||
+          window.webkitAudioContext;
+
+        if (!AudioClass) return null;
+
+        missileAudioCtx = new AudioClass();
+      }
+
+      if (missileAudioCtx.state === 'suspended') {
+        missileAudioCtx.resume().catch(() => {});
+      }
+
+      return missileAudioCtx;
+    } catch {
+      return null;
+    }
+  }
+
+  // 모바일 및 PC에서 사용자 조작 시 오디오 활성화
+  document.addEventListener(
+    'pointerdown',
+    getMissileAudio,
+    { passive: true }
+  );
+
+  document.addEventListener(
+    'keydown',
+    getMissileAudio
+  );
+
+  function startMissileSound(id) {
+    if (
+      !missileSoundEnabled() ||
+      missileSounds.has(id)
+    ) return;
+
+    const ctx = getMissileAudio();
+
+    if (!ctx) return;
+
+    try {
+      const engine = ctx.createOscillator();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+
+      // 로켓 엔진 특유의 낮은 추진음
+      engine.type = 'sawtooth';
+      engine.frequency.setValueAtTime(
+        95,
+        ctx.currentTime
+      );
+
+      filter.type = 'lowpass';
+      filter.frequency.value = 420;
+
+      // 귀에 부담되지 않도록 낮은 음량
+      gain.gain.setValueAtTime(
+        0,
+        ctx.currentTime
+      );
+
+      gain.gain.linearRampToValueAtTime(
+        0.025,
+        ctx.currentTime + 0.12
+      );
+
+      engine.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+
+      engine.start();
+
+      missileSounds.set(id, {
+        engine,
+        filter,
+        gain
+      });
+
+    } catch (error) {
+      console.warn(
+        '[MISSILE] 효과음 시작 실패',
+        error
+      );
+    }
+  }
+
+  function stopMissileSound(id) {
+    const sound = missileSounds.get(id);
+
+    if (!sound) return;
+
+    missileSounds.delete(id);
+
+    try {
+      const ctx = missileAudioCtx;
+      const now = ctx.currentTime;
+
+      sound.gain.gain.cancelScheduledValues(now);
+
+      sound.gain.gain.setValueAtTime(
+        sound.gain.gain.value,
+        now
+      );
+
+      sound.gain.gain.linearRampToValueAtTime(
+        0,
+        now + 0.08
+      );
+
+      sound.engine.stop(now + 0.1);
+
+      sound.engine.onended = () => {
+        sound.engine.disconnect();
+        sound.filter.disconnect();
+        sound.gain.disconnect();
+      };
+
+    } catch {}
+  }
+
+  function updateMissileSounds(now) {
+    const enabled = missileSoundEnabled();
+
+    for (const [id, shot] of shots) {
+      if (!enabled) {
+        stopMissileSound(id);
+        continue;
+      }
+
+      if (!missileSounds.has(id)) {
+        startMissileSound(id);
+      }
+
+      const sound = missileSounds.get(id);
+
+      if (!sound) continue;
+
+      // 비행 중 미세한 엔진 회전 변화
+      const pitch =
+        95 + Math.sin(now * 0.012) * 14;
+
+      sound.engine.frequency.setTargetAtTime(
+        pitch,
+        missileAudioCtx.currentTime,
+        0.05
+      );
+    }
+  }
+function removeMissile(id) {
+  stopMissileSound(id);
+
+  const shot = shots.get(id);
+
+  if (!shot) return;
+
+  disposeObject(shot.object);
+
+  shots.delete(id);
+}
 
   // ========================================
   // 피격 화면 효과
@@ -1001,9 +1171,12 @@ export function installMissileClient({
       0.05
     );
 
-    lastFrame = now;
+lastFrame = now;
 
-    updateImpacts(dt, now);
+updateImpacts(dt, now);
+
+// 미사일 추진음 실행 및 음량 설정 반영
+updateMissileSounds(now);
 
     // 조준 표시 갱신
     if (aiming) {
