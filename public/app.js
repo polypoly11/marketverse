@@ -1,3 +1,4 @@
+import {installMissileClient} from './missile-client.js';
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
 import {createBossClient} from './boss-client.js?v=20261120-whale-scale-99';
 const $ = id => document.getElementById(id);
@@ -2213,6 +2214,25 @@ renderer.domElement.addEventListener(
     }
   }
 );
+const missileClient = installMissileClient({
+  THREE,
+  scene,
+  sceneEl,
+  renderer,
+  camera,
+
+  getAvatar: () => myAvatar,
+  getOthers: () => others,
+  getMyId: () => myId,
+
+  send: msg => send(msg),
+
+  isBlocked: () =>
+    defeated ||
+    reentryRequired ||
+    !profile ||
+    !$('profile-modal').hidden
+});
 const raidClient=createBossClient({
   THREE,
   scene,
@@ -2609,7 +2629,9 @@ window.addEventListener('keydown',e=>{
     sendMove(true);
   }
 
+ if (k !== 's') {
   keys.add(k);
+}
 });
 
 window.addEventListener('keyup',e=>{
@@ -2868,7 +2890,7 @@ function animate(now){
   ){
     const f=
       Number(held('w')||held('arrowup'))-
-      Number(held('s')||held('arrowdown'))-
+      Number(held('arrowdown'))-
       mobileJoystick.y;
 
     const s=
@@ -3118,6 +3140,9 @@ function connect(){
     }
 if (m.type === 'pvp_profile') {
   showPvpProfile(m);
+  return;
+}
+    if (missileClient.onMessage(m)) {
   return;
 }
     if(raidClient.onMessage(m))return;
