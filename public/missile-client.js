@@ -595,7 +595,268 @@ mobileButton.style.cssText = `
   // ========================================
   // 서버 메시지 수신
   // ========================================
+// ========================================
+// 미사일 명중 이펙트
+// 폭발 / 파편 / 캐릭터 피격 액션
+// ========================================
 
+const missileExplosions = [];
+const missileRecoils = [];
+
+const impactFlash = document.createElement('div');
+
+impactFlash.style.cssText = `
+  position:fixed;
+  inset:0;
+  z-index:9996;
+  pointer-events:none;
+  background:radial-gradient(
+    circle,
+    transparent 35%,
+    rgba(255,65,20,.55) 100%
+  );
+  opacity:0;
+`;
+
+document.body.appendChild(impactFlash);
+
+let impactFlashUntil = 0;
+
+function createMissileExplosion(m) {
+
+  const group = new THREE.Group();
+
+  group.position.set(
+    Number(m.x) || 0,
+    Number(m.y) || 1.1,
+    Number(m.z) || 0
+  );
+
+  scene.add(group);
+
+  // 폭발 중심의 밝은 섬광
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(.45,12,8),
+    new THREE.MeshBasicMaterial({
+      color:0xffdd66,
+      transparent:true,
+      opacity:.9,
+      depthWrite:false
+    })
+  );
+
+  group.add(core);
+
+  const fragments = [];
+
+  // 불꽃 및 금속 파편 생성
+  for (let i = 0; i < 18; i++) {
+
+    const colors = [
+      0xffdd55,
+      0xff782b,
+      0xff3420,
+      0xffb94d,
+      0x9fa9b7
+    ];
+
+    const material = new THREE.MeshBasicMaterial({
+      color:colors[i % colors.length],
+      transparent:true,
+      opacity:1,
+      depthWrite:false
+    });
+
+    const fragment = new THREE.Mesh(
+      new THREE.TetrahedronGeometry(
+        .08 + Math.random() * .10
+      ),
+      material
+    );
+
+    const a = Math.random() * Math.PI * 2;
+
+    const speed = 2.5 + Math.random() * 4;
+
+    fragment.userData.velocity = new THREE.Vector3(
+      Math.cos(a) * speed,
+      1.5 + Math.random() * 4,
+      Math.sin(a) * speed
+    );
+
+    fragment.userData.spin = new THREE.Vector3(
+      Math.random() * 8,
+      Math.random() * 8,
+      Math.random() * 8
+    );
+
+    group.add(fragment);
+    fragments.push(fragment);
+  }
+
+  missileExplosions.push({
+    group,
+    core,
+    fragments,
+    elapsed:0,
+    duration:.75
+  });
+
+  // 피격 대상 캐릭터 움찔 액션
+  const avatar =
+    m.targetId === getMyId()
+      ? getAvatar()
+      : getOthers().get(m.targetId);
+
+  const body = avatar?.userData?.bodyGroup;
+
+  if (body) {
+
+    // 기존 피격 액션 중이라면 초기값 복구
+    for (let i = missileRecoils.length - 1; i >= 0; i--) {
+      const old = missileRecoils[i];
+
+      if (old.body === body) {
+        body.rotation.x = old.baseRotation;
+        missileRecoils.splice(i,1);
+      }
+    }
+
+    missileRecoils.push({
+      body,
+      baseRotation:body.rotation.x,
+      elapsed:0,
+      duration:.4
+    });
+  }
+
+  // 내가 맞았을 때 화면 충격 표시
+  if (m.targetId === getMyId()) {
+    impactFlashUntil = performance.now() + 350;
+  }
+}
+
+function updateMissileImpacts(dt,now) {
+
+  // ====================================
+  // 폭발 파편 애니메이션
+  // ====================================
+
+  for (
+    let i = missileExplosions.length - 1;
+    i >= 0;
+    i--
+  ) {
+
+    const effect = missileExplosions[i];
+
+    effect.elapsed += dt;
+
+    const progress = Math.min(
+      1,
+      effect.elapsed / effect.duration
+    );
+
+    effect.core.scale.setScalar(
+      1 + progress * 4
+    );
+
+    effect.core.material.opacity =
+      .9 * (1 - progress);
+
+    for (const fragment of effect.fragments) {
+
+      const velocity =
+        fragment.userData.velocity;
+
+      fragment.position.addScaledVector(
+        velocity,
+        dt
+      );
+
+      velocity.y -= 8 * dt;
+
+      fragment.rotation.x +=
+        fragment.userData.spin.x * dt;
+
+      fragment.rotation.y +=
+        fragment.userData.spin.y * dt;
+
+      fragment.rotation.z +=
+        fragment.userData.spin.z * dt;
+
+      fragment.material.opacity =
+        Math.max(0,1 - progress);
+    }
+
+    if (progress >= 1) {
+
+      scene.remove(effect.group);
+
+      effect.group.traverse(child => {
+        if (!child.isMesh) return;
+
+        child.geometry.dispose();
+        child.material.dispose();
+      });
+
+      missileExplosions.splice(i,1);
+    }
+  }
+
+  // ====================================
+  // 캐릭터 피격 모션
+  // ====================================
+
+  for (
+    let i = missileRecoils.length - 1;
+    i >= 0;
+    i--
+  ) {
+
+    const recoil = missileRecoils[i];
+
+    recoil.elapsed += dt;
+
+    const progress = Math.min(
+      1,
+      recoil.elapsed / recoil.duration
+    );
+
+    // 뒤로 젖혀졌다가 원래 자세로 복귀
+    const impact = Math.sin(
+      progress * Math.PI
+    );
+
+    recoil.body.rotation.x =
+      recoil.baseRotation - impact * .42;
+
+    if (progress >= 1) {
+
+      recoil.body.rotation.x =
+        recoil.baseRotation;
+
+      missileRecoils.splice(i,1);
+    }
+  }
+
+  // ====================================
+  // 화면 피격 효과
+  // ====================================
+
+  if (now < impactFlashUntil) {
+
+    const remaining =
+      (impactFlashUntil - now) / 350;
+
+    impactFlash.style.opacity =
+      String(Math.max(0,remaining));
+
+  } else {
+
+    impactFlash.style.opacity = '0';
+  }
+}
   function onMessage(m) {
 
     if (m.type === 'raid_state') {
@@ -649,15 +910,23 @@ if (m.type === 'missile_state') {
     }
 
     // 명중 또는 발사 종료
-    if (
-      m.type === 'missile_hit' ||
-      m.type === 'missile_end'
-    ) {
+// 미사일 명중: 폭발 및 피격 액션
+if (m.type === 'missile_hit') {
 
-      removeMissile(m.id);
+  removeMissile(m.id);
 
-      return true;
-    }
+  createMissileExplosion(m);
+
+  return true;
+}
+
+// 명중하지 않고 종료된 미사일
+if (m.type === 'missile_end') {
+
+  removeMissile(m.id);
+
+  return true;
+}
 
     return false;
   }
@@ -686,7 +955,7 @@ if (m.type === 'missile_state') {
     );
 
     lastFrame = now;
-
+updateMissileImpacts(dt,now);
     // ====================================
     // 조준 표시 갱신
     // ====================================
