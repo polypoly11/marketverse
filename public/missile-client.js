@@ -129,7 +129,7 @@ export function installMissileClient({
     }
 
     if (target.id === 'boss') {
-      projected.set(0, 4, -13);
+      projected.set(0, 2.2, -13);
     } else {
       const avatar = getOthers().get(target.id);
 
