@@ -142,7 +142,7 @@ export function mountAdmin(app, context) {
     magicShots,
     send,
     broadcast,
-presence, raid, visitorStats
+presence, raid, visitorStats, missileSystem
   } = context;
 
   app.set('trust proxy', 1);
@@ -423,6 +423,40 @@ visitors: visitorStats.snapshot(),
   );
 
   // =====================================
+    // =====================================
+  // 어드민 전체 미사일 충전
+  // =====================================
+
+  app.post(
+    '/api/admin/missiles/refill',
+    safeOrigin,
+    requireAdmin,
+    async (_req, res) => {
+      try {
+        const result =
+          await missileSystem.refillOnline();
+
+        remember(
+          `전체 미사일 충전: ${result.players}명`
+        );
+
+        res.json({
+          ok: true,
+          ...result
+        });
+
+      } catch (error) {
+        console.error(
+          '[ADMIN] 미사일 충전 오류:',
+          error
+        );
+
+        res.status(500).json({
+          error: '전체 미사일 충전에 실패했습니다.'
+        });
+      }
+    }
+  );
   // 채팅 / 마법 기능 ON-OFF
   // =====================================
   app.post(
