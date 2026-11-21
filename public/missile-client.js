@@ -12,6 +12,7 @@ export function installMissileClient({
 }) {
 
   let count = 0;
+  let maxMissiles = 5;
   let nextAt = null;
   let pressedAt = 0;
   let aiming = false;
@@ -598,13 +599,13 @@ export function installMissileClient({
       return false;
     }
 
-    if (m.type === 'missile_state') {
+if (m.type === 'missile_state') {
+  count = Number(m.count) || 0;
+  maxMissiles = Number(m.max) || 5;
+  nextAt = m.nextAt || null;
 
-      count = Number(m.count) || 0;
-      nextAt = m.nextAt || null;
-
-      return true;
-    }
+  return true;
+}
 
     if (m.type === 'missile_notice') {
 
@@ -711,8 +712,8 @@ export function installMissileClient({
         )
       : 20;
 
-    indicator.textContent =
-      `🚀\nMISSILE\n${count}/3\n${remaining}분`;
+indicator.textContent =
+  `🚀\nMISSILE\n${count}/${maxMissiles}\n${remaining}분`;
 
     // ====================================
     // 미사일 이동 및 추적
