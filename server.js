@@ -1,3 +1,4 @@
+import {createMissileSystem} from './missile-server.js';
 import express from 'express';
 import { createServer } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -363,6 +364,14 @@ async function sendPvpProfile(ws,requester,targetId) {
     deaths:Number(stats.deaths)
   });
 }
+const missileSystem = createMissileSystem({
+  clients,
+  send,
+  broadcast,
+  raid,
+  recordPvpKill,
+  presence
+});
 mountAdmin(app, {
   clients,
   votes,
@@ -696,7 +705,11 @@ wss.on('connection', async (ws, req) => {
       }
 
       p.ready = true;
-
+if (firstJoin) {
+  missileSystem.join(ws, p);
+} else {
+  missileSystem.state(ws, p);
+}
       if (firstJoin) {
         void visitorStats.record(m.visitorId);
       }
@@ -717,6 +730,9 @@ wss.on('connection', async (ws, req) => {
     if (!p.ready) {
       return;
     }
+    if (missileSystem.handle(ws, p, m)) {
+  return;
+}
 // ========================================
 // 캐릭터 클릭 시 PVP 전적 조회
 // ========================================
