@@ -7,6 +7,8 @@ const MAX_HP = 10000;
 const BOSS = {x:0,y:1.7,z:-13,radius:2.25};
 const LOOT = {x:0,z:-13,radius:1.6};
 const LOOT_ITEM_NAME = '고래의 비늘';
+const LOOT_EXPIRE_MS = 3 * 60 * 1000;       // 처치 후 3분: 미획득 비늘 소멸
+const BOSS_RESPAWN_MS = 10 * 60 * 1000;    // 처치 후 10분: 고래 자동 부활
 
 const sha = text =>
   crypto.createHash('sha256').update(text).digest('hex');
@@ -32,6 +34,12 @@ export async function createBossRaid({clients,send,broadcast}) {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         finished_at TIMESTAMPTZ
       )
+    `);
+
+    // 기존 테이블에도 처치 시간을 기록할 수 있도록 안전하게 컬럼 추가.
+    await pool.query(`
+      ALTER TABLE jmc_raid_runs
+      ADD COLUMN IF NOT EXISTS defeated_at TIMESTAMPTZ
     `);
 
     await pool.query(`
@@ -78,14 +86,14 @@ export async function createBossRaid({clients,send,broadcast}) {
     state:'idle',
     hp:MAX_HP,
     damage:1,
-    winnerName:null
+    winnerName:null,
+    defeatedAt:null
   };
 
   if (pool) {
     const result = await pool.query(`
-      SELECT id,state,hp,damage,winner_name
+      SELECT id,state,hp,damage,winner_name,defeated_at
       FROM jmc_raid_runs
-      WHERE state IN ('active','loot')
       ORDER BY created_at DESC
       LIMIT 1
     `);
@@ -98,7 +106,8 @@ export async function createBossRaid({clients,send,broadcast}) {
         state:r.state,
         hp:r.hp,
         damage:r.damage,
-        winnerName:r.winner_name
+        winnerName:r.winner_name,
+        defeatedAt:r.defeated_at ? new Date(r.defeated_at).getTime() : null
       };
     }
   }
@@ -111,6 +120,20 @@ export async function createBossRaid({clients,send,broadcast}) {
   let lastSaved = 0;
   let saving = false;
   let deathSaved = Promise.resolve();
+  let lifecycleBusy = false;
+
+  // 구버전 서버에서 이미 떨어진 비늘은 처치 시간을 기록하지 않았음.
+  // 기존 보상이 영원히 남지 않도록, 초기 로딩 시점을 기준으로 유예.
+  if (run.state === 'loot' && !Number.isFinite(run.defeatedAt)) {
+    run.defeatedAt = Date.now();
+    if (pool) {
+      await pool.query(`
+        UPDATE jmc_raid_runs
+        SET defeated_at = to_timestamp($2 / 1000.0)
+        WHERE id = $1 AND defeated_at IS NULL
+      `, [run.id, run.defeatedAt]);
+    }
+  }
 
   const snapshot = () => ({
     type:'raid_state',
@@ -123,6 +146,9 @@ export async function createBossRaid({clients,send,broadcast}) {
     loot:LOOT,
     lootItemName:LOOT_ITEM_NAME,
     winnerName:run.winnerName,
+    defeatedAt:run.defeatedAt,
+    lootExpiresAt:run.defeatedAt ? run.defeatedAt + LOOT_EXPIRE_MS : null,
+    nextSpawnAt:run.defeatedAt ? run.defeatedAt + BOSS_RESPAWN_MS : null,
     prizeEnabled:!!pool
   });
 
@@ -183,7 +209,8 @@ export async function createBossRaid({clients,send,broadcast}) {
       state:'active',
       hp:MAX_HP,
       damage:n,
-      winnerName:null
+      winnerName:null,
+      defeatedAt:null
     };
 
     publish();
@@ -205,7 +232,8 @@ export async function createBossRaid({clients,send,broadcast}) {
 
     run = {
       ...run,
-      state:'cancelled'
+      state:'cancelled',
+      defeatedAt:null
     };
 
     publish();
@@ -286,13 +314,18 @@ export async function createBossRaid({clients,send,broadcast}) {
 
     if (run.hp===0) {
       run.state='loot';
+      run.defeatedAt=now;
 
       if (pool) {
         deathSaved=pool.query(`
           UPDATE jmc_raid_runs
-          SET state='loot',hp=0
+          SET state='loot',hp=0,
+              defeated_at=to_timestamp($2 / 1000.0)
           WHERE id=$1 AND state='active'
-        `,[run.id]);
+        `,[run.id,now]).catch(error => {
+          console.error('[RAID] 처치 기록 저장 실패:',error);
+          throw error;
+        });
       }
 
       publish();
@@ -300,7 +333,9 @@ export async function createBossRaid({clients,send,broadcast}) {
   }
 
   async function pickup(ws,player) {
-    if (run.state!=='loot') {
+    if (run.state!=='loot' ||
+        !Number.isFinite(run.defeatedAt) ||
+        Date.now() >= run.defeatedAt + LOOT_EXPIRE_MS) {
       return send(ws,{
         type:'raid_notice',
         message:'획득할 아이템이 없습니다.'
@@ -444,6 +479,51 @@ export async function createBossRaid({clients,send,broadcast}) {
       claiming=false;
     }
   }
+
+  // 서버 타이머: 플레이어가 0명이더라도 보상 소멸과 부활 처리.
+  // DB의 defeated_at으로 서버 재시작 후에도 같은 시간을 사용한다.
+  async function updateRaidLifecycle() {
+    if (lifecycleBusy || claiming || !Number.isFinite(run.defeatedAt)) return;
+    if (!['loot','claimed','expired'].includes(run.state)) return;
+
+    const now = Date.now();
+    const lootDeadline = run.defeatedAt + LOOT_EXPIRE_MS;
+    const respawnDeadline = run.defeatedAt + BOSS_RESPAWN_MS;
+    if (now < lootDeadline && now < respawnDeadline) return;
+
+    lifecycleBusy = true;
+    try {
+      if (run.state === 'loot' && now >= lootDeadline) {
+        await deathSaved;
+        if (pool) {
+          const result = await pool.query(`
+            UPDATE jmc_raid_runs
+            SET state='expired',finished_at=NOW()
+            WHERE id=$1 AND state='loot'
+          `,[run.id]);
+          if (result.rowCount !== 1) return;
+        }
+        run.state = 'expired';
+        publish();
+        console.info('[RAID] 미획득 고래 비늘 3분 경과로 소멸');
+      }
+
+      if (Date.now() >= respawnDeadline &&
+          (run.state === 'claimed' || run.state === 'expired')) {
+        const damage = run.damage;
+        await spawn(damage);
+        console.info('[RAID] 고래 보스 처치 10분 후 자동 재소환');
+      }
+    } catch (error) {
+      console.error('[RAID] 자동 소멸/재소환 처리 실패:',error);
+    } finally {
+      lifecycleBusy = false;
+    }
+  }
+
+  setInterval(() => { void updateRaidLifecycle(); }, 1000).unref();
+  // 서버 시작 시 이미 지난 기한을 즉시 정산.
+  void updateRaidLifecycle();
 
   async function rewards() {
     if (!pool) {
