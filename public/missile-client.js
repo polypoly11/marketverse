@@ -670,59 +670,72 @@ export function installMissileClient({
     getMissileAudio
   );
 
-   function startMissileSound(id) {
+    // ========================================
+  // 미사일 비행음: 바람 + 로켓 추진 소음
+  // ========================================
+
+  function startMissileSound(id) {
     if (
       !missileSoundEnabled() ||
       missileSounds.has(id)
     ) return;
 
     const ctx = getMissileAudio();
-
     if (!ctx) return;
 
     try {
-      const engine = ctx.createOscillator();
-      const filter = ctx.createBiquadFilter();
-      const gain = ctx.createGain();
-
-      // 부드러운 로켓 추진음
-      engine.type = 'triangle';
-
-      engine.frequency.setValueAtTime(
-        170,
-        ctx.currentTime
+      // 실제 바람 소리에 가까운 노이즈 생성
+      const sampleRate = ctx.sampleRate;
+      const buffer = ctx.createBuffer(
+        1,
+        sampleRate,
+        sampleRate
       );
 
-      // 높은 주파수 제거
-      filter.type = 'lowpass';
-      filter.frequency.value = 280;
+      const data = buffer.getChannelData(0);
 
-      // 자연스럽게 시작하는 작은 음량
+      for (let i = 0; i < data.length; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+
+      const wind = ctx.createBufferSource();
+      wind.buffer = buffer;
+      wind.loop = true;
+
+      // 날카로운 잡음을 줄이고
+      // 공기를 가르는 '슈우웅' 소리로 가공
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 1100;
+      filter.Q.value = 0.65;
+
+      const gain = ctx.createGain();
+
       gain.gain.setValueAtTime(
         0,
         ctx.currentTime
       );
 
       gain.gain.linearRampToValueAtTime(
-        0.008,
+        0.16,
         ctx.currentTime + 0.12
       );
 
-      engine.connect(filter);
+      wind.connect(filter);
       filter.connect(gain);
       gain.connect(ctx.destination);
 
-      engine.start();
+      wind.start();
 
       missileSounds.set(id, {
-        engine,
+        wind,
         filter,
         gain
       });
 
     } catch (error) {
       console.warn(
-        '[MISSILE] 효과음 시작 실패',
+        '[MISSILE] 비행음 생성 오류:',
         error
       );
     }
@@ -730,7 +743,6 @@ export function installMissileClient({
 
   function stopMissileSound(id) {
     const sound = missileSounds.get(id);
-
     if (!sound) return;
 
     missileSounds.delete(id);
@@ -748,13 +760,13 @@ export function installMissileClient({
 
       sound.gain.gain.linearRampToValueAtTime(
         0,
-        now + 0.08
+        now + 0.1
       );
 
-      sound.engine.stop(now + 0.1);
+      sound.wind.stop(now + 0.12);
 
-      sound.engine.onended = () => {
-        sound.engine.disconnect();
+      sound.wind.onended = () => {
+        sound.wind.disconnect();
         sound.filter.disconnect();
         sound.gain.disconnect();
       };
@@ -776,17 +788,46 @@ export function installMissileClient({
       }
 
       const sound = missileSounds.get(id);
-
       if (!sound) continue;
 
-      // 비행 중 미세한 엔진 회전 변화
-const pitch =
-  170 + Math.sin(now * 0.008) * 5;
+      // 미사일 이동에 따른 바람 소리 변화
+      const ctx = missileAudioCtx;
 
-      sound.engine.frequency.setTargetAtTime(
+      if (!ctx || ctx.state !== 'running') {
+        continue;
+      }
+
+      const pitch =
+        1100 + Math.sin(now * 0.004) * 180;
+
+      sound.filter.frequency.setTargetAtTime(
         pitch,
-        missileAudioCtx.currentTime,
-        0.05
+        ctx.currentTime,
+        0.08
+      );
+
+      // 캐릭터와의 거리에 따라 음량 조절
+      const me = getAvatar();
+      const missilePos = shot.object.position;
+
+      let volume = 0.16;
+
+      if (me) {
+        const distance = Math.hypot(
+          me.position.x - missilePos.x,
+          me.position.z - missilePos.z
+        );
+
+        volume = Math.max(
+          0.025,
+          0.16 * (1 - distance / 30)
+        );
+      }
+
+      sound.gain.gain.setTargetAtTime(
+        volume,
+        ctx.currentTime,
+        0.08
       );
     }
   }
