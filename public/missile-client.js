@@ -780,8 +780,8 @@ export function installMissileClient({
       if (!sound) continue;
 
       // 비행 중 미세한 엔진 회전 변화
-      const pitch =
-        95 + Math.sin(now * 0.012) * 14;
+const pitch =
+  170 + Math.sin(now * 0.008) * 5;
 
       sound.engine.frequency.setTargetAtTime(
         pitch,
