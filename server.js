@@ -242,7 +242,127 @@ function presence() {
 
 const raid = await createBossRaid({clients, send, broadcast});
 const googleAuth = await createGoogleAuth(app);
+// ========================================
+// Google 계정 PVP 전적 저장
+// ========================================
 
+let pvpPool = null;
+
+if (process.env.DATABASE_URL) {
+  const {Pool} = await import('pg');
+
+  pvpPool = new Pool({
+    connectionString:process.env.DATABASE_URL,
+    max:2
+  });
+
+  await pvpPool.query(`
+    CREATE TABLE IF NOT EXISTS jmc_pvp_stats (
+      google_sub TEXT PRIMARY KEY
+        REFERENCES jmc_google_users(google_sub),
+      kills INTEGER NOT NULL DEFAULT 0
+        CHECK(kills >= 0),
+      deaths INTEGER NOT NULL DEFAULT 0
+        CHECK(deaths >= 0),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+}
+
+async function recordPvpKill(attackerSub,victimSub) {
+  if (
+    !pvpPool ||
+    !attackerSub ||
+    !victimSub ||
+    attackerSub === victimSub
+  ) return;
+
+  const db = await pvpPool.connect();
+
+  try {
+    await db.query('BEGIN');
+
+    await db.query(`
+      INSERT INTO jmc_pvp_stats(
+        google_sub,kills,deaths
+      )
+      VALUES($1,1,0)
+      ON CONFLICT(google_sub)
+      DO UPDATE SET
+        kills=jmc_pvp_stats.kills+1,
+        updated_at=NOW()
+    `,[attackerSub]);
+
+    await db.query(`
+      INSERT INTO jmc_pvp_stats(
+        google_sub,kills,deaths
+      )
+      VALUES($1,0,1)
+      ON CONFLICT(google_sub)
+      DO UPDATE SET
+        deaths=jmc_pvp_stats.deaths+1,
+        updated_at=NOW()
+    `,[victimSub]);
+
+    await db.query('COMMIT');
+
+  } catch(error) {
+    await db.query('ROLLBACK').catch(()=>{});
+    throw error;
+
+  } finally {
+    db.release();
+  }
+}
+
+async function sendPvpProfile(ws,requester,targetId) {
+  const target = [...clients.values()].find(
+    p => p.ready && p.id === targetId
+  );
+
+  if (!target) {
+    send(ws,{
+      type:'pvp_profile',
+      error:'해당 이용자가 접속 중이지 않습니다.'
+    });
+    return;
+  }
+
+  if (!target.googleSub || !pvpPool) {
+    send(ws,{
+      type:'pvp_profile',
+      targetId:target.id,
+      displayName:target.name,
+      animal:target.animal,
+      registered:false,
+      kills:0,
+      deaths:0
+    });
+    return;
+  }
+
+  const result = await pvpPool.query(`
+    SELECT kills,deaths
+    FROM jmc_pvp_stats
+    WHERE google_sub=$1
+  `,[target.googleSub]);
+
+  const stats = result.rows[0] || {
+    kills:0,
+    deaths:0
+  };
+
+  send(ws,{
+    type:'pvp_profile',
+    targetId:target.id,
+    displayName:target.name,
+    accountNickname:target.accountNickname,
+    animal:target.animal,
+    registered:true,
+    kills:Number(stats.kills),
+    deaths:Number(stats.deaths)
+  });
+}
 mountAdmin(app, {
   clients,
   votes,
@@ -597,7 +717,31 @@ wss.on('connection', async (ws, req) => {
     if (!p.ready) {
       return;
     }
+// ========================================
+// 캐릭터 클릭 시 PVP 전적 조회
+// ========================================
 
+if (m.type === 'pvp_profile_request') {
+  if (
+    typeof m.targetId !== 'string' ||
+    m.targetId.length > 100
+  ) return;
+
+  void sendPvpProfile(ws,p,m.targetId)
+    .catch(error => {
+      console.error(
+        '[JMC] PVP 전적 조회 오류:',
+        error
+      );
+
+      send(ws,{
+        type:'pvp_profile',
+        error:'전적을 불러오지 못했습니다.'
+      });
+    });
+
+  return;
+}
     // ====================================
     // 고래 광역공격 회피용 점프 판정
     // ====================================
@@ -1138,7 +1282,26 @@ function updateMagicCollisions() {
     if (target.hp === 0) {
 
       target.ready = false;
+if (target.hp === 0) {
 
+  // Google 계정 이용자끼리의 PVP 사망만 기록
+  if (
+    shot.owner.googleSub &&
+    target.googleSub &&
+    shot.owner.googleSub !== target.googleSub
+  ) {
+    void recordPvpKill(
+      shot.owner.googleSub,
+      target.googleSub
+    ).catch(error => {
+      console.error(
+        '[JMC] PVP 전적 저장 실패:',
+        error
+      );
+    });
+  }
+
+  target.ready = false;
       send(targetWs, {
         type: 'death',
         message: '사망하셨습니다',
