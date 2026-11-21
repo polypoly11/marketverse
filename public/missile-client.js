@@ -10,19 +10,25 @@ export function installMissileClient({
   send,
   isBlocked
 }) {
+  const LOCK_MS = 700;
+  const RANGE = 15;
+
+  const shots = new Map();
+  const explosions = [];
+  const recoils = [];
+
+  const forwardAxis = new THREE.Vector3(0, 0, 1);
+  const dir = new THREE.Vector3();
+  const projected = new THREE.Vector3();
 
   let count = 0;
   let maxMissiles = 5;
   let nextAt = null;
   let pressedAt = 0;
   let aiming = false;
-  let bossActive = false;
   let locked = null;
-
-  const shots = new Map();
-
-  const LOCK_MS = 700;
-  const RANGE = 15;
+  let bossActive = false;
+  let impactFlashUntil = 0;
 
   // ========================================
   // 미사일 인벤토리
@@ -32,70 +38,63 @@ export function installMissileClient({
 
   indicator.id = 'jmc-missile-inventory';
 
-indicator.style.cssText = `
-  position:fixed;
-  z-index:9998;
-  width:64px;
-  min-height:58px;
-  box-sizing:border-box;
-  padding:8px 4px 7px;
-  border:1px solid #d8ba80;
-  border-radius:12px;
-  background:rgba(15,29,47,.97);
-  color:#fff;
-  font:700 12px Arial,sans-serif;
-  line-height:1.25;
-  text-align:center;
-  white-space:pre-line;
-  cursor:help;
-  box-shadow:0 5px 18px rgba(0,0,0,.28);
-`;
+  indicator.style.cssText = `
+    position:fixed;
+    z-index:9998;
+    width:64px;
+    min-height:58px;
+    box-sizing:border-box;
+    padding:8px 4px 7px;
+    border:1px solid #d8ba80;
+    border-radius:12px;
+    background:rgba(15,29,47,.97);
+    color:#fff;
+    font:700 12px Arial,sans-serif;
+    line-height:1.25;
+    text-align:center;
+    white-space:pre-line;
+    cursor:help;
+    box-shadow:0 5px 18px rgba(0,0,0,.28);
+  `;
 
   indicator.title =
     '🚀 유도 미사일 사용법\n' +
-    'S키를 0.7초 이상 누르면 조준합니다.\n' +
-    'S키를 떼면 미사일이 발사됩니다.\n' +
-    '다른 이용자와 고래 보스를 공격할 수 있습니다.\n' +
-    '명중 피해: HP 40\n' +
-    '20분마다 1개 지급\n' +
-    '최대 3개 보유 가능';
+    'S키 또는 모바일 🚀 버튼을 0.7초 이상 누른 뒤 떼면 발사\n' +
+    '다른 이용자와 고래 보스 공격 가능\n' +
+    '직격 40 / 근접 25 / 외곽 10 / 회피 0 피해\n' +
+    '접속 중 10분마다 1개 충전';
 
-indicator.textContent =
-  '🚀\n0/3';
+  indicator.textContent = '🚀\n0/5';
 
   document.body.appendChild(indicator);
 
-  function positionMissileInventory() {
-
+  function positionInventory() {
     const item = document.getElementById(
       'jmc-inventory-toggle'
     );
 
-    if (!item) {
+    if (
+      !item ||
+      !item.getClientRects().length
+    ) {
       indicator.style.display = 'none';
       return;
     }
 
-    const rect = item.getBoundingClientRect();
+    const r = item.getBoundingClientRect();
 
     indicator.style.display = 'block';
-
-    indicator.style.left =
-      `${rect.left}px`;
-
-    indicator.style.top =
-      `${rect.bottom + 6}px`;
-
-    indicator.style.width =
-      `${rect.width}px`;
+    indicator.style.left = `${r.left}px`;
+    indicator.style.top = `${r.bottom + 6}px`;
+    indicator.style.width = `${r.width}px`;
   }
 
-  positionMissileInventory();
+  positionInventory();
 
-  setInterval(positionMissileInventory, 300);
+  setInterval(positionInventory, 300);
 
   // ========================================
-  // 카트라이더 스타일 조준 표시
+  // 조준 표시
   // ========================================
 
   const crosshair = document.createElement('div');
@@ -109,9 +108,6 @@ indicator.textContent =
     transform:translate(-50%,-50%);
     border:3px solid #ffd45a;
     border-radius:13px;
-    box-shadow:
-      0 0 18px rgba(255,65,65,.45),
-      inset 0 0 14px rgba(255,65,65,.2);
     background:rgba(255,30,30,.04);
     color:white;
     font:bold 12px Arial,sans-serif;
@@ -126,21 +122,15 @@ indicator.textContent =
 
   document.body.appendChild(crosshair);
 
-  const aimPosition = new THREE.Vector3();
-
-  function updateTargetReticle(target, isLocked) {
-
+  function updateReticle(target, isLocked) {
     if (!target) {
       crosshair.style.display = 'none';
       return;
     }
 
     if (target.id === 'boss') {
-
-      aimPosition.set(0, 4, -13);
-
+      projected.set(0, 4, -13);
     } else {
-
       const avatar = getOthers().get(target.id);
 
       if (!avatar) {
@@ -148,38 +138,35 @@ indicator.textContent =
         return;
       }
 
-      avatar.getWorldPosition(aimPosition);
-      aimPosition.y += 1.35;
+      avatar.getWorldPosition(projected);
+      projected.y += 1.35;
     }
 
-    aimPosition.project(camera);
+    projected.project(camera);
 
     if (
-      aimPosition.z < -1 ||
-      aimPosition.z > 1
+      projected.z < -1 ||
+      projected.z > 1
     ) {
       crosshair.style.display = 'none';
       return;
     }
 
-    const rect =
-      renderer.domElement.getBoundingClientRect();
+    const r = renderer.domElement.getBoundingClientRect();
 
     crosshair.style.left = `${
-      rect.left +
-      (aimPosition.x + 1) * rect.width / 2
+      r.left + (projected.x + 1) * r.width / 2
     }px`;
 
     crosshair.style.top = `${
-      rect.top +
-      (1 - aimPosition.y) * rect.height / 2
+      r.top + (1 - projected.y) * r.height / 2
     }px`;
 
     crosshair.style.display = 'flex';
 
     crosshair.textContent = isLocked
-      ? '🔒 LOCK ON'
-      : '◎ TARGET';
+      ? '🔒 조준 완료'
+      : '◎ 조준 중';
 
     crosshair.style.borderColor = isLocked
       ? '#ff3535'
@@ -199,136 +186,120 @@ indicator.textContent =
   mobileButton.type = 'button';
   mobileButton.textContent = '🚀';
 
-mobileButton.style.cssText = `
-  position:fixed;
-  z-index:45;
-  width:48px;
-  height:48px;
-  padding:0;
-  background:rgba(134,47,61,.96);
-  color:#fff;
-  border:1px solid #ffe1a2;
-  border-radius:12px;
-  box-shadow:0 4px 14px rgba(0,0,0,.35);
-  font:700 22px Arial,sans-serif;
-  display:none;
-  align-items:center;
-  justify-content:center;
-  touch-action:none;
-  user-select:none;
-  cursor:pointer;
-`;
-
-document.body.appendChild(mobileButton);
-
-// ========================================
-// 모바일 미사일 버튼을 A 공격 버튼 위에 배치
-// ========================================
-
-const missileMobileQuery = window.matchMedia(
-  '(max-width:980px), (pointer:coarse)'
-);
-
-function positionMobileMissileButton() {
-
-  if (!missileMobileQuery.matches) {
-    mobileButton.style.display = 'none';
-    return;
-  }
-
-  const actionBar = document.getElementById(
-    'mobile-actions'
+  mobileButton.setAttribute(
+    'aria-label',
+    '유도 미사일 조준 및 발사'
   );
 
-  if (
-    !actionBar ||
-    actionBar.getClientRects().length === 0
-  ) {
-    mobileButton.style.display = 'none';
-    return;
-  }
+  mobileButton.style.cssText = `
+    position:fixed;
+    z-index:45;
+    width:48px;
+    height:48px;
+    padding:0;
+    background:rgba(134,47,61,.96);
+    color:#fff;
+    border:1px solid #ffe1a2;
+    border-radius:12px;
+    box-shadow:0 4px 14px rgba(0,0,0,.35);
+    font:700 22px Arial,sans-serif;
+    display:none;
+    align-items:center;
+    justify-content:center;
+    touch-action:none;
+    user-select:none;
+    cursor:pointer;
+  `;
 
-  const rect = actionBar.getBoundingClientRect();
+  document.body.appendChild(mobileButton);
 
-  if (!rect.width || !rect.height) {
-    mobileButton.style.display = 'none';
-    return;
-  }
-
-  const buttonSize = 48;
-  const gap = 12;
-
-  // 기존 공격 버튼 묶음의 중앙에 정렬
-  const left = Math.max(
-    8,
-    Math.min(
-      window.innerWidth - buttonSize - 8,
-      rect.left + rect.width / 2 - buttonSize / 2
-    )
+  const mobileMedia = window.matchMedia(
+    '(max-width:980px), (pointer:coarse)'
   );
 
-  // 공격 버튼 묶음 바로 위에 배치
-  let top = rect.top - buttonSize - gap;
-
-  // 화면 위쪽 공간이 부족할 경우 왼쪽으로 배치
-  if (top < 8) {
-    top = Math.max(
-      8,
-      rect.top + rect.height / 2 - buttonSize / 2
+  function positionMobileButton() {
+    const bar = document.getElementById(
+      'mobile-actions'
     );
 
-    mobileButton.style.left =
-      `${Math.max(8,rect.left - buttonSize - gap)}px`;
+    if (
+      !mobileMedia.matches ||
+      !bar ||
+      !bar.getClientRects().length
+    ) {
+      mobileButton.style.display = 'none';
+      return;
+    }
 
-  } else {
-    mobileButton.style.left = `${left}px`;
+    const r = bar.getBoundingClientRect();
+
+    if (!r.width || !r.height) {
+      mobileButton.style.display = 'none';
+      return;
+    }
+
+    const size = 48;
+    const gap = 12;
+
+    let x = Math.max(
+      8,
+      Math.min(
+        window.innerWidth - size - 8,
+        r.left + (r.width - size) / 2
+      )
+    );
+
+    let y = r.top - size - gap;
+
+    if (y < 8) {
+      x = Math.max(
+        8,
+        r.left - size - gap
+      );
+
+      y = Math.max(
+        8,
+        r.top + (r.height - size) / 2
+      );
+    }
+
+    mobileButton.style.left = `${x}px`;
+    mobileButton.style.top = `${y}px`;
+    mobileButton.style.display = 'flex';
   }
 
-  mobileButton.style.top = `${top}px`;
-  mobileButton.style.display = 'flex';
-}
+  positionMobileButton();
 
-positionMobileMissileButton();
+  window.addEventListener(
+    'resize',
+    positionMobileButton
+  );
 
-window.addEventListener(
-  'resize',
-  positionMobileMissileButton
-);
+  window.addEventListener(
+    'orientationchange',
+    positionMobileButton
+  );
 
-window.addEventListener(
-  'orientationchange',
-  positionMobileMissileButton
-);
-
-setInterval(
-  positionMobileMissileButton,
-  300
-);
+  setInterval(positionMobileButton, 300);
 
   // ========================================
   // 조준 가능한 대상 검색
   // ========================================
 
   function availableTarget() {
-
     const me = getAvatar();
 
     if (!me) return null;
 
-    const direction =
+    const facing =
       me.userData.targetDirection ??
       me.rotation.y;
-
-    let best = null;
 
     const entries = [...getOthers()].map(
       ([id, avatar]) => ({
         id,
         x: avatar.position.x,
-        z: avatar.position.z,
-        label:
-          avatar.userData?.nameTag?.name ||
-          '이용자'
+        z: avatar.position.z
       })
     );
 
@@ -336,30 +307,27 @@ setInterval(
       entries.push({
         id: 'boss',
         x: 0,
-        z: -13,
-        label: '고래 보스'
+        z: -13
       });
     }
 
-    for (const target of entries) {
+    let best = null;
 
-      const dx =
-        target.x - me.position.x;
-
-      const dz =
-        target.z - me.position.z;
-
-      const distance =
-        Math.hypot(dx, dz);
+    for (const item of entries) {
+      const dx = item.x - me.position.x;
+      const dz = item.z - me.position.z;
+      const distance = Math.hypot(dx, dz);
 
       if (
-        distance > RANGE ||
-        distance < 0.2
-      ) continue;
+        distance < 0.2 ||
+        distance > RANGE
+      ) {
+        continue;
+      }
 
       const dot = (
-        Math.sin(direction) * dx +
-        Math.cos(direction) * dz
+        Math.sin(facing) * dx +
+        Math.cos(facing) * dz
       ) / distance;
 
       if (dot < 0.65) continue;
@@ -372,7 +340,7 @@ setInterval(
         score < best.score
       ) {
         best = {
-          ...target,
+          ...item,
           score
         };
       }
@@ -382,34 +350,28 @@ setInterval(
   }
 
   // ========================================
-  // S키 누르기: 조준 시작
+  // S키 / 모바일 조준 및 발사
   // ========================================
 
   function press() {
-
     if (
       aiming ||
-      isBlocked() ||
-      count < 1 ||
-      !getAvatar()
-    ) return;
+      isBlocked?.() ||
+      count <= 0
+    ) {
+      return;
+    }
 
     aiming = true;
-    locked = null;
-
     pressedAt = performance.now();
+    locked = null;
 
     send({
       type: 'missile_aim_start'
     });
   }
 
-  // ========================================
-  // S키 떼기: 유도 미사일 발사
-  // ========================================
-
   function release() {
-
     if (!aiming) return;
 
     const elapsed =
@@ -424,7 +386,8 @@ setInterval(
 
     if (
       elapsed >= LOCK_MS &&
-      target
+      target &&
+      !isBlocked?.()
     ) {
       send({
         type: 'missile_fire',
@@ -435,31 +398,32 @@ setInterval(
 
   window.addEventListener(
     'keydown',
-    event => {
+    e => {
+      if (
+        e.code !== 'KeyS' ||
+        e.repeat
+      ) {
+        return;
+      }
 
       if (
-        event.code !== 'KeyS' ||
-        event.repeat
-      ) return;
-
-      if (
-        event.target?.closest?.(
+        e.target?.closest?.(
           'input,textarea,select,[contenteditable="true"]'
         )
-      ) return;
+      ) {
+        return;
+      }
 
-      event.preventDefault();
-
+      e.preventDefault();
       press();
     }
   );
 
   window.addEventListener(
     'keyup',
-    event => {
-
-      if (event.code === 'KeyS') {
-        event.preventDefault();
+    e => {
+      if (e.code === 'KeyS') {
+        e.preventDefault();
         release();
       }
     }
@@ -469,12 +433,11 @@ setInterval(
 
   mobileButton.addEventListener(
     'pointerdown',
-    event => {
-
-      event.preventDefault();
+    e => {
+      e.preventDefault();
 
       mobileButton.setPointerCapture(
-        event.pointerId
+        e.pointerId
       );
 
       press();
@@ -483,8 +446,8 @@ setInterval(
 
   mobileButton.addEventListener(
     'pointerup',
-    event => {
-      event.preventDefault();
+    e => {
+      e.preventDefault();
       release();
     }
   );
@@ -495,52 +458,46 @@ setInterval(
   );
 
   // ========================================
-  // 새로운 3D 유도 미사일 모델
+  // 3D 미사일 모델
   // ========================================
 
-  function createRocketModel() {
-
+  function createRocket() {
     const rocket = new THREE.Group();
 
-    const bodyMat =
-      new THREE.MeshStandardMaterial({
-        color:0x2787d9,
-        metalness:.65,
-        roughness:.24
-      });
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: 0x2787d9,
+      metalness: 0.65,
+      roughness: 0.24
+    });
 
-    const noseMat =
-      new THREE.MeshStandardMaterial({
-        color:0xe63d40,
-        metalness:.3,
-        roughness:.35
-      });
+    const noseMat = new THREE.MeshStandardMaterial({
+      color: 0xe63d40,
+      metalness: 0.3,
+      roughness: 0.35
+    });
 
-    const finMat =
-      new THREE.MeshStandardMaterial({
-        color:0xf4bd48,
-        metalness:.4,
-        roughness:.3
-      });
+    const finMat = new THREE.MeshStandardMaterial({
+      color: 0xf4bd48,
+      metalness: 0.4,
+      roughness: 0.3
+    });
 
-    const engineMat =
-      new THREE.MeshBasicMaterial({
-        color:0xffa32b
-      });
+    const engineMat = new THREE.MeshBasicMaterial({
+      color: 0xffa32b
+    });
 
-    const metalMat =
-      new THREE.MeshStandardMaterial({
-        color:0x313641,
-        metalness:.8,
-        roughness:.3
-      });
+    const metalMat = new THREE.MeshStandardMaterial({
+      color: 0x313641,
+      metalness: 0.8,
+      roughness: 0.3
+    });
 
-    // 파란 원통 몸체
+    // 몸체
     const body = new THREE.Mesh(
       new THREE.CylinderGeometry(
-        .18,
-        .18,
-        .9,
+        0.18,
+        0.18,
+        0.9,
         16
       ),
       bodyMat
@@ -549,29 +506,28 @@ setInterval(
     body.rotation.x = Math.PI / 2;
     rocket.add(body);
 
-    // 빨간 탄두
+    // 탄두
     const nose = new THREE.Mesh(
       new THREE.ConeGeometry(
-        .18,
-        .42,
+        0.18,
+        0.42,
         16
       ),
       noseMat
     );
 
     nose.rotation.x = Math.PI / 2;
-    nose.position.z = .64;
+    nose.position.z = 0.64;
 
     rocket.add(nose);
 
-    // 금색 날개 4개
+    // 날개
     for (let i = 0; i < 4; i++) {
-
       const fin = new THREE.Mesh(
         new THREE.BoxGeometry(
-          .08,
-          .32,
-          .35
+          0.08,
+          0.32,
+          0.35
         ),
         finMat
       );
@@ -579,9 +535,9 @@ setInterval(
       const a = i * Math.PI / 2;
 
       fin.position.set(
-        Math.cos(a) * .18,
-        Math.sin(a) * .18,
-        -.3
+        Math.cos(a) * 0.18,
+        Math.sin(a) * 0.18,
+        -0.3
       );
 
       fin.rotation.z = a;
@@ -592,31 +548,31 @@ setInterval(
     // 엔진 노즐
     const nozzle = new THREE.Mesh(
       new THREE.CylinderGeometry(
-        .15,
-        .2,
-        .18,
+        0.15,
+        0.2,
+        0.18,
         12
       ),
       metalMat
     );
 
     nozzle.rotation.x = Math.PI / 2;
-    nozzle.position.z = -.52;
+    nozzle.position.z = -0.52;
 
     rocket.add(nozzle);
 
     // 엔진 불꽃
     const flame = new THREE.Mesh(
       new THREE.ConeGeometry(
-        .12,
-        .5,
+        0.12,
+        0.5,
         12
       ),
       engineMat
     );
 
     flame.rotation.x = -Math.PI / 2;
-    flame.position.z = -.85;
+    flame.position.z = -0.85;
 
     rocket.add(flame);
 
@@ -628,108 +584,119 @@ setInterval(
   }
 
   // ========================================
-  // 미사일 모델 메모리 정리
+  // 3D 객체 메모리 정리
   // ========================================
 
-  function disposeRocket(object) {
+  function disposeObject(obj) {
+    if (!obj) return;
 
-    if (!object) return;
+    scene.remove(obj);
 
-    scene.remove(object);
+    const geometries = new Set();
+    const materials = new Set();
 
-    object.traverse(child => {
-
+    obj.traverse(child => {
       if (!child.isMesh) return;
 
       if (child.geometry) {
-        child.geometry.dispose();
+        geometries.add(child.geometry);
       }
 
       if (Array.isArray(child.material)) {
-
         child.material.forEach(
-          material => material.dispose()
+          material => materials.add(material)
         );
-
       } else if (child.material) {
-
-        child.material.dispose();
+        materials.add(child.material);
       }
     });
+
+    geometries.forEach(
+      geometry => geometry.dispose()
+    );
+
+    materials.forEach(
+      material => material.dispose()
+    );
   }
 
   function removeMissile(id) {
-
     const shot = shots.get(id);
 
     if (!shot) return;
 
-    disposeRocket(shot.object);
+    disposeObject(shot.object);
 
     shots.delete(id);
   }
 
   // ========================================
-  // 서버 메시지 수신
+  // 피격 화면 효과
   // ========================================
-// ========================================
-// 미사일 명중 이펙트
-// 폭발 / 파편 / 캐릭터 피격 액션
-// ========================================
 
-const missileExplosions = [];
-const missileRecoils = [];
+  const impactFlash = document.createElement('div');
 
-const impactFlash = document.createElement('div');
+  impactFlash.style.cssText = `
+    position:fixed;
+    inset:0;
+    z-index:9996;
+    pointer-events:none;
+    background:radial-gradient(
+      circle,
+      transparent 35%,
+      rgba(255,65,20,.55) 100%
+    );
+    opacity:0;
+  `;
 
-impactFlash.style.cssText = `
-  position:fixed;
-  inset:0;
-  z-index:9996;
-  pointer-events:none;
-  background:radial-gradient(
-    circle,
-    transparent 35%,
-    rgba(255,65,20,.55) 100%
-  );
-  opacity:0;
-`;
+  document.body.appendChild(impactFlash);
 
-document.body.appendChild(impactFlash);
+  // ========================================
+  // 폭발 및 파편 효과
+  // ========================================
 
-let impactFlashUntil = 0;
+  function createExplosion(m) {
+    const group = new THREE.Group();
 
-function createMissileExplosion(m) {
+    group.position.set(
+      Number(m.x) || 0,
+      Number(m.y) || 1.1,
+      Number(m.z) || 0
+    );
 
-  const group = new THREE.Group();
+    scene.add(group);
 
-  group.position.set(
-    Number(m.x) || 0,
-    Number(m.y) || 1.1,
-    Number(m.z) || 0
-  );
+    const damage = Math.max(
+      0,
+      Number(m.damage) || 0
+    );
 
-  scene.add(group);
+    const core = new THREE.Mesh(
+      new THREE.SphereGeometry(
+        0.45,
+        12,
+        8
+      ),
+      new THREE.MeshBasicMaterial({
+        color: damage ? 0xffdd66 : 0xffa355,
+        transparent: true,
+        opacity: damage ? 0.9 : 0.5,
+        depthWrite: false
+      })
+    );
 
-  // 폭발 중심의 밝은 섬광
-  const core = new THREE.Mesh(
-    new THREE.SphereGeometry(.45,12,8),
-    new THREE.MeshBasicMaterial({
-      color:0xffdd66,
-      transparent:true,
-      opacity:.9,
-      depthWrite:false
-    })
-  );
+    group.add(core);
 
-  group.add(core);
+    const fragments = [];
 
-  const fragments = [];
+    const total =
+      damage >= 25
+        ? 18
+        : damage > 0
+          ? 12
+          : 8;
 
-  // 불꽃 및 금속 파편 생성
-  for (let i = 0; i < 18; i++) {
-
-    const colors = [
+    const palette = [
       0xffdd55,
       0xff782b,
       0xff3420,
@@ -737,324 +704,320 @@ function createMissileExplosion(m) {
       0x9fa9b7
     ];
 
-    const material = new THREE.MeshBasicMaterial({
-      color:colors[i % colors.length],
-      transparent:true,
-      opacity:1,
-      depthWrite:false
+    for (let i = 0; i < total; i++) {
+      const mesh = new THREE.Mesh(
+        new THREE.TetrahedronGeometry(
+          0.08 + Math.random() * 0.1
+        ),
+        new THREE.MeshBasicMaterial({
+          color: palette[i % palette.length],
+          transparent: true,
+          opacity: 1,
+          depthWrite: false
+        })
+      );
+
+      const a =
+        Math.random() * Math.PI * 2;
+
+      const speed =
+        2.5 + Math.random() * 4;
+
+      mesh.userData.velocity = new THREE.Vector3(
+        Math.cos(a) * speed,
+        1.5 + Math.random() * 4,
+        Math.sin(a) * speed
+      );
+
+      mesh.userData.spin = new THREE.Vector3(
+        Math.random() * 8,
+        Math.random() * 8,
+        Math.random() * 8
+      );
+
+      group.add(mesh);
+      fragments.push(mesh);
+    }
+
+    explosions.push({
+      group,
+      core,
+      fragments,
+      elapsed: 0,
+      duration: 0.75
     });
 
-    const fragment = new THREE.Mesh(
-      new THREE.TetrahedronGeometry(
-        .08 + Math.random() * .10
-      ),
-      material
-    );
+    // 완전 회피면 캐릭터 피격 모션 없음
+    if (damage <= 0) return;
 
-    const a = Math.random() * Math.PI * 2;
+    const avatar =
+      m.targetId === getMyId()
+        ? getAvatar()
+        : getOthers().get(m.targetId);
 
-    const speed = 2.5 + Math.random() * 4;
+    const body =
+      avatar?.userData?.bodyGroup;
 
-    fragment.userData.velocity = new THREE.Vector3(
-      Math.cos(a) * speed,
-      1.5 + Math.random() * 4,
-      Math.sin(a) * speed
-    );
+    if (body) {
+      for (
+        let i = recoils.length - 1;
+        i >= 0;
+        i--
+      ) {
+        if (recoils[i].body === body) {
+          body.rotation.x =
+            recoils[i].initial;
 
-    fragment.userData.spin = new THREE.Vector3(
-      Math.random() * 8,
-      Math.random() * 8,
-      Math.random() * 8
-    );
+          recoils.splice(i, 1);
+        }
+      }
 
-    group.add(fragment);
-    fragments.push(fragment);
+      recoils.push({
+        body,
+        initial: body.rotation.x,
+        elapsed: 0,
+        duration: 0.4,
+        damage
+      });
+    }
+
+    if (m.targetId === getMyId()) {
+      impactFlashUntil =
+        performance.now() + 350;
+    }
   }
 
-  missileExplosions.push({
-    group,
-    core,
-    fragments,
-    elapsed:0,
-    duration:.75
-  });
+  // ========================================
+  // 폭발 / 피격 애니메이션
+  // ========================================
 
-  // 피격 대상 캐릭터 움찔 액션
-  const avatar =
-    m.targetId === getMyId()
-      ? getAvatar()
-      : getOthers().get(m.targetId);
+  function updateImpacts(dt, now) {
+    for (
+      let i = explosions.length - 1;
+      i >= 0;
+      i--
+    ) {
+      const effect = explosions[i];
 
-  const body = avatar?.userData?.bodyGroup;
+      effect.elapsed += dt;
 
-  if (body) {
+      const t = Math.min(
+        1,
+        effect.elapsed / effect.duration
+      );
 
-    // 기존 피격 액션 중이라면 초기값 복구
-    for (let i = missileRecoils.length - 1; i >= 0; i--) {
-      const old = missileRecoils[i];
+      effect.core.scale.setScalar(
+        1 + t * 4
+      );
 
-      if (old.body === body) {
-        body.rotation.x = old.baseRotation;
-        missileRecoils.splice(i,1);
+      effect.core.material.opacity =
+        0.9 * (1 - t);
+
+      for (const fragment of effect.fragments) {
+        const velocity =
+          fragment.userData.velocity;
+
+        fragment.position.addScaledVector(
+          velocity,
+          dt
+        );
+
+        velocity.y -= 8 * dt;
+
+        fragment.rotation.x +=
+          fragment.userData.spin.x * dt;
+
+        fragment.rotation.y +=
+          fragment.userData.spin.y * dt;
+
+        fragment.rotation.z +=
+          fragment.userData.spin.z * dt;
+
+        fragment.material.opacity =
+          Math.max(0, 1 - t);
+      }
+
+      if (t >= 1) {
+        disposeObject(effect.group);
+        explosions.splice(i, 1);
       }
     }
 
-    missileRecoils.push({
-      body,
-      baseRotation:body.rotation.x,
-      elapsed:0,
-      duration:.4
-    });
-  }
+    for (
+      let i = recoils.length - 1;
+      i >= 0;
+      i--
+    ) {
+      const recoil = recoils[i];
 
-  // 내가 맞았을 때 화면 충격 표시
-  if (m.targetId === getMyId()) {
-    impactFlashUntil = performance.now() + 350;
-  }
-}
+      recoil.elapsed += dt;
 
-function updateMissileImpacts(dt,now) {
-
-  // ====================================
-  // 폭발 파편 애니메이션
-  // ====================================
-
-  for (
-    let i = missileExplosions.length - 1;
-    i >= 0;
-    i--
-  ) {
-
-    const effect = missileExplosions[i];
-
-    effect.elapsed += dt;
-
-    const progress = Math.min(
-      1,
-      effect.elapsed / effect.duration
-    );
-
-    effect.core.scale.setScalar(
-      1 + progress * 4
-    );
-
-    effect.core.material.opacity =
-      .9 * (1 - progress);
-
-    for (const fragment of effect.fragments) {
-
-      const velocity =
-        fragment.userData.velocity;
-
-      fragment.position.addScaledVector(
-        velocity,
-        dt
+      const t = Math.min(
+        1,
+        recoil.elapsed / recoil.duration
       );
 
-      velocity.y -= 8 * dt;
-
-      fragment.rotation.x +=
-        fragment.userData.spin.x * dt;
-
-      fragment.rotation.y +=
-        fragment.userData.spin.y * dt;
-
-      fragment.rotation.z +=
-        fragment.userData.spin.z * dt;
-
-      fragment.material.opacity =
-        Math.max(0,1 - progress);
-    }
-
-    if (progress >= 1) {
-
-      scene.remove(effect.group);
-
-      effect.group.traverse(child => {
-        if (!child.isMesh) return;
-
-        child.geometry.dispose();
-        child.material.dispose();
-      });
-
-      missileExplosions.splice(i,1);
-    }
-  }
-
-  // ====================================
-  // 캐릭터 피격 모션
-  // ====================================
-
-  for (
-    let i = missileRecoils.length - 1;
-    i >= 0;
-    i--
-  ) {
-
-    const recoil = missileRecoils[i];
-
-    recoil.elapsed += dt;
-
-    const progress = Math.min(
-      1,
-      recoil.elapsed / recoil.duration
-    );
-
-    // 뒤로 젖혀졌다가 원래 자세로 복귀
-    const impact = Math.sin(
-      progress * Math.PI
-    );
-
-    recoil.body.rotation.x =
-      recoil.baseRotation - impact * .42;
-
-    if (progress >= 1) {
+      const size =
+        recoil.damage >= 40
+          ? 0.42
+          : recoil.damage >= 25
+            ? 0.28
+            : 0.14;
 
       recoil.body.rotation.x =
-        recoil.baseRotation;
+        recoil.initial -
+        Math.sin(t * Math.PI) * size;
 
-      missileRecoils.splice(i,1);
+      if (t >= 1) {
+        recoil.body.rotation.x =
+          recoil.initial;
+
+        recoils.splice(i, 1);
+      }
     }
-  }
-
-  // ====================================
-  // 화면 피격 효과
-  // ====================================
-
-  if (now < impactFlashUntil) {
-
-    const remaining =
-      (impactFlashUntil - now) / 350;
 
     impactFlash.style.opacity =
-      String(Math.max(0,remaining));
-
-  } else {
-
-    impactFlash.style.opacity = '0';
+      now < impactFlashUntil
+        ? String(
+            Math.max(
+              0,
+              (impactFlashUntil - now) / 350
+            )
+          )
+        : '0';
   }
-}
+
+  // ========================================
+  // 서버 메시지 처리
+  // ========================================
+
   function onMessage(m) {
-
     if (m.type === 'raid_state') {
-
       bossActive = m.state === 'active';
-
       return false;
     }
 
-if (m.type === 'missile_state') {
-  count = Number(m.count) || 0;
-  maxMissiles = Number(m.max) || 5;
-  nextAt = m.nextAt || null;
-
-  return true;
-}
+    if (m.type === 'missile_state') {
+      count = Number(m.count) || 0;
+      maxMissiles = Number(m.max) || 5;
+      nextAt = m.nextAt || null;
+      return true;
+    }
 
     if (m.type === 'missile_notice') {
-
       console.info(
         '[JMC MISSILE]',
         m.message
       );
-
       return true;
     }
 
-    // 유도 미사일 발사
+    // 미사일 생성
     if (m.type === 'missile_launch') {
+      const object = createRocket();
 
-      const object = createRocketModel();
+      const x = Number(m.x) || 0;
+      const y = Number(m.y) || 1.2;
+      const z = Number(m.z) || 0;
 
-      object.position.set(
-        m.x,
-        m.y,
-        m.z
-      );
+      object.position.set(x, y, z);
+      object.rotation.y = Number(m.angle) || 0;
 
       scene.add(object);
 
       shots.set(m.id, {
         object,
-        targetId:m.targetId,
+        serverPosition: new THREE.Vector3(
+          x,
+          y,
+          z
+        ),
+        targetId: m.targetId,
+        angle: Number(m.angle) || 0,
         deadline:
           performance.now() +
-          (Number(m.flightMs) || 1500) +
-          2500
+          (Number(m.flightMs) || 2800) +
+          3000
       });
 
       return true;
     }
 
-    // 명중 또는 발사 종료
-// 미사일 명중: 폭발 및 피격 액션
-if (m.type === 'missile_hit') {
+    // 서버에서 계산한 미사일 위치
+    if (m.type === 'missile_position') {
+      const shot = shots.get(m.id);
 
-  removeMissile(m.id);
+      if (!shot) return true;
 
-  createMissileExplosion(m);
+      shot.serverPosition.set(
+        Number(m.x) || 0,
+        Number(m.y) || 1.2,
+        Number(m.z) || 0
+      );
 
-  return true;
-}
+      shot.angle = Number(m.angle) || 0;
 
-// 명중하지 않고 종료된 미사일
-if (m.type === 'missile_end') {
+      return true;
+    }
 
-  removeMissile(m.id);
+    // 실제 명중
+    if (m.type === 'missile_hit') {
+      removeMissile(m.id);
+      createExplosion(m);
+      return true;
+    }
 
-  return true;
-}
+    // 빗나간 미사일 종료
+    if (m.type === 'missile_end') {
+      removeMissile(m.id);
+
+      if (
+        m.exploded &&
+        Number.isFinite(Number(m.x))
+      ) {
+        createExplosion(m);
+      }
+
+      return true;
+    }
 
     return false;
   }
 
   // ========================================
-  // 유도 미사일 애니메이션
+  // 서버 탄도 기반 화면 렌더링
   // ========================================
-
-  const forwardAxis =
-    new THREE.Vector3(0,0,1);
-
-  const goal = new THREE.Vector3();
-
-  const directionVector =
-    new THREE.Vector3();
 
   let lastFrame = performance.now();
 
   function animate(now) {
-
     requestAnimationFrame(animate);
 
     const dt = Math.min(
-      (now - lastFrame) / 1000,
-      .05
+      Math.max(
+        0,
+        (now - lastFrame) / 1000
+      ),
+      0.05
     );
 
     lastFrame = now;
-updateMissileImpacts(dt,now);
-    // ====================================
+
+    updateImpacts(dt, now);
+
     // 조준 표시 갱신
-    // ====================================
-
     if (aiming) {
-
       locked = availableTarget();
 
-      updateTargetReticle(
+      updateReticle(
         locked,
         now - pressedAt >= LOCK_MS
       );
-
     } else {
-
       crosshair.style.display = 'none';
     }
 
-    // ====================================
-    // 미사일 인벤토리 갱신
-    // ====================================
-
+    // 미사일 보유량 / 충전 시간 표시
     const remaining = nextAt
       ? Math.max(
           0,
@@ -1062,98 +1025,41 @@ updateMissileImpacts(dt,now);
             (nextAt - Date.now()) / 60000
           )
         )
-      : 20;
+      : 10;
 
-indicator.textContent =
-  `🚀\n${count}/${maxMissiles}\n${remaining}분`;
+    indicator.textContent =
+      `🚀\n${count}/${maxMissiles}\n${remaining}분`;
 
-    // ====================================
-    // 미사일 이동 및 추적
-    // ====================================
-
+    // 미사일 이동
     for (const [id, shot] of shots) {
+      shot.object.position.lerp(
+        shot.serverPosition,
+        Math.min(1, dt * 20)
+      );
 
-      let targetPosition = null;
+      dir.set(
+        Math.sin(shot.angle),
+        0,
+        Math.cos(shot.angle)
+      );
 
-      if (shot.targetId === 'boss') {
+      shot.object.quaternion.setFromUnitVectors(
+        forwardAxis,
+        dir
+      );
 
-        targetPosition = {
-          x:0,
-          y:1.5,
-          z:-13
-        };
-
-      } else {
-
-        const other =
-          getOthers().get(shot.targetId);
-
-        if (other) {
-
-          targetPosition = other.position;
-
-        } else if (
-          shot.targetId === getMyId()
-        ) {
-
-          targetPosition =
-            getAvatar()?.position || null;
-        }
-      }
-
-      if (targetPosition) {
-
-        goal.set(
-          targetPosition.x,
-          (targetPosition.y || 0) + 1.1,
-          targetPosition.z
-        );
-
-        directionVector.subVectors(
-          goal,
-          shot.object.position
-        );
-
-        const distance =
-          directionVector.length();
-
-        if (distance > .05) {
-
-          directionVector.normalize();
-
-          // 프레임 속도에 맞춰 미사일 이동
-          const speed = 12;
-
-          shot.object.position.addScaledVector(
-            directionVector,
-            Math.min(
-              distance,
-              speed * dt
-            )
-          );
-
-          // 탄두가 목표를 향하도록 회전
-          shot.object.quaternion.setFromUnitVectors(
-            forwardAxis,
-            directionVector
-          );
-        }
-      }
-
-      // 엔진 화염 애니메이션
+      // 엔진 화염
       const flame =
         shot.object.userData.flame;
 
       if (flame) {
-
         flame.scale.y =
           0.8 +
-          Math.sin(now * .025) * .2;
+          Math.sin(now * 0.025) * 0.2;
       }
 
       // 오래된 미사일 제거
       if (now > shot.deadline) {
-
         removeMissile(id);
       }
     }
