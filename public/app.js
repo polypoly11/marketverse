@@ -303,8 +303,56 @@ function makeAnimal(id){
   root.userData.animal = id;
   root.userData.walk = 0;
   root.userData.seated = false;
-  root.userData.jumpHeight = 0;
-  return root;
+root.userData.jumpHeight = 0;
+
+// ========================================
+// 캐릭터 배에 전적 보기 표시
+// ========================================
+
+const markerCanvas = document.createElement('canvas');
+markerCanvas.width = 256;
+markerCanvas.height = 88;
+
+const markerCtx = markerCanvas.getContext('2d');
+
+markerCtx.fillStyle = 'rgba(13,28,45,.93)';
+markerCtx.beginPath();
+markerCtx.roundRect(6,6,244,76,19);
+markerCtx.fill();
+
+markerCtx.strokeStyle = '#e8c58b';
+markerCtx.lineWidth = 5;
+markerCtx.stroke();
+
+markerCtx.fillStyle = '#ffffff';
+markerCtx.font = 'bold 40px sans-serif';
+markerCtx.textAlign = 'center';
+markerCtx.textBaseline = 'middle';
+markerCtx.fillText('전적 보기',128,45);
+
+const markerTexture = new THREE.CanvasTexture(
+  markerCanvas
+);
+
+markerTexture.colorSpace = THREE.SRGBColorSpace;
+
+const marker = new THREE.Sprite(
+  new THREE.SpriteMaterial({
+    map:markerTexture,
+    transparent:true,
+    depthTest:false,
+    depthWrite:false
+  })
+);
+
+marker.position.set(0,1.06,.57);
+marker.scale.set(.85,.29,1);
+marker.renderOrder = 85;
+
+root.add(marker);
+root.userData.pvpMarker = marker;
+
+return root;
 }
 
 // ====================================================
@@ -1902,7 +1950,269 @@ function refreshBoard(){
 refreshBoard();
 
 const others=new Map();
+// ========================================
+// 캐릭터 클릭 시 PVP 전적 창
+// ========================================
 
+const pvpOverlay = document.createElement('div');
+pvpOverlay.hidden = true;
+
+pvpOverlay.style.cssText = `
+  position:fixed;
+  inset:0;
+  z-index:99990;
+  background:rgba(0,0,0,.66);
+  display:none;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  box-sizing:border-box;
+`;
+
+const pvpCard = document.createElement('div');
+
+pvpCard.style.cssText = `
+  width:min(370px,100%);
+  background:#112439;
+  border:1px solid #c8a16b;
+  border-radius:16px;
+  padding:22px;
+  box-sizing:border-box;
+  color:white;
+  text-align:center;
+  font-family:Arial,sans-serif;
+`;
+
+const pvpHeading = document.createElement('h2');
+pvpHeading.style.cssText =
+  'margin:0 0 8px;font-size:23px';
+
+const pvpSub = document.createElement('p');
+pvpSub.style.cssText =
+  'color:#a9c2d3;font-size:13px;margin:0 0 18px';
+
+const pvpNumbers = document.createElement('div');
+pvpNumbers.style.cssText = `
+  display:flex;
+  justify-content:space-around;
+  gap:10px;
+  font-weight:700;
+  font-size:17px;
+`;
+
+const pvpClose = document.createElement('button');
+pvpClose.type = 'button';
+pvpClose.textContent = '닫기';
+
+pvpClose.style.cssText = `
+  margin-top:22px;
+  width:100%;
+  padding:11px;
+  border:0;
+  border-radius:9px;
+  background:#dfc18d;
+  cursor:pointer;
+  font-weight:700;
+`;
+
+pvpCard.append(
+  pvpHeading,
+  pvpSub,
+  pvpNumbers,
+  pvpClose
+);
+
+pvpOverlay.appendChild(pvpCard);
+document.body.appendChild(pvpOverlay);
+
+function closePvpProfile() {
+  pvpOverlay.hidden = true;
+  pvpOverlay.style.display = 'none';
+}
+
+pvpClose.onclick = closePvpProfile;
+
+pvpOverlay.addEventListener('click',event => {
+  if (event.target === pvpOverlay) {
+    closePvpProfile();
+  }
+});
+
+window.addEventListener('keydown',event => {
+  if (event.key === 'Escape') {
+    closePvpProfile();
+  }
+});
+
+function openPvpProfile(targetId) {
+  if (
+    !targetId ||
+    !profile ||
+    defeated ||
+    reentryRequired
+  ) return;
+
+  pvpHeading.textContent = 'PVP 전적';
+  pvpSub.textContent = '전적을 불러오는 중...';
+  pvpNumbers.textContent = '';
+
+  pvpOverlay.hidden = false;
+  pvpOverlay.style.display = 'flex';
+
+  send({
+    type:'pvp_profile_request',
+    targetId
+  });
+}
+
+function showPvpProfile(data) {
+  if (pvpOverlay.hidden) return;
+
+  if (data.error) {
+    pvpSub.textContent = data.error;
+    pvpNumbers.textContent = '';
+    return;
+  }
+
+  pvpHeading.textContent =
+    `${animal(data.animal).emoji} ${data.displayName}`;
+
+  if (!data.registered) {
+    pvpSub.textContent =
+      '게스트 이용자 · 공식 PVP 전적 없음';
+
+    pvpNumbers.textContent = '';
+    return;
+  }
+
+  pvpSub.textContent =
+    `계정 닉네임: ${
+      data.accountNickname || data.displayName
+    }`;
+
+  const kills = Number(data.kills) || 0;
+  const deaths = Number(data.deaths) || 0;
+
+  const kd = deaths === 0
+    ? kills.toFixed(2)
+    : (kills / deaths).toFixed(2);
+
+  pvpNumbers.replaceChildren();
+
+  for (const [label,value] of [
+    ['KILL',kills],
+    ['DEATH',deaths],
+    ['K/D',kd]
+  ]) {
+    const cell = document.createElement('div');
+
+    cell.style.cssText = `
+      flex:1;
+      padding:13px 3px;
+      border-radius:9px;
+      background:#1c354a;
+    `;
+
+    const title = document.createElement('div');
+    title.textContent = label;
+    title.style.cssText = `
+      font-size:11px;
+      color:#a9c2d3;
+      margin-bottom:7px;
+    `;
+
+    const number = document.createElement('div');
+    number.textContent = String(value);
+
+    cell.append(title,number);
+    pvpNumbers.appendChild(cell);
+  }
+}
+
+// ========================================
+// 캐릭터 클릭 판정
+// ========================================
+
+const pvpRaycaster = new THREE.Raycaster();
+const pvpPointer = new THREE.Vector2();
+
+let pvpPress = null;
+
+renderer.domElement.addEventListener(
+  'pointerdown',
+  event => {
+    pvpPress = {
+      x:event.clientX,
+      y:event.clientY
+    };
+  }
+);
+
+renderer.domElement.addEventListener(
+  'pointerup',
+  event => {
+    if (!pvpPress) return;
+
+    const moved = Math.hypot(
+      event.clientX - pvpPress.x,
+      event.clientY - pvpPress.y
+    );
+
+    pvpPress = null;
+
+    if (
+      moved > 9 ||
+      !profile ||
+      defeated ||
+      !$('profile-modal').hidden
+    ) return;
+
+    const rect = renderer.domElement.getBoundingClientRect();
+
+    if (rect.width <= 0 || rect.height <= 0) return;
+
+    pvpPointer.set(
+      (event.clientX - rect.left) / rect.width * 2 - 1,
+      -(event.clientY - rect.top) / rect.height * 2 + 1
+    );
+
+    pvpRaycaster.setFromCamera(pvpPointer,camera);
+
+    const entries = [...others.entries()];
+
+    if (myAvatar && myId) {
+      entries.push([myId,myAvatar]);
+    }
+
+    let nearest = null;
+
+    for (const [id,avatar] of entries) {
+      if (!avatar.visible) continue;
+
+      const hits = pvpRaycaster.intersectObject(
+        avatar,
+        true
+      );
+
+      if (
+        hits.length &&
+        (
+          !nearest ||
+          hits[0].distance < nearest.distance
+        )
+      ) {
+        nearest = {
+          id,
+          distance:hits[0].distance
+        };
+      }
+    }
+
+    if (nearest) {
+      openPvpProfile(nearest.id);
+    }
+  }
+);
 const raidClient=createBossClient({
   THREE,
   scene,
@@ -2806,7 +3116,10 @@ function connect(){
       );
       return;
     }
-
+if (m.type === 'pvp_profile') {
+  showPvpProfile(m);
+  return;
+}
     if(raidClient.onMessage(m))return;
 
     if(m.type==='position_correct'&&myAvatar){
