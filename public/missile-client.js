@@ -32,24 +32,24 @@ export function installMissileClient({
 
   indicator.id = 'jmc-missile-inventory';
 
-  indicator.style.cssText = `
-    position:fixed;
-    z-index:9998;
-    width:65px;
-    min-height:66px;
-    box-sizing:border-box;
-    padding:7px 4px;
-    border:1px solid #d8ba80;
-    border-radius:11px;
-    background:rgba(15,29,47,.96);
-    color:#fff;
-    font:700 11px Arial,sans-serif;
-    line-height:1.35;
-    text-align:center;
-    white-space:pre-line;
-    cursor:help;
-    box-shadow:0 5px 24px #0005;
-  `;
+indicator.style.cssText = `
+  position:fixed;
+  z-index:9998;
+  width:64px;
+  min-height:58px;
+  box-sizing:border-box;
+  padding:8px 4px 7px;
+  border:1px solid #d8ba80;
+  border-radius:12px;
+  background:rgba(15,29,47,.97);
+  color:#fff;
+  font:700 12px Arial,sans-serif;
+  line-height:1.25;
+  text-align:center;
+  white-space:pre-line;
+  cursor:help;
+  box-shadow:0 5px 18px rgba(0,0,0,.28);
+`;
 
   indicator.title =
     '🚀 유도 미사일 사용법\n' +
@@ -60,8 +60,8 @@ export function installMissileClient({
     '20분마다 1개 지급\n' +
     '최대 3개 보유 가능';
 
-  indicator.textContent =
-    '🚀\nMISSILE\n0/3';
+indicator.textContent =
+  '🚀\n0/3';
 
   document.body.appendChild(indicator);
 
@@ -197,22 +197,28 @@ export function installMissileClient({
   const mobileButton = document.createElement('button');
 
   mobileButton.type = 'button';
-  mobileButton.textContent = '🚀 S 미사일';
+  mobileButton.textContent = '🚀';
 
-  mobileButton.style.cssText = `
-    position:absolute;
-    right:12px;
-    bottom:115px;
-    z-index:41;
-    padding:12px;
-    background:#862f3d;
-    color:#fff;
-    border:1px solid #ffe1a2;
-    border-radius:12px;
-    touch-action:none;
-    display:none;
-    cursor:pointer;
-  `;
+mobileButton.style.cssText = `
+  position:absolute;
+  right:14px;
+  bottom:178px;
+  z-index:41;
+  width:54px;
+  height:54px;
+  padding:0;
+  background:rgba(134,47,61,.96);
+  color:#fff;
+  border:1px solid #ffe1a2;
+  border-radius:14px;
+  box-shadow:0 4px 14px rgba(0,0,0,.35);
+  font:700 22px Arial,sans-serif;
+  line-height:54px;
+  text-align:center;
+  touch-action:none;
+  display:none;
+  cursor:pointer;
+`;
 
   sceneEl.appendChild(mobileButton);
 
@@ -713,7 +719,7 @@ if (m.type === 'missile_state') {
       : 20;
 
 indicator.textContent =
-  `🚀\nMISSILE\n${count}/${maxMissiles}\n${remaining}분`;
+  `🚀\n${count}/${maxMissiles}\n${remaining}분`;
 
     // ====================================
     // 미사일 이동 및 추적
