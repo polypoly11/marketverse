@@ -2835,6 +2835,36 @@ transform: translate(-50%, -50%) !important;
     display: none !important;
   }
 </style>
+  <!-- 캐릭터 선택 및 계정 설정 중 게임 HUD 숨김 -->
+<style>
+  /* 게스트 캐릭터 선택창이 열려 있을 때 */
+  body:has(#profile-modal:not([hidden]))
+  #jmc-hp-hud,
+
+  body:has(#profile-modal:not([hidden]))
+  #jmc-inventory-toggle,
+
+  body:has(#profile-modal:not([hidden]))
+  #jmc-missile-inventory,
+
+  body:has(#profile-modal:not([hidden]))
+  #jmc-inventory-panel,
+
+  /* 구글 계정 프로필 설정창이 열려 있을 때 */
+  body:has(#jmc-account-profile-modal:not([hidden]))
+  #jmc-hp-hud,
+
+  body:has(#jmc-account-profile-modal:not([hidden]))
+  #jmc-inventory-toggle,
+
+  body:has(#jmc-account-profile-modal:not([hidden]))
+  #jmc-missile-inventory,
+
+  body:has(#jmc-account-profile-modal:not([hidden]))
+  #jmc-inventory-panel {
+    display: none !important;
+  }
+</style>
 </body>
 
 
