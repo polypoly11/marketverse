@@ -717,7 +717,7 @@ export function installMissileClient({
       );
 
 gain.gain.linearRampToValueAtTime(
-  0.32,
+  0.16,
   ctx.currentTime + 0.12
 );
 
@@ -810,7 +810,7 @@ gain.gain.linearRampToValueAtTime(
       const me = getAvatar();
       const missilePos = shot.object.position;
 
-let volume = 0.32;
+let volume = 0.16;
 
 if (me) {
   const distance = Math.hypot(
@@ -818,10 +818,10 @@ if (me) {
     me.position.z - missilePos.z
   );
 
-  volume = Math.max(
-    0.10,
-    0.32 * (1 - distance / 50)
-  );
+volume = Math.max(
+  0.05,
+  0.16 * (1 - distance / 50)
+);
 }
 
       sound.gain.gain.setTargetAtTime(
