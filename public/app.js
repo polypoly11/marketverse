@@ -982,7 +982,23 @@ async function jmcLoadGoogleStatus() {
 
     const data = await response.json();
     jmcGoogleUser = data.user || null;
+// Google 로그인 시 계정 닉네임과 캐릭터를 통일
+if (jmcGoogleUser?.accountNickname) {
+  profile = {
+    name: jmcGoogleUser.accountNickname,
+    animal: animal(
+      jmcGoogleUser.accountAnimal || 'seal'
+    ).id
+  };
 
+  $('profile-modal').hidden = true;
+
+  $('my-profile').textContent =
+    `${animal(profile.animal).emoji} ${profile.name}`;
+
+  updateMyAvatar();
+  sendProfile();
+}
     if (jmcGoogleUser && !jmcGoogleUser.accountNickname) {
       jmcOpenAccountProfile(true);
     }
@@ -1068,7 +1084,13 @@ $('cancel-profile').onclick = ()=>{
   }
 };
 
-$('rename').onclick = ()=>showProfile(true);
+$('rename').onclick = () => {
+  if (jmcGoogleUser) {
+    jmcOpenAccountProfile(false);
+  } else {
+    showProfile(true);
+  }
+};
 
 $('nickname').addEventListener('keydown',e=>{
   if(e.key==='Enter')saveProfile();
