@@ -384,6 +384,59 @@ function removeCharacterHpBar(avatar){
   delete avatar.userData.hpBar;
 }
 
+// ====================================================
+// 캐릭터 머리 위 닉네임 (HP 바 위쪽)
+// ====================================================
+function setCharacterName(avatar, value) {
+  if (!avatar) return;
+  const name=String(value ?? '').trim().slice(0,16);
+  const old=avatar.userData.nameTag;
+  if(old?.name===name) return;
+  if(old) {
+    avatar.remove(old.sprite);
+    old.sprite.material.dispose();
+    old.texture.dispose();
+    delete avatar.userData.nameTag;
+  }
+  if(!name) return;
+  const canvas=document.createElement('canvas');
+  canvas.width=512;
+  canvas.height=120;
+  const ctx=canvas.getContext('2d');
+  ctx.clearRect(0,0,512,120);
+  ctx.fillStyle='rgba(8,18,30,.90)';
+  ctx.beginPath();
+  ctx.roundRect(18,10,476,94,22);
+  ctx.fill();
+  ctx.lineWidth=3;
+  ctx.strokeStyle='rgba(220,195,140,.75)';
+  ctx.stroke();
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillStyle='#ffffff';
+  ctx.font='bold 47px Arial,sans-serif';
+  ctx.fillText(name,256,58,446);
+  const texture=new THREE.CanvasTexture(canvas);
+  texture.colorSpace=THREE.SRGBColorSpace;
+  const sprite=new THREE.Sprite(new THREE.SpriteMaterial({
+    map:texture,transparent:true,depthTest:false,depthWrite:false
+  }));
+  sprite.position.set(0,4.52,0);
+  sprite.scale.set(2.75,.68,1);
+  sprite.renderOrder=95;
+  avatar.add(sprite);
+  avatar.userData.nameTag={name,sprite,texture};
+}
+
+function removeCharacterName(avatar) {
+  if(!avatar) return;
+  const tag=avatar.userData.nameTag;
+  if(!tag)return;
+  avatar.remove(tag.sprite);
+  tag.sprite.material.dispose();
+  tag.texture.dispose();
+  delete avatar.userData.nameTag;
+}
 const previewScene = new THREE.Scene();
 const previewCamera = new THREE.PerspectiveCamera(
   35,1,.1,40
@@ -548,6 +601,7 @@ try {
 } catch (error) {
   console.warn('[JMC] Inventory token unavailable:', error);
 }
+
 let profile = null;
 let myAvatar = null;
 let activeSymbol = null;
@@ -632,8 +686,8 @@ $('enter-lounge').onclick = saveProfile;
 
 // ========================================
 // Google 로그인 + 게스트 입장
-// 기존 닉네임 선택/입장 및 게임 로직은 변경하지 않는다.
 // ========================================
+
 const jmcGoogleButton = document.createElement('button');
 jmcGoogleButton.type = 'button';
 jmcGoogleButton.id = 'jmc-google-login';
@@ -648,7 +702,8 @@ $('enter-lounge').insertAdjacentElement('afterend',jmcGoogleButton);
 
 const jmcAuthNote = document.createElement('div');
 jmcAuthNote.id = 'jmc-google-auth-note';
-jmcAuthNote.style.cssText = 'padding:7px 3px;font:12px Arial,sans-serif;text-align:center;color:#9bb7c9;';
+jmcAuthNote.style.cssText =
+  'padding:7px 3px;font:12px Arial,sans-serif;text-align:center;color:#9bb7c9;';
 jmcGoogleButton.insertAdjacentElement('afterend',jmcAuthNote);
 
 const jmcAccountButton = document.createElement('button');
@@ -662,49 +717,284 @@ jmcAccountButton.style.cssText = `
 `;
 $('rename').insertAdjacentElement('afterend',jmcAccountButton);
 
+// ====================================================
+// Google 계정별 고정 닉네임 / 대표 캐릭터 설정
+// ====================================================
+
+const jmcAccountModal=document.createElement('div');
+jmcAccountModal.id='jmc-account-profile-modal';
+jmcAccountModal.hidden=true;
+jmcAccountModal.style.cssText=`
+  position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,.78);
+  display:none;align-items:center;justify-content:center;
+  padding:16px;box-sizing:border-box;
+`;
+
+const jmcAccountCard=document.createElement('div');
+jmcAccountCard.style.cssText=`
+  width:min(460px,100%);max-height:90vh;overflow-y:auto;
+  background:#112337;color:#fff;padding:22px;border-radius:16px;
+  border:1px solid #6e8a9e;box-sizing:border-box;
+`;
+
+const jmcAccountTitle=document.createElement('h3');
+jmcAccountTitle.textContent='Google 계정 프로필 설정';
+
+const jmcAccountDesc=document.createElement('p');
+jmcAccountDesc.textContent=
+  '계정 고정 닉네임과 대표 캐릭터를 등록하세요. 라운지 입장 닉네임은 별도로 바꿀 수 있습니다.';
+jmcAccountDesc.style.cssText=
+  'font-size:13px;line-height:1.5;color:#b5cad9';
+
+const jmcNicknameInput=document.createElement('input');
+jmcNicknameInput.placeholder='고정 닉네임 (2~16자)';
+jmcNicknameInput.maxLength=16;
+jmcNicknameInput.style.cssText=
+  'width:100%;padding:12px;border-radius:8px;box-sizing:border-box';
+
+const jmcCheckButton=document.createElement('button');
+jmcCheckButton.type='button';
+jmcCheckButton.textContent='닉네임 중복 확인';
+jmcCheckButton.style.cssText=
+  'margin-top:8px;padding:9px 12px;border-radius:8px;cursor:pointer';
+
+const jmcNicknameMessage=document.createElement('div');
+jmcNicknameMessage.style.cssText=
+  'min-height:28px;padding-top:7px;font-size:13px';
+
+const jmcAnimalLabel=document.createElement('p');
+jmcAnimalLabel.textContent='대표 캐릭터 선택';
+
+const jmcAnimalSelector=document.createElement('select');
+jmcAnimalSelector.style.cssText=
+  'width:100%;padding:11px;border-radius:8px;box-sizing:border-box';
+
+for(const a of animals) {
+  const opt=document.createElement('option');
+  opt.value=a.id;
+  opt.textContent=`${a.emoji} ${a.name}`;
+  jmcAnimalSelector.appendChild(opt);
+}
+
+const jmcAccountSave=document.createElement('button');
+jmcAccountSave.type='button';
+jmcAccountSave.textContent='계정 프로필 저장';
+jmcAccountSave.disabled=true;
+jmcAccountSave.style.cssText=
+  'width:100%;padding:12px;margin-top:18px;border-radius:8px;background:#dfc18d;cursor:pointer';
+
+const jmcAccountCancel=document.createElement('button');
+jmcAccountCancel.type='button';
+jmcAccountCancel.textContent='취소';
+jmcAccountCancel.style.cssText=
+  'width:100%;padding:9px;margin-top:8px;cursor:pointer';
+
+jmcAccountCard.append(
+  jmcAccountTitle,
+  jmcAccountDesc,
+  jmcNicknameInput,
+  jmcCheckButton,
+  jmcNicknameMessage,
+  jmcAnimalLabel,
+  jmcAnimalSelector,
+  jmcAccountSave,
+  jmcAccountCancel
+);
+
+jmcAccountModal.appendChild(jmcAccountCard);
+document.body.appendChild(jmcAccountModal);
+
+let jmcCheckedNickname='';
+let jmcProfileRequired=false;
+
+function jmcOpenAccountProfile(required=false) {
+  if(!jmcGoogleUser)return;
+
+  jmcProfileRequired=required || !jmcGoogleUser.accountNickname;
+
+  jmcAccountModal.hidden=false;
+  jmcAccountModal.style.display='flex';
+  jmcNicknameInput.value=jmcGoogleUser.accountNickname || '';
+  jmcAnimalSelector.value=jmcGoogleUser.accountAnimal || 'seal';
+  jmcCheckedNickname='';
+  jmcAccountSave.disabled=true;
+  jmcNicknameMessage.textContent='닉네임 중복 확인을 눌러주세요.';
+  jmcNicknameMessage.style.color='#b5cad9';
+  jmcAccountCancel.textContent=
+    jmcProfileRequired?'게스트로 돌아가기 (로그아웃)':'취소';
+}
+
+function jmcCloseAccountProfile() {
+  jmcAccountModal.hidden=true;
+  jmcAccountModal.style.display='none';
+}
+
+jmcNicknameInput.addEventListener('input',()=>{
+  jmcCheckedNickname='';
+  jmcAccountSave.disabled=true;
+  jmcNicknameMessage.textContent='닉네임 중복 확인이 필요합니다.';
+  jmcNicknameMessage.style.color='#b5cad9';
+});
+
+jmcCheckButton.onclick=async()=>{
+  const nickname=jmcNicknameInput.value.normalize('NFC').trim();
+  jmcCheckedNickname='';
+  jmcAccountSave.disabled=true;
+  jmcCheckButton.disabled=true;
+
+  try {
+    const response=await fetch(
+      `/api/auth/profile/check?nickname=${encodeURIComponent(nickname)}`,
+      {credentials:'same-origin',cache:'no-store'}
+    );
+
+    const result=await response.json();
+
+    if(jmcNicknameInput.value.normalize('NFC').trim()!==nickname) return;
+    if(!response.ok) throw Error(result.error || '확인 실패');
+
+    if(result.available) {
+      jmcCheckedNickname=nickname;
+      jmcAccountSave.disabled=false;
+      jmcNicknameMessage.textContent='사용 가능한 닉네임입니다.';
+      jmcNicknameMessage.style.color='#63e6ae';
+    } else {
+      jmcNicknameMessage.textContent='이미 사용 중인 닉네임입니다.';
+      jmcNicknameMessage.style.color='#ff9090';
+    }
+  }catch(error) {
+    jmcNicknameMessage.textContent=error.message;
+    jmcNicknameMessage.style.color='#ff9090';
+  }finally{
+    jmcCheckButton.disabled=false;
+  }
+};
+
+jmcAccountSave.onclick=async()=>{
+  const nickname=jmcNicknameInput.value.normalize('NFC').trim();
+
+  if(!jmcCheckedNickname || jmcCheckedNickname!==nickname) {
+    jmcNicknameMessage.textContent='먼저 닉네임 중복 확인을 해주세요.';
+    return;
+  }
+
+  jmcAccountSave.disabled=true;
+
+  try {
+    const response=await fetch('/api/auth/profile',{
+      method:'POST',
+      credentials:'same-origin',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        nickname,
+        animal:jmcAnimalSelector.value
+      })
+    });
+
+    const result=await response.json();
+    if(!response.ok) throw Error(result.error || '저장 실패');
+
+    location.reload();
+  }catch(error) {
+    jmcNicknameMessage.textContent=error.message;
+    jmcNicknameMessage.style.color='#ff9090';
+    jmcCheckedNickname='';
+  }
+};
+
+jmcAccountCancel.onclick=async()=>{
+  if(jmcProfileRequired) {
+    try {
+      await fetch('/api/auth/logout',{
+        method:'POST',
+        credentials:'same-origin'
+      });
+      location.reload();
+    }catch(error){
+      jmcNicknameMessage.textContent=
+        '로그아웃에 실패했습니다. 다시 시도해 주세요.';
+    }
+  }else{
+    jmcCloseAccountProfile();
+  }
+};
+
 let jmcGoogleUser = null;
 let jmcGoogleEnabled = false;
 
 async function jmcLoadGoogleStatus() {
   try {
-    const response = await fetch('/api/auth/me',{credentials:'same-origin',cache:'no-store'});
+    const response = await fetch(
+      '/api/auth/me',
+      {credentials:'same-origin',cache:'no-store'}
+    );
+
     if (!response.ok) throw new Error('인증 서버 응답 실패');
+
     const data = await response.json();
     jmcGoogleUser = data.user || null;
+
+    if (jmcGoogleUser && !jmcGoogleUser.accountNickname) {
+      jmcOpenAccountProfile(true);
+    }
+
     jmcGoogleEnabled = data.configured === true;
-    jmcGoogleButton.hidden = !jmcGoogleEnabled && !jmcGoogleUser;
-    jmcGoogleButton.textContent = jmcGoogleUser ? 'Google 계정 로그아웃' : 'Google 계정으로 로그인';
+
+    jmcGoogleButton.hidden =
+      !jmcGoogleEnabled && !jmcGoogleUser;
+
+    jmcGoogleButton.textContent = jmcGoogleUser
+      ? 'Google 계정 로그아웃'
+      : 'Google 계정으로 로그인';
+
     jmcAuthNote.textContent = jmcGoogleUser
       ? `${jmcGoogleUser.name || 'Google 이용자'} · 비늘은 Google 계정에 보관됩니다.`
       : '게스트 입장은 기존 버튼을 이용하세요. 선물 신청은 Google 로그인이 필요합니다.';
+
     jmcAccountButton.textContent = jmcGoogleUser
       ? `Google · ${jmcGoogleUser.name || '로그인'}`
       : '게스트 · 로그인';
+
   } catch(error) {
-    jmcAuthNote.textContent = '계정 상태를 불러오지 못했습니다. 게스트로는 입장할 수 있습니다.';
-    jmcGoogleButton.hidden = true;
+    jmcAuthNote.textContent=
+      '계정 상태를 불러오지 못했습니다. 게스트로는 입장할 수 있습니다.';
+    jmcGoogleButton.hidden=true;
   }
 }
 
 jmcGoogleButton.onclick = async () => {
   jmcGoogleButton.disabled = true;
+
   try {
     if (jmcGoogleUser) {
-      const response = await fetch('/api/auth/logout', {
-        method:'POST',credentials:'same-origin'
+      const response = await fetch('/api/auth/logout',{
+        method:'POST',
+        credentials:'same-origin'
       });
+
       if (!response.ok) throw new Error('로그아웃 실패');
+
       location.reload();
       return;
     }
-    const response = await fetch('/api/auth/google/start', {
-      method:'POST',credentials:'same-origin',
+
+    const response = await fetch('/api/auth/google/start',{
+      method:'POST',
+      credentials:'same-origin',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({inventoryToken})
     });
+
     const data = await response.json();
-    if (!response.ok || !data.url) throw new Error(data.error || 'Google 인증을 시작할 수 없습니다.');
+
+    if (!response.ok || !data.url) {
+      throw new Error(
+        data.error || 'Google 인증을 시작할 수 없습니다.'
+      );
+    }
+
     location.assign(data.url);
+
   } catch(error) {
     jmcAuthNote.textContent = error.message;
     jmcGoogleButton.disabled = false;
@@ -712,12 +1002,16 @@ jmcGoogleButton.onclick = async () => {
 };
 
 jmcAccountButton.onclick = () => {
+  if (jmcGoogleUser) {
+    jmcOpenAccountProfile(false);
+    return;
+  }
+
   showProfile(true);
   jmcGoogleButton.hidden = !jmcGoogleEnabled && !jmcGoogleUser;
 };
 
 void jmcLoadGoogleStatus();
-
 
 $('cancel-profile').onclick = ()=>{
   if(profile){
@@ -844,7 +1138,7 @@ function renderAssets(){
     ticker.textContent = s.id+' / USD';
     left.append(title,ticker);
 
-    const right = document.createElement('div');
+      const right = document.createElement('div');
     right.className = 'price';
     right.textContent = money(s.price);
 
@@ -1012,6 +1306,7 @@ const sceneEl = $('scene');
 // JMC 메타버스 내부 라이브 채팅
 // 접힘: 최신 1줄 / 펼침: 최근 3줄
 // ====================================================
+
 function installSceneLiveChat() {
   const panel = document.querySelector('.chat-panel');
   const messages = $('messages');
@@ -1032,37 +1327,35 @@ function installSceneLiveChat() {
   toggle.textContent = '펼치기 ▲';
   panel.appendChild(toggle);
 
+  let chatStage = 0;
 
-let chatStage = 0;
+  toggle.addEventListener('click', () => {
+    chatStage = (chatStage + 1) % 3;
 
-toggle.addEventListener('click', () => {
-  chatStage = (chatStage + 1) % 3;
+    panel.classList.toggle(
+      'jmc-chat-collapsed',
+      chatStage === 0
+    );
 
-  panel.classList.toggle(
-    'jmc-chat-collapsed',
-    chatStage === 0
-  );
+    panel.classList.toggle(
+      'jmc-chat-large',
+      chatStage === 2
+    );
 
-  panel.classList.toggle(
-    'jmc-chat-large',
-    chatStage === 2
-  );
+    toggle.textContent =
+      chatStage === 0 ? '펼치기 ▲' :
+      chatStage === 1 ? '더 펼치기 ▲' :
+      '접기 ▼';
 
-  toggle.textContent =
-    chatStage === 0 ? '펼치기 ▲' :
-    chatStage === 1 ? '더 펼치기 ▲' :
-    '접기 ▼';
+    toggle.setAttribute(
+      'aria-expanded',
+      String(chatStage !== 0)
+    );
 
-  toggle.setAttribute(
-    'aria-expanded',
-    String(chatStage !== 0)
-  );
-
-  requestAnimationFrame(() => {
-    messages.scrollTop = messages.scrollHeight;
+    requestAnimationFrame(() => {
+      messages.scrollTop = messages.scrollHeight;
+    });
   });
-});
-
 
   const style = document.createElement('style');
   style.id = 'jmc-scene-chat-style';
@@ -1128,10 +1421,10 @@ toggle.addEventListener('click', () => {
       overflow-wrap:normal !important;
     }
 
-#scene > .jmc-scene-chat:not(.jmc-chat-large)
-#messages > .msg:nth-last-child(n+4) {
-  display:none !important;
-}
+    #scene > .jmc-scene-chat:not(.jmc-chat-large)
+    #messages > .msg:nth-last-child(n+4) {
+      display:none !important;
+    }
 
     #scene > .jmc-scene-chat #messages > .msg b {
       color:#9ce8ca !important;
@@ -1202,7 +1495,7 @@ toggle.addEventListener('click', () => {
       background:rgba(37,48,65,.96) !important;
       color:white !important;
       font-size:11px !important;
-      font-weight:700 !important;
+      font-weight:700;
       cursor:pointer;
     }
 
@@ -1223,37 +1516,29 @@ toggle.addEventListener('click', () => {
       display:none !important;
     }
 
-/* 채팅 2차 확대: 약 10줄 높이 */
-#scene > .jmc-scene-chat.jmc-chat-large #messages {
-  height:min(245px,45dvh) !important;
-  min-height:min(245px,45dvh) !important;
-  max-height:min(245px,45dvh) !important;
+    #scene > .jmc-scene-chat.jmc-chat-large #messages {
+      height:min(245px,45dvh) !important;
+      min-height:min(245px,45dvh) !important;
+      max-height:min(245px,45dvh) !important;
+      overflow-x:hidden !important;
+      overflow-y:auto !important;
+      overscroll-behavior:contain;
+      -webkit-overflow-scrolling:touch;
+      touch-action:pan-y;
+    }
 
-  overflow-x:hidden !important;
-  overflow-y:auto !important;
-
-  overscroll-behavior:contain;
-  -webkit-overflow-scrolling:touch;
-  touch-action:pan-y;
-}
-
-/* 모바일: 큰 채팅창을 볼 때 조작 버튼 임시 숨김 */
-@media (max-width:980px),(pointer:coarse) {
-  #scene:has(> .jmc-scene-chat.jmc-chat-large)
-  #mobile-controls,
-  #scene:has(> .jmc-scene-chat.jmc-chat-large)
-  #mobile-actions {
-    display:none !important;
-  }
-}
-
-@media (max-width:980px),(pointer:coarse) {
-#scene > .jmc-scene-chat {
-  left: 8px !important;
-  bottom: 8px !important;
-  width: min(420px, calc(100% - 16px)) !important;
-}
-
+    @media (max-width:980px),(pointer:coarse) {
+      #scene:has(> .jmc-scene-chat.jmc-chat-large)
+      #mobile-controls,
+      #scene:has(> .jmc-scene-chat.jmc-chat-large)
+      #mobile-actions {
+        display:none !important;
+      }
+      #scene > .jmc-scene-chat {
+        left:8px !important;
+        bottom:8px !important;
+        width:min(420px,calc(100% - 16px)) !important;
+      }
       #scene > .jmc-scene-chat #messages {
         font-size:11px !important;
       }
@@ -1266,9 +1551,9 @@ toggle.addEventListener('click', () => {
 installSceneLiveChat();
 
 // ========================================
-// 마법 발사 / 피격 효과음 (Web Audio API)
-// 별도 음원 파일이나 server.js 수정은 필요 없다.
+// 마법 발사 / 피격 효과음
 // ========================================
+
 let sfxEnabled = true;
 let audioCtx = null;
 
@@ -1278,22 +1563,29 @@ try {
 
 function getAudioContext() {
   if (!sfxEnabled) return null;
+
   try {
     if (!audioCtx) {
-      const AudioClass = window.AudioContext || window.webkitAudioContext;
+      const AudioClass =
+        window.AudioContext || window.webkitAudioContext;
+
       if (!AudioClass) return null;
       audioCtx = new AudioClass();
     }
+
     if (audioCtx.state === 'suspended') {
       audioCtx.resume().catch(() => {});
     }
+
     return audioCtx;
   } catch {
     return null;
   }
 }
 
-document.addEventListener('pointerdown',getAudioContext,{passive:true});
+document.addEventListener(
+  'pointerdown',getAudioContext,{passive:true}
+);
 document.addEventListener('keydown',getAudioContext);
 
 function playSfxTone(type,startHz,endHz,duration,volume) {
@@ -1314,12 +1606,15 @@ function playSfxTone(type,startHz,endHz,duration,volume) {
   gain.gain.exponentialRampToValueAtTime(
     Math.max(.0002,volume),now+.012
   );
-  gain.gain.exponentialRampToValueAtTime(.0001,now+duration);
+  gain.gain.exponentialRampToValueAtTime(
+    .0001,now+duration
+  );
 
   oscillator.connect(gain);
   gain.connect(ctx.destination);
   oscillator.start(now);
   oscillator.stop(now+duration+.02);
+
   oscillator.onended=()=>{
     oscillator.disconnect();
     gain.disconnect();
@@ -1339,32 +1634,46 @@ function playMagicHitSfx(volume=1) {
 }
 
 function magicSoundVolume(x,z) {
-  if(!myAvatar || !Number.isFinite(x) || !Number.isFinite(z)){
+  if(
+    !myAvatar ||
+    !Number.isFinite(x) ||
+    !Number.isFinite(z)
+  ){
     return .7;
   }
+
   const distance=Math.hypot(
     x-myAvatar.position.x,
     z-myAvatar.position.z
   );
+
   return Math.max(0,1-distance/20);
 }
 
 const sfxButton=document.createElement('button');
 sfxButton.type='button';
 sfxButton.id='jmc-sfx-toggle';
-sfxButton.textContent=sfxEnabled?'🔊 효과음 ON':'🔇 효과음 OFF';
+sfxButton.textContent=sfxEnabled
+  ?'🔊 효과음 ON':'🔇 효과음 OFF';
+
 sfxButton.style.cssText=`
   position:absolute;top:12px;right:12px;z-index:30;
   padding:9px 13px;background:rgba(7,20,33,.9);
   color:white;border:1px solid #dfc18d;border-radius:9px;
   cursor:pointer;font-size:13px;
 `;
+
 sfxButton.onclick=()=>{
   sfxEnabled=!sfxEnabled;
-  sfxButton.textContent=sfxEnabled?'🔊 효과음 ON':'🔇 효과음 OFF';
+  sfxButton.textContent=sfxEnabled
+    ?'🔊 효과음 ON':'🔇 효과음 OFF';
+
   try {
-    localStorage.setItem('jmc-sfx-enabled',sfxEnabled?'1':'0');
+    localStorage.setItem(
+      'jmc-sfx-enabled',sfxEnabled?'1':'0'
+    );
   }catch{}
+
   if(sfxEnabled)getAudioContext();
 };
 
@@ -1372,14 +1681,11 @@ const loungeBadge = document.querySelector('.scene-head .pill');
 const loungeHeader = document.querySelector('.scene-head');
 
 if (isMobileDevice && loungeHeader) {
-
-  // 모바일 효과음 버튼을 메타버스 화면 밖으로 이동
   loungeHeader.style.flexDirection = 'column';
   loungeHeader.style.alignItems = 'stretch';
 
   const sfxRow = document.createElement('div');
-
-  sfxRow.style.cssText = `
+  sfxRow.style.cssText=`
     display:flex;
     justify-content:flex-end;
     width:100%;
@@ -1396,8 +1702,6 @@ if (isMobileDevice && loungeHeader) {
   loungeHeader.appendChild(sfxRow);
 
 } else if (loungeBadge) {
-
-  // PC 효과음 버튼 위치는 기존대로 유지
   loungeBadge.style.position = 'relative';
   loungeBadge.appendChild(sfxButton);
 
@@ -1408,9 +1712,7 @@ if (isMobileDevice && loungeHeader) {
   sfxButton.style.zIndex = '40';
 
 } else {
-
   sceneEl.appendChild(sfxButton);
-
 }
 
 const scene=new THREE.Scene();
@@ -1451,6 +1753,7 @@ function box(w,h,d,color,x,y,z){
       roughness:.55
     })
   );
+
   mesh.position.set(x,y,z);
   scene.add(mesh);
   return mesh;
@@ -1492,6 +1795,7 @@ for(const x of [-17,17]){
         color:0x238878
       })
     );
+
     plant.position.set(x,2,z);
     scene.add(plant);
   }
@@ -1710,10 +2014,12 @@ function updateMyAvatar(){
     if(myId)removeBubble(myId);
     scene.remove(myAvatar);
     removeCharacterHpBar(myAvatar);
+    removeCharacterName(myAvatar);
   }
 
   myAvatar=makeAnimal(profile.animal);
   addCharacterHpBar(myAvatar,myHp);
+  setCharacterName(myAvatar,profile.name);
   myAvatar.position.copy(pos);
   myAvatar.rotation.y=dir;
   myAvatar.userData.targetDirection=dir;
@@ -1735,10 +2041,12 @@ function updateOthers(players){
         removeBubble(p.id);
         scene.remove(avatar);
         removeCharacterHpBar(avatar);
+        removeCharacterName(avatar);
       }
 
       avatar=makeAnimal(p.animal);
       addCharacterHpBar(avatar,p.hp??100);
+      setCharacterName(avatar,p.name);
       scene.add(avatar);
       others.set(p.id,avatar);
     }
@@ -1750,6 +2058,7 @@ function updateOthers(players){
     );
 
     setCharacterHpBar(avatar,p.hp??100);
+    setCharacterName(avatar,p.name);
     avatar.userData.seated=p.seated===true;
 
     if(Number.isFinite(Number(p.direction))){
@@ -1762,6 +2071,7 @@ function updateOthers(players){
       removeBubble(id);
       scene.remove(a);
       removeCharacterHpBar(a);
+      removeCharacterName(a);
       others.delete(id);
     }
   }
@@ -1982,14 +2292,11 @@ window.addEventListener('keydown',e=>{
     !myAvatar.userData.seated&&
     onGround
   ){
-jumpVelocity=JUMP_SPEED;
-onGround=false;
+    jumpVelocity=JUMP_SPEED;
+    onGround=false;
 
-// 고래 광역공격 회피용 점프 신호
-send({type:'jump'});
-
-sendMove(true);
-
+    send({type:'jump'});
+    sendMove(true);
   }
 
   keys.add(k);
@@ -1999,10 +2306,8 @@ window.addEventListener('keyup',e=>{
   keys.delete(e.key.toLowerCase());
 });
 
-
 const controls=$('mobile-controls');
 
-// 360도 원형 조이스틱
 const mobileJoystick={
   x:0,
   y:0,
@@ -2018,43 +2323,34 @@ const joystickThumb=controls.querySelector(
   '.jmc-joystick-thumb'
 );
 
-// 원형 조이스틱 디자인
 const joystickStyle=document.createElement('style');
 
-
 joystickStyle.textContent=`
-  /* 반투명 글래스 조이스틱 - 외곽 원 */
   #scene #mobile-controls.jmc-joystick {
     width:120px !important;
     height:120px !important;
     transform:none !important;
     box-sizing:border-box !important;
     border-radius:50% !important;
-
     border:1.5px solid rgba(237,213,169,.55);
-
     background:radial-gradient(
       circle at 35% 28%,
       rgba(219,239,255,.23) 0%,
       rgba(104,159,198,.16) 48%,
       rgba(13,37,57,.25) 100%
     );
-
     -webkit-backdrop-filter:blur(4px);
     backdrop-filter:blur(4px);
-
     box-shadow:
       0 5px 18px rgba(0,0,0,.18),
       inset 0 0 22px rgba(204,230,255,.08),
       inset 0 0 0 8px rgba(255,255,255,.025);
-
     touch-action:none !important;
     user-select:none !important;
     -webkit-user-select:none !important;
     z-index:30 !important;
   }
 
-  /* 내부의 은은한 원형 가이드 */
   #scene #mobile-controls.jmc-joystick::before {
     content:"";
     position:absolute;
@@ -2068,7 +2364,6 @@ joystickStyle.textContent=`
     pointer-events:none;
   }
 
-  /* 손가락으로 움직이는 유리 손잡이 */
   #scene #mobile-controls.jmc-joystick
   .jmc-joystick-thumb {
     position:absolute;
@@ -2078,24 +2373,19 @@ joystickStyle.textContent=`
     height:52px;
     box-sizing:border-box;
     border-radius:50%;
-
     transform:translate(-50%,-50%);
     border:1.5px solid rgba(244,224,183,.75);
-
     background:radial-gradient(
       circle at 32% 24%,
       rgba(244,250,255,.55) 0%,
       rgba(140,194,232,.32) 42%,
       rgba(50,101,142,.42) 100%
     );
-
     -webkit-backdrop-filter:blur(3px);
     backdrop-filter:blur(3px);
-
     box-shadow:
       0 3px 10px rgba(0,0,0,.22),
       inset 0 2px 5px rgba(255,255,255,.18);
-
     pointer-events:none;
     touch-action:none !important;
     will-change:transform;
@@ -2104,47 +2394,36 @@ joystickStyle.textContent=`
 
 document.head.appendChild(joystickStyle);
 
-  // ==========================================
-  // 모바일 조이스틱 화면 흔들림 방지
-  // ==========================================
+if (isMobileDevice) {
+  document.addEventListener('touchmove',function(e){
+    if(
+      mobileJoystick.pointerId !== null &&
+      e.cancelable
+    ){
+      e.preventDefault();
+    }
+  },{
+    passive:false,
+    capture:true
+  });
 
-  if (isMobileDevice) {
-
-    // 조이스틱 조작 중 브라우저 화면 스크롤 방지
-    document.addEventListener('touchmove', function(e) {
-      if (
-        mobileJoystick.pointerId !== null &&
-        e.cancelable
-      ) {
-        e.preventDefault();
+  joystickStyle.textContent+=`
+    @media (max-width:980px),(pointer:coarse) {
+      html body #scene {
+        height:65svh !important;
+        touch-action:none !important;
+        overscroll-behavior:none !important;
       }
-    }, {
-      passive: false,
-      capture: true
-    });
-
-    // 모바일 주소창 변화로 인한 화면 높이 흔들림 방지
-    joystickStyle.textContent += `
-      @media (max-width: 980px), (pointer: coarse) {
-
-        html body #scene {
-          height: 65svh !important;
-          touch-action: none !important;
-          overscroll-behavior: none !important;
-        }
-
-        html body #mobile-controls.jmc-joystick,
-        html body #mobile-controls.jmc-joystick * {
-          touch-action: none !important;
-          user-select: none !important;
-          -webkit-user-select: none !important;
-        }
-
+      html body #mobile-controls.jmc-joystick,
+      html body #mobile-controls.jmc-joystick * {
+        touch-action:none !important;
+        user-select:none !important;
+        -webkit-user-select:none !important;
       }
-    `;
-  }
+    }
+  `;
+}
 
-// 손가락 위치로 이동 방향 계산
 function updateMobileJoystick(e){
   const rect=controls.getBoundingClientRect();
 
@@ -2176,7 +2455,6 @@ function updateMobileJoystick(e){
                calc(-50% + ${offsetY}px))`;
 }
 
-// 손가락을 떼면 즉시 정지
 function resetMobileJoystick(){
   mobileJoystick.x=0;
   mobileJoystick.y=0;
@@ -2195,7 +2473,6 @@ controls.addEventListener('pointerdown',e=>{
 
   mobileJoystick.pointerId=e.pointerId;
   controls.setPointerCapture(e.pointerId);
-
   updateMobileJoystick(e);
 });
 
@@ -2204,7 +2481,6 @@ controls.addEventListener('pointermove',e=>{
 
   e.preventDefault();
   e.stopPropagation();
-
   updateMobileJoystick(e);
 });
 
@@ -2213,17 +2489,9 @@ function finishMobileJoystick(e){
   resetMobileJoystick();
 }
 
-controls.addEventListener(
-  'pointerup',finishMobileJoystick
-);
-
-controls.addEventListener(
-  'pointercancel',finishMobileJoystick
-);
-
-controls.addEventListener(
-  'lostpointercapture',finishMobileJoystick
-);
+controls.addEventListener('pointerup',finishMobileJoystick);
+controls.addEventListener('pointercancel',finishMobileJoystick);
+controls.addEventListener('lostpointercapture',finishMobileJoystick);
 
 window.addEventListener('blur',resetMobileJoystick);
 
@@ -2267,6 +2535,7 @@ function sendMove(force=false){
 
 function animate(now){
   requestAnimationFrame(animate);
+
   const dt=Math.min((now-lastFrame)/1000,.05);
   lastFrame=now;
 
@@ -2287,17 +2556,15 @@ function animate(now){
     !defeated&&
     !reentryRequired
   ){
+    const f=
+      Number(held('w')||held('arrowup'))-
+      Number(held('s')||held('arrowdown'))-
+      mobileJoystick.y;
 
-const f=
-  Number(held('w')||held('arrowup'))-
-  Number(held('s')||held('arrowdown'))-
-  mobileJoystick.y;
-
-const s=
-  Number(held('d')||held('arrowright'))-
-  Number(held('arrowleft'))+
-  mobileJoystick.x;
-
+    const s=
+      Number(held('d')||held('arrowright'))-
+      Number(held('arrowleft'))+
+      mobileJoystick.x;
 
     if((f||s)&&!myAvatar.userData.seated){
       const len=Math.hypot(f,s);
@@ -2324,8 +2591,10 @@ const s=
 
       myAvatar.userData.targetDirection=Math.atan2(dx,dz);
       walkTime+=dt*12;
+
       myAvatar.userData.bodyGroup.position.y=
         Math.abs(Math.sin(walkTime))*.085;
+
       sendMove();
     }else{
       myAvatar.userData.bodyGroup.position.y*=.8;
@@ -2340,6 +2609,7 @@ const s=
         jumpVelocity=0;
         onGround=true;
       }
+
       sendMove();
     }
 
@@ -2422,19 +2692,21 @@ function send(m){
     socket.send(JSON.stringify(m));
   }
 }
-window.addEventListener('jmc-inventory-craft', () => {
-  send({ type: 'inventory_craft' });
+
+window.addEventListener('jmc-inventory-craft',()=>{
+  send({type:'inventory_craft'});
 });
+
 function sendProfile(){
   if(!profile||defeated||reentryRequired)return;
 
-send({
-  type:'join',
-  name:profile.name,
-  animal:profile.animal,
-  visitorId,
-  inventoryToken
-});
+  send({
+    type:'join',
+    name:profile.name,
+    animal:profile.animal,
+    visitorId,
+    inventoryToken
+  });
 
   if(myAvatar){
     send({
@@ -2488,7 +2760,8 @@ function connect(){
     location.protocol==='https:'?'wss':'ws';
 
   socket=new WebSocket(
-    `${protocol}://${location.host}/ws`
+
+        `${protocol}://${location.host}/ws`
   );
 
   socket.onopen=()=>{
@@ -2520,18 +2793,20 @@ function connect(){
     }catch{
       return;
     }
-if (
-  m.type === 'inventory_state' ||
-  m.type === 'inventory_crafted' ||
-  m.type === 'inventory_notice'
-) {
-  window.dispatchEvent(
-    new CustomEvent('jmc-inventory', {
-      detail: m
-    })
-  );
-  return;
-}
+
+    if (
+      m.type === 'inventory_state' ||
+      m.type === 'inventory_crafted' ||
+      m.type === 'inventory_notice'
+    ) {
+      window.dispatchEvent(
+        new CustomEvent('jmc-inventory', {
+          detail: m
+        })
+      );
+      return;
+    }
+
     if(raidClient.onMessage(m))return;
 
     if(m.type==='position_correct'&&myAvatar){
@@ -2553,6 +2828,11 @@ if (
       }
 
       sendProfile();
+    }
+
+    if(m.type==='account_profile_required') {
+      if (jmcGoogleUser) jmcOpenAccountProfile(true);
+      return;
     }
 
     if(m.type==='presence'){
@@ -2697,9 +2977,9 @@ $('calendar-scene-button')?.addEventListener(
   }
 );
 
-/* ========================================
-   A키 연속 마법 공격 + 멀티플레이 동기화
-   ======================================== */
+// ========================================
+// A키 연속 마법 공격 + 멀티플레이 동기화
+// ========================================
 
 let magicPressed=false;
 let lastMagicTime=0;
@@ -2724,20 +3004,17 @@ function createBitcoinMagicTexture(){
 
   ctx.clearRect(0,0,256,256);
 
-  // 바깥 원
   ctx.fillStyle = '#f7931a';
   ctx.beginPath();
   ctx.arc(128,128,118,0,Math.PI*2);
   ctx.fill();
 
-  // 안쪽 원 테두리 느낌
   ctx.strokeStyle = '#ffd27a';
   ctx.lineWidth = 8;
   ctx.beginPath();
   ctx.arc(128,128,101,0,Math.PI*2);
   ctx.stroke();
 
-  // 비트코인 문자
   ctx.fillStyle = '#ffffff';
   ctx.font = 'bold 150px Arial';
   ctx.textAlign = 'center';
@@ -2766,7 +3043,6 @@ function spawnRemoteMagic(m){
 
   const projectile = new THREE.Group();
 
-  // 비트코인 코인 본체
   const core = new THREE.Mesh(
     new THREE.CylinderGeometry(.24,.24,.08,32),
     new THREE.MeshStandardMaterial({
@@ -2778,10 +3054,8 @@ function spawnRemoteMagic(m){
     })
   );
 
-  // 코인이 회전하면서 날아가도록 기본 각도 설정
   core.rotation.z = Math.PI / 2;
 
-  // 앞면 비트코인 로고
   const frontLogo = new THREE.Mesh(
     new THREE.PlaneGeometry(.34,.34),
     new THREE.MeshBasicMaterial({
@@ -2792,7 +3066,6 @@ function spawnRemoteMagic(m){
   );
   frontLogo.position.z = .045;
 
-  // 뒷면 비트코인 로고
   const backLogo = new THREE.Mesh(
     new THREE.PlaneGeometry(.34,.34),
     new THREE.MeshBasicMaterial({
@@ -2801,10 +3074,10 @@ function spawnRemoteMagic(m){
       depthWrite:false
     })
   );
+
   backLogo.position.z = -.045;
   backLogo.rotation.y = Math.PI;
 
-  // 마법 오라
   const aura = new THREE.Mesh(
     new THREE.TorusGeometry(.34,.05,10,24),
     new THREE.MeshBasicMaterial({
@@ -2815,6 +3088,7 @@ function spawnRemoteMagic(m){
       depthWrite:false
     })
   );
+
   aura.rotation.y = Math.PI / 2;
 
   projectile.add(core,aura,frontLogo,backLogo);
@@ -2898,7 +3172,7 @@ function disposeMagicProjectile(shot){
   scene.remove(shot.object);
 
   shot.object.traverse(node=>{
-    if(!node.isMesh) return;
+    if(!node.isMesh)return;
 
     if(node.geometry){
       node.geometry.dispose();
@@ -2906,17 +3180,16 @@ function disposeMagicProjectile(shot){
 
     if(Array.isArray(node.material)){
       node.material.forEach(mat=>{
-        if(mat.map) mat.map.dispose();
+        if(mat.map)mat.map.dispose();
         mat.dispose();
       });
     }else if(node.material){
-      if(node.material.map) node.material.map.dispose();
+      if(node.material.map)node.material.map.dispose();
       node.material.dispose();
     }
   });
 }
 
-// 피격: 마법탄 소멸 + 충격파 + 불꽃 + 캐릭터 움찔
 const impactEffects=[];
 const IMPACT_LIFETIME=420;
 const HIT_REACTION_DURATION=340;
@@ -3244,8 +3517,8 @@ function updateMagic(now){
 
     advanceVisibleMagic(shot,dt,now);
     shot.aura.rotation.y+=dt*9;
-if(shot.core) shot.core.rotation.x += dt*12;
-    
+    if(shot.core)shot.core.rotation.x+=dt*12;
+
     const age=now-shot.born;
     const remaining=Math.max(
       0,
@@ -3269,6 +3542,7 @@ requestAnimationFrame(updateMagic);
 // ====================================================
 // 전투 HP HUD / 사망 팝업 / 입장 화면으로 자동 복귀
 // ====================================================
+
 const hpHud = document.createElement('div');
 hpHud.id = 'jmc-hp-hud';
 
@@ -3327,7 +3601,7 @@ hpHud.innerHTML = `
     ">HP</span>
   </div>
 
-<div id="jmc-hp-text" style="
+  <div id="jmc-hp-text" style="
     font-size:11px;
     color:white;
     white-space:nowrap;
@@ -3378,9 +3652,14 @@ function positionMobileHp() {
     }
 
     [
-      'position', 'left', 'top',
-      'width', 'height', 'min-height',
-      'padding', 'gap'
+      'position',
+      'left',
+      'top',
+      'width',
+      'height',
+      'min-height',
+      'padding',
+      'gap'
     ].forEach(name => {
       hpHud.style.removeProperty(name);
     });
@@ -3410,7 +3689,6 @@ function positionMobileHp() {
     return;
   }
 
-  // 모바일에서는 화면 기준으로 직접 배치
   if (hpHud.parentElement !== document.body) {
     document.body.appendChild(hpHud);
   }
@@ -3418,55 +3696,72 @@ function positionMobileHp() {
   const rect = sceneEl.getBoundingClientRect();
 
   hpHud.style.setProperty(
-    'position', 'fixed', 'important'
+    'position',
+    'fixed',
+    'important'
   );
 
   hpHud.style.setProperty(
-    'left', `${rect.left + 6}px`, 'important'
+    'left',
+    `${rect.left + 6}px`,
+    'important'
   );
 
   hpHud.style.setProperty(
-    'top', `${rect.top + 6}px`, 'important'
-  );
-
-hpHud.style.setProperty(
-  'width', '48px', 'important'
-);
-
-hpHud.style.setProperty(
-  'height', '96px', 'important'
-);
-
-hpHud.style.setProperty(
-  'min-height', '96px', 'important'
-);
-
-  hpHud.style.setProperty(
-    'padding', '5px 3px', 'important'
+    'top',
+    `${rect.top + 6}px`,
+    'important'
   );
 
   hpHud.style.setProperty(
-    'gap', '3px', 'important'
+    'width',
+    '48px',
+    'important'
   );
 
   hpHud.style.setProperty(
-    'z-index', '9997', 'important'
+    'height',
+    '96px',
+    'important'
   );
 
-  // 모바일 심전도 아이콘 숨김
+  hpHud.style.setProperty(
+    'min-height',
+    '96px',
+    'important'
+  );
+
+  hpHud.style.setProperty(
+    'padding',
+    '5px 3px',
+    'important'
+  );
+
+  hpHud.style.setProperty(
+    'gap',
+    '3px',
+    'important'
+  );
+
+  hpHud.style.setProperty(
+    'z-index',
+    '9997',
+    'important'
+  );
+
   const icon = hpHud.querySelector('svg');
 
   if (icon) {
     icon.style.setProperty(
-      'display', 'none', 'important'
+      'display',
+      'none',
+      'important'
     );
   }
 }
 
-// 초기 배치
 positionMobileHp();
 
-// 화면 크기 및 방향 변경 대응
 window.addEventListener(
   'resize',
   positionMobileHp
@@ -3488,7 +3783,6 @@ window.addEventListener(
   positionMobileHp
 );
 
-// 모바일 전용 HP HUD 위치 및 크기
 const jmcMobileHpStyle = document.createElement('style');
 
 jmcMobileHpStyle.textContent = `
@@ -3509,28 +3803,27 @@ jmcMobileHpStyle.textContent = `
       display:none !important;
     }
 
-#jmc-hp-hud #jmc-hp-text {
-  display:block !important;
-  width:100% !important;
-  max-width:100% !important;
-  min-width:0 !important;
-  box-sizing:border-box !important;
-  padding:0 !important;
-  margin:0 !important;
-  font-size:8px !important;
-  font-weight:700 !important;
-  letter-spacing:-0.5px !important;
-  line-height:11px !important;
-  text-align:center !important;
-  white-space:nowrap !important;
-  flex-shrink:0 !important;
-}
+    #jmc-hp-hud #jmc-hp-text {
+      display:block !important;
+      width:100% !important;
+      max-width:100% !important;
+      min-width:0 !important;
+      box-sizing:border-box !important;
+      padding:0 !important;
+      margin:0 !important;
+      font-size:8px !important;
+      font-weight:700 !important;
+      letter-spacing:-0.5px !important;
+      line-height:11px !important;
+      text-align:center !important;
+      white-space:nowrap !important;
+      flex-shrink:0 !important;
+    }
   }
 `;
 
 document.head.appendChild(jmcMobileHpStyle);
 
-// 모바일에서는 HP 심전도 아이콘 완전히 숨기기
 function updateMobileHpIcon() {
   const mobile = window.matchMedia(
     '(max-width: 980px), (pointer: coarse)'
@@ -3547,11 +3840,13 @@ function updateMobileHpIcon() {
   }
 }
 
-// 최초 적용
 updateMobileHpIcon();
 
-// 화면 크기가 변경될 때도 적용
-window.addEventListener('resize', updateMobileHpIcon);
+window.addEventListener(
+  'resize',
+  updateMobileHpIcon
+);
+
 function updateHpHud(hp,maxHp=100){
   const max = Math.max(1,Number(maxHp)||100);
 
@@ -3564,118 +3859,150 @@ function updateHpHud(hp,maxHp=100){
 
   const percent = (remaining/max)*100;
 
-const hpText = document.getElementById('jmc-hp-text');
+  const hpText = document.getElementById('jmc-hp-text');
+  hpText.textContent = `${remaining}/${max}`;
 
-hpText.textContent = `${remaining}/${max}`;
+  const isMobileHp = window.matchMedia(
+    '(max-width:980px), (pointer:coarse)'
+  ).matches;
 
-const isMobileHp = window.matchMedia(
-  '(max-width:980px), (pointer:coarse)'
-).matches;
-
-if (isMobileHp) {
-  // HP바 내부 영역 고정
-  hpHud.style.setProperty(
-    'overflow', 'hidden', 'important'
-  );
-
-  hpHud.style.setProperty(
-    'box-sizing', 'border-box', 'important'
-  );
-
-  hpHud.style.setProperty(
-    'gap', '2px', 'important'
-  );
-
-  // 100/100 숫자가 테두리 밖으로 나가지 않도록 고정
-  hpText.style.setProperty(
-    'display', 'block', 'important'
-  );
-
-  hpText.style.setProperty(
-    'font-size', '8px', 'important'
-  );
-
-  hpText.style.setProperty(
-    'line-height', '11px', 'important'
-  );
-
-  hpText.style.setProperty(
-    'letter-spacing', '-0.6px', 'important'
-  );
-
-  hpText.style.setProperty(
-    'width', '100%', 'important'
-  );
-
-  hpText.style.setProperty(
-    'max-width', '100%', 'important'
-  );
-
-  hpText.style.setProperty(
-    'min-width', '0', 'important'
-  );
-
-  hpText.style.setProperty(
-    'text-align', 'center', 'important'
-  );
-
-  hpText.style.setProperty(
-    'white-space', 'nowrap', 'important'
-  );
-
-  hpText.style.setProperty(
-    'overflow', 'hidden', 'important'
-  );
-
-  hpText.style.setProperty(
-    'flex-shrink', '0', 'important'
-  );
-
-  // 초록색 HP 게이지도 테두리 안에 고정
-  const hpTrack = document.getElementById('jmc-hp-fill')
-    ?.parentElement;
-
-  if (hpTrack) {
-    hpTrack.style.setProperty(
-      'min-height', '0', 'important'
+  if (isMobileHp) {
+    hpHud.style.setProperty(
+      'overflow',
+      'hidden',
+      'important'
     );
 
-    hpTrack.style.setProperty(
-      'flex', '1 1 0', 'important'
+    hpHud.style.setProperty(
+      'box-sizing',
+      'border-box',
+      'important'
     );
 
-    hpTrack.style.setProperty(
-      'width', '15px', 'important'
+    hpHud.style.setProperty(
+      'gap',
+      '2px',
+      'important'
     );
 
-    hpTrack.style.setProperty(
-      'max-height', '100%', 'important'
+    hpText.style.setProperty(
+      'display',
+      'block',
+      'important'
     );
 
-    hpTrack.style.setProperty(
-      'overflow', 'hidden', 'important'
+    hpText.style.setProperty(
+      'font-size',
+      '8px',
+      'important'
     );
+
+    hpText.style.setProperty(
+      'line-height',
+      '11px',
+      'important'
+    );
+
+    hpText.style.setProperty(
+      'letter-spacing',
+      '-0.6px',
+      'important'
+    );
+
+    hpText.style.setProperty(
+      'width',
+      '100%',
+      'important'
+    );
+
+    hpText.style.setProperty(
+      'max-width',
+      '100%',
+      'important'
+    );
+
+    hpText.style.setProperty(
+      'min-width',
+      '0',
+      'important'
+    );
+
+    hpText.style.setProperty(
+      'text-align',
+      'center',
+      'important'
+    );
+
+    hpText.style.setProperty(
+      'white-space',
+      'nowrap',
+      'important'
+    );
+
+    hpText.style.setProperty(
+      'overflow',
+      'hidden',
+      'important'
+    );
+
+    hpText.style.setProperty(
+      'flex-shrink',
+      '0',
+      'important'
+    );
+
+    const hpTrack = document.getElementById(
+      'jmc-hp-fill'
+    )?.parentElement;
+
+    if (hpTrack) {
+      hpTrack.style.setProperty(
+        'min-height',
+        '0',
+        'important'
+      );
+
+      hpTrack.style.setProperty(
+        'flex',
+        '1 1 0',
+        'important'
+      );
+
+      hpTrack.style.setProperty(
+        'width',
+        '15px',
+        'important'
+      );
+
+      hpTrack.style.setProperty(
+        'max-height',
+        '100%',
+        'important'
+      );
+
+      hpTrack.style.setProperty(
+        'overflow',
+        'hidden',
+        'important'
+      );
+    }
   }
-}
 
-  // HP가 감소하면 세로 체력바가 아래에서부터 줄어듦
   $('jmc-hp-fill').style.height =
     percent+'%';
 
-  // 체력에 따라 색상 자동 변경
   let hpColor;
 
   if(percent<=25){
-    hpColor = '#f16c7c'; // 빨간색
+    hpColor = '#f16c7c';
   }else if(percent<=50){
-    hpColor = '#f0a43c'; // 주황색
+    hpColor = '#f0a43c';
   }else{
-    hpColor = '#43de9a'; // 초록색
+    hpColor = '#43de9a';
   }
 
   $('jmc-hp-fill').style.backgroundColor = hpColor;
 
-  // 캐릭터 머리 위 HP 표시도 기존처럼 갱신
   if(myAvatar){
     setCharacterHpBar(myAvatar,remaining,max);
   }
@@ -3728,7 +4055,8 @@ function showDeathPopup(){
     color:#fff;
     box-shadow:0 0 50px rgba(155,38,75,.3);
     font-family:Arial,sans-serif;
-  `;  
+  `;
+
   const title=document.createElement('h2');
   title.textContent='전투 불능';
 
@@ -3822,9 +4150,8 @@ function showDeathPopup(){
     if(seconds<=0){
       returnToEntry();
     }else{
-countdown.textContent=
-  `${seconds}초 후 입장 화면으로 돌아갑니다.`;
-
+      countdown.textContent=
+        `${seconds}초 후 입장 화면으로 돌아갑니다.`;
     }
   },1000);
 }
