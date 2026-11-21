@@ -272,10 +272,14 @@ export async function createBossRaid({clients,send,broadcast}) {
     };
   }
 
-  function hit(shot,point) {
-    if (run.state!=='active') return;
+function hit(shot,point,damageOverride=null) {
+  if (run.state!=='active') return;
 
-    run.hp=Math.max(0,run.hp-run.damage);
+  const hitDamage=Number.isFinite(damageOverride)
+    ?Math.max(1,Math.min(40,damageOverride))
+    :run.damage;
+
+  run.hp=Math.max(0,run.hp-hitDamage);
 
     const now=Date.now();
 
