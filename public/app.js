@@ -2108,10 +2108,7 @@ function showPvpProfile(data) {
     return;
   }
 
-  pvpSub.textContent =
-    `계정 닉네임: ${
-      data.accountNickname || data.displayName
-    }`;
+pvpSub.textContent = 'Google 인증 이용자';
 
   const kills = Number(data.kills) || 0;
   const deaths = Number(data.deaths) || 0;
