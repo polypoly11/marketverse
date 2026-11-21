@@ -1,3 +1,4 @@
+
 import crypto from 'node:crypto';
 
 const REWARD_MS = 10 * 60 * 1000;
@@ -291,87 +292,13 @@ export function createMissileSystem({
         return null;
       }
 
-  // ========================================
-  // 어드민 전체 미사일 충전
-  // ========================================
-
-  async function refillOnline() {
-    const db = await dbReady;
-
-    if (!db) {
-      throw new Error('미사일 DB 연결 실패');
-    }
-
-    const owners = new Set();
-
-    for (const p of clients.values()) {
-      if (
-        p.ready &&
-        p.hp > 0 &&
-        p.missileOwnerKey &&
-        !p.missileLoading
-      ) {
-        owners.add(p.missileOwnerKey);
-      }
-    }
-
-    if (owners.size === 0) {
       return {
-        owners: 0,
-        players: 0
+        id: 'boss',
+        x: 0,
+        z: -13,
+        player: null
       };
     }
-
-    const result = await db.query(`
-      UPDATE jmc_missile_inventory
-      SET
-        quantity = CASE
-          WHEN owner_key LIKE 'google:%'
-            THEN 5
-          ELSE 3
-        END,
-        last_seen = NOW()
-      WHERE owner_key = ANY($1::text[])
-      RETURNING
-        owner_key,
-        quantity,
-        (
-          EXTRACT(EPOCH FROM next_at) * 1000
-        )::bigint AS next_ms
-    `, [[...owners]]);
-
-    let players = 0;
-
-    for (const row of result.rows) {
-      syncOwner(
-        row.owner_key,
-        Number(row.quantity),
-        Number(row.next_ms)
-      );
-
-      for (const p of clients.values()) {
-        if (
-          p.ready &&
-          p.missileOwnerKey === row.owner_key
-        ) {
-          players++;
-        }
-      }
-    }
-
-    return {
-      owners: result.rows.length,
-      players
-    };
-  }
-
-  return {
-    join,
-    handle,
-    state,
-    refillOnline
-  };
-}
 
     const player = [...clients.values()].find(
       v =>
@@ -668,9 +595,84 @@ export function createMissileSystem({
     return true;
   }
 
+  // ========================================
+  // 어드민 전체 미사일 충전
+  // ========================================
+
+  async function refillOnline() {
+    const db = await dbReady;
+
+    if (!db) {
+      throw new Error('미사일 DB 연결 실패');
+    }
+
+    const owners = new Set();
+
+    for (const p of clients.values()) {
+      if (
+        p.ready &&
+        p.hp > 0 &&
+        p.missileOwnerKey &&
+        !p.missileLoading
+      ) {
+        owners.add(p.missileOwnerKey);
+      }
+    }
+
+    if (owners.size === 0) {
+      return {
+        owners: 0,
+        players: 0
+      };
+    }
+
+    const result = await db.query(`
+      UPDATE jmc_missile_inventory
+      SET
+        quantity = CASE
+          WHEN owner_key LIKE 'google:%'
+            THEN 5
+          ELSE 3
+        END,
+        last_seen = NOW()
+      WHERE owner_key = ANY($1::text[])
+      RETURNING
+        owner_key,
+        quantity,
+        (
+          EXTRACT(EPOCH FROM next_at) * 1000
+        )::bigint AS next_ms
+    `, [[...owners]]);
+
+    let players = 0;
+
+    for (const row of result.rows) {
+      syncOwner(
+        row.owner_key,
+        Number(row.quantity),
+        Number(row.next_ms)
+      );
+
+      for (const p of clients.values()) {
+        if (
+          p.ready &&
+          p.missileOwnerKey === row.owner_key
+        ) {
+          players++;
+        }
+      }
+    }
+
+    return {
+      owners: result.rows.length,
+      players
+    };
+  }
+
   return {
     join,
     handle,
-    state
+    state,
+    refillOnline
   };
 }
