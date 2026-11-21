@@ -982,7 +982,7 @@ async function jmcLoadGoogleStatus() {
 
     const data = await response.json();
     jmcGoogleUser = data.user || null;
-// Google 로그인 시 계정 닉네임과 캐릭터를 통일
+// Google 로그인: 계정 닉네임과 캐릭터 통일
 if (jmcGoogleUser?.accountNickname) {
   profile = {
     name: jmcGoogleUser.accountNickname,
@@ -996,7 +996,22 @@ if (jmcGoogleUser?.accountNickname) {
   $('my-profile').textContent =
     `${animal(profile.animal).emoji} ${profile.name}`;
 
+  // 기존 재입장 절차 완료
+  if (reentryRequired && !defeated) {
+    resetToBoard();
+
+    reentryRequired = false;
+
+    try {
+      sessionStorage.removeItem(
+        'jmc-reentry-required'
+      );
+    } catch {}
+  }
+
   updateMyAvatar();
+
+  // 구글 계정 프로필로 서버 입장
   sendProfile();
 }
     if (jmcGoogleUser && !jmcGoogleUser.accountNickname) {
