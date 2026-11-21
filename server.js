@@ -1279,9 +1279,6 @@ function updateMagicCollisions() {
       hp: target.hp
     });
 
-    if (target.hp === 0) {
-
-      target.ready = false;
 if (target.hp === 0) {
 
   // Google 계정 이용자끼리의 PVP 사망만 기록
@@ -1302,19 +1299,20 @@ if (target.hp === 0) {
   }
 
   target.ready = false;
-      send(targetWs, {
-        type: 'death',
-        message: '사망하셨습니다',
-        hp: 0
-      });
 
-      targetWs.close(
-        4001,
-        'HP depleted'
-      );
+  send(targetWs, {
+    type: 'death',
+    message: '사망하셨습니다',
+    hp: 0
+  });
 
-      presence();
-    }
+  targetWs.close(
+    4001,
+    'HP depleted'
+  );
+
+  presence();
+}
   }
 }
 
