@@ -1,4 +1,3 @@
-
 import express from 'express';
 import { createServer } from 'node:http';
 import { WebSocketServer, WebSocket } from 'ws';
@@ -11,6 +10,7 @@ import {
   adminState
 } from './admin.js';
 import {createBossRaid} from './boss-raid.js';
+import {createGoogleAuth} from './google-auth.js';
 
 const app = express();
 
@@ -241,6 +241,7 @@ function presence() {
 // ========================================
 
 const raid = await createBossRaid({clients, send, broadcast});
+const googleAuth = await createGoogleAuth(app);
 
 mountAdmin(app, {
   clients,
@@ -423,7 +424,7 @@ setInterval(updateBossTailAttack, 200).unref();
 // WebSocket 멀티플레이 서버
 // ========================================
 
-wss.on('connection', (ws, req) => {
+wss.on('connection', async (ws, req) => {
 
   // 관리자가 차단한 IP는 재입장 제한
   if (isBlocked(req)) {
@@ -431,7 +432,18 @@ wss.on('connection', (ws, req) => {
     return;
   }
 
+  // 서버 세션 쿠키에서 로그인 확인: 브라우저가 보낸 계정 ID를 신뢰하지 않는다.
+  let googleUser = null;
+  try {
+    googleUser = await googleAuth.getUser(req);
+  } catch (error) {
+    console.error('[JMC AUTH] WebSocket session:', error);
+  }
+  if (ws.readyState !== WebSocket.OPEN) return;
+
   const p = {
+    googleSub: googleUser?.sub || null,
+    googleName: googleUser?.name || null,
     clientIP: getClientIP(req),
     joinedAt: Date.now(),
 
@@ -532,10 +544,11 @@ if (firstJoin) {
       ? m.inventoryToken.toLowerCase()
       : '';
 
-  p.inventoryHash =
-    INVENTORY_TOKEN_PATTERN.test(token)
-      ? hashInventoryToken(token)
-      : p.cookieInventoryHash;
+  p.inventoryHash = p.googleSub
+    ? googleAuth.ownerHash(p.googleSub)
+    : (INVENTORY_TOKEN_PATTERN.test(token)
+        ? hashInventoryToken(token)
+        : p.cookieInventoryHash);
 
   if (!p.inventoryHash) {
     send(ws, {
@@ -606,6 +619,13 @@ if (m.type === 'jump') {
       return;
     }
 if (m.type === 'inventory_craft') {
+  if (!p.googleSub) {
+    send(ws, {
+      type: 'inventory_notice',
+      message: '행운의 선물 교환 신청은 Google 로그인 후 가능합니다.'
+    });
+    return;
+  }
   void (async () => {
     try {
       await raid.inventory.craft(ws, p);
