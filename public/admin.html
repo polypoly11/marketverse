@@ -722,7 +722,24 @@
             </button>
           </div>
         </div>
+<div class="panel">
+  <div class="panel-head">
+    <h2>🚀 유도 미사일 관리</h2>
+  </div>
 
+  <p class="muted">
+    현재 접속 중인 이용자 전체의 미사일을
+    최대 보유량까지 충전합니다.
+    구글 계정 5개, 게스트 3개입니다.
+  </p>
+
+  <button
+    id="refill-missiles"
+    class="button secondary"
+  >
+    🚀 전체 미사일 충전
+  </button>
+</div>
         <div class="panel">
           <div class="panel-head">
             <h2>투표 관리</h2>
@@ -1305,7 +1322,37 @@ $('metric-today-users').textContent =
         );
       }
     };
+$('refill-missiles').onclick = async () => {
 
+  if (!confirm(
+    '접속 중인 전체 이용자의 미사일을 충전할까요?'
+  )) {
+    return;
+  }
+
+  const button = $('refill-missiles');
+
+  button.disabled = true;
+
+  try {
+    const result = await request(
+      '/api/admin/missiles/refill',
+      {}
+    );
+
+    toast(
+      `미사일 충전 완료: ${result.players}명`
+    );
+
+    await refresh();
+
+  } catch (error) {
+    toast(error.message, true);
+
+  } finally {
+    button.disabled = false;
+  }
+};
     $('reset-votes').onclick = () => {
       if (
         confirm(
