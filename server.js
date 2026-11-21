@@ -333,22 +333,22 @@ function updateBossTailAttack() {
   for (const [ws, player] of clients) {
     if (!player.ready || player.hp <= 0) continue;
 
-// 고래 중심(0, -13) 기준 공격 반경 8
-const distanceFromBoss = Math.hypot(
-  player.x,
-  player.z + 13
-);
+    // 고래 중심(0, -13) 기준 공격 반경 8
+    const distanceFromBoss = Math.hypot(
+      player.x,
+      player.z + 13
+    );
 
-// 붉은 원 밖에 있으면 공격을 받지 않음
-if (distanceFromBoss > BOSS_TAIL_RADIUS) {
-  send(ws, {
-    type: 'boss_tail_result',
-    outOfRange: true,
-    dodged: true,
-    damage: 0
-  });
-  continue;
-}
+    // 붉은 원 밖에 있으면 공격을 받지 않음
+    if (distanceFromBoss > BOSS_TAIL_RADIUS) {
+      send(ws, {
+        type: 'boss_tail_result',
+        outOfRange: true,
+        dodged: true,
+        damage: 0
+      });
+      continue;
+    }
 
     // 서버가 기록한 실제 점프 시작 시각으로 판정
     const elapsed = (now - player.lastJumpAt) / 1000;
@@ -420,6 +420,7 @@ if (distanceFromBoss > BOSS_TAIL_RADIUS) {
 // 고래 공격 상태를 0.2초마다 확인
 // 기존 0.05초 대비 검사 횟수 75% 감소
 setInterval(updateBossTailAttack, 200).unref();
+
 // ========================================
 // WebSocket 멀티플레이 서버
 // ========================================
@@ -432,31 +433,37 @@ wss.on('connection', async (ws, req) => {
     return;
   }
 
-  // 서버 세션 쿠키에서 로그인 확인: 브라우저가 보낸 계정 ID를 신뢰하지 않는다.
+  // 서버 세션 쿠키에서 로그인 확인:
+  // 브라우저가 보낸 계정 ID를 신뢰하지 않는다.
   let googleUser = null;
+
   try {
     googleUser = await googleAuth.getUser(req);
   } catch (error) {
     console.error('[JMC AUTH] WebSocket session:', error);
   }
+
   if (ws.readyState !== WebSocket.OPEN) return;
 
   const p = {
     googleSub: googleUser?.sub || null,
     googleName: googleUser?.name || null,
+    accountNickname: googleUser?.accountNickname || null,
+    accountAnimal: googleUser?.accountAnimal || null,
     clientIP: getClientIP(req),
     joinedAt: Date.now(),
 
     id: crypto.randomUUID(),
 
-name: '',
-animal: 'seal',
-inventoryHash: null,
-// 브라우저가 최초 접속할 때 쿠키에 저장해 둔 익명 식별값
-cookieInventoryHash: (() => {
-  const token = inventoryTokenFromCookie(req);
-  return token ? hashInventoryToken(token) : null;
-})(),
+    name: '',
+    animal: 'seal',
+    inventoryHash: null,
+
+    // 브라우저가 최초 접속할 때 쿠키에 저장한 익명 식별값
+    cookieInventoryHash: (() => {
+      const token = inventoryTokenFromCookie(req);
+      return token ? hashInventoryToken(token) : null;
+    })(),
 
     x: 0,
     y: 0,
@@ -519,6 +526,16 @@ cookieInventoryHash: (() => {
 
     if (m.type === 'join') {
 
+      // Google 계정은 고정 프로필 등록 후 입장
+      if (p.googleSub && !p.accountNickname) {
+        send(ws, {
+          type: 'account_profile_required',
+          message:
+            '먼저 Google 계정 닉네임과 대표 캐릭터를 등록해 주세요.'
+        });
+        return;
+      }
+
       if (p.hp <= 0) {
         return;
       }
@@ -535,36 +552,36 @@ cookieInventoryHash: (() => {
         ? m.animal
         : 'seal';
 
+      const firstJoin = !p.ready;
 
-const firstJoin = !p.ready;
+      if (firstJoin) {
+        const token =
+          typeof m.inventoryToken === 'string'
+            ? m.inventoryToken.toLowerCase()
+            : '';
 
-if (firstJoin) {
-  const token =
-    typeof m.inventoryToken === 'string'
-      ? m.inventoryToken.toLowerCase()
-      : '';
+        p.inventoryHash = p.googleSub
+          ? googleAuth.ownerHash(p.googleSub)
+          : (INVENTORY_TOKEN_PATTERN.test(token)
+              ? hashInventoryToken(token)
+              : p.cookieInventoryHash);
 
-  p.inventoryHash = p.googleSub
-    ? googleAuth.ownerHash(p.googleSub)
-    : (INVENTORY_TOKEN_PATTERN.test(token)
-        ? hashInventoryToken(token)
-        : p.cookieInventoryHash);
+        if (!p.inventoryHash) {
+          send(ws, {
+            type: 'raid_notice',
+            message:
+              '아이템 저장 식별값이 없습니다. 새로고침 후 다시 입장해 주세요.'
+          });
+        }
+      }
 
-  if (!p.inventoryHash) {
-    send(ws, {
-      type: 'raid_notice',
-      message: '아이템 저장 식별값이 없습니다. 새로고침 후 다시 입장해 주세요.'
-    });
-  }
-}
+      p.ready = true;
 
-p.ready = true;
+      if (firstJoin) {
+        void visitorStats.record(m.visitorId);
+      }
 
-if (firstJoin) {
-  void visitorStats.record(m.visitorId);
-}
-
-void raid.inventory.sendSnapshot(ws, p);
+      void raid.inventory.sendSnapshot(ws, p);
 
       send(ws, {
         type: 'hp',
@@ -581,67 +598,97 @@ void raid.inventory.sendSnapshot(ws, p);
       return;
     }
 
+    // ====================================
+    // 고래 광역공격 회피용 점프 판정
+    // ====================================
 
-// 고래 광역공격 회피를 위한 점프 시작 시각 기록
-if (m.type === 'jump') {
-  const now = Date.now();
+    if (m.type === 'jump') {
+      const now = Date.now();
 
-  // 앉은 상태에서는 점프 불가
-  // 점프 연타로 회피 판정을 조작하지 못하도록 제한
-  if (
-    p.hp > 0 &&
-    !p.seated &&
-    now - p.lastJumpAt >= 850
-  ) {
-    p.lastJumpAt = now;
-  }
+      // 앉은 상태에서는 점프 불가
+      // 점프 연타로 회피 판정을 조작하지 않도록 제한
+      if (
+        p.hp > 0 &&
+        !p.seated &&
+        now - p.lastJumpAt >= 850
+      ) {
+        p.lastJumpAt = now;
+      }
 
-  return;
-}
-    if(m.type==='loot_pickup'){
-      // 서버가 지급 판정 및 영구 저장을 완료한 후
-      // 현재 인벤토리를 다시 보내 아이템창을 즉시 갱신한다.
-      // 이곳에서는 파편을 추가 지급하지 않으므로 중복 지급되지 않는다.
+      return;
+    }
+
+    // ====================================
+    // 고래의 비늘 선착순 획득
+    // ====================================
+
+    if (m.type === 'loot_pickup') {
+      // 서버에서 지급 판정 및 영구 저장을 완료한 뒤
+      // 현재 인벤토리를 다시 보내 즉시 갱신한다.
       void (async () => {
         try {
-          await raid.pickup(ws,p);
+          await raid.pickup(ws, p);
+
           if (p.ready && ws.readyState === WebSocket.OPEN) {
-            await raid.inventory.sendSnapshot(ws,p);
+            await raid.inventory.sendSnapshot(ws, p);
           }
+
         } catch (error) {
-          console.error('[JMC] 보스 보상 수령 오류:', error);
+          console.error(
+            '[JMC] 보스 보상 수령 오류:',
+            error
+          );
+
           send(ws, {
             type: 'raid_notice',
-            message: '아이템 처리에 실패했습니다. 다시 시도해 주세요.'
+            message:
+              '아이템 처리에 실패했습니다. 다시 시도해 주세요.'
           });
         }
       })();
+
       return;
     }
-if (m.type === 'inventory_craft') {
-  if (!p.googleSub) {
-    send(ws, {
-      type: 'inventory_notice',
-      message: '행운의 선물 교환 신청은 Google 로그인 후 가능합니다.'
-    });
-    return;
-  }
-  void (async () => {
-    try {
-      await raid.inventory.craft(ws, p);
-      if (p.ready && ws.readyState === WebSocket.OPEN) {
-        await raid.inventory.sendSnapshot(ws, p);
+
+    // ====================================
+    // 고래의 비늘 5개 조합
+    // ====================================
+
+    if (m.type === 'inventory_craft') {
+      if (!p.googleSub) {
+        send(ws, {
+          type: 'inventory_notice',
+          message:
+            '행운의 선물 교환 신청은 Google 로그인 후 가능합니다.'
+        });
+        return;
       }
-    } catch (error) {
-      console.error('[JMC] 아이템 제작 오류:', error);
-      send(ws, {
-        type: 'raid_notice',
-        message: '아이템 제작에 실패했습니다. 다시 시도해 주세요.'
-      });
+
+      void (async () => {
+        try {
+          await raid.inventory.craft(ws, p);
+
+          if (p.ready && ws.readyState === WebSocket.OPEN) {
+            await raid.inventory.sendSnapshot(ws, p);
+          }
+
+        } catch (error) {
+          console.error(
+            '[JMC] 아이템 제작 오류:',
+            error
+          );
+
+          send(ws, {
+            type: 'raid_notice',
+            message:
+              '아이템 제작에 실패했습니다. 다시 시도해 주세요.'
+          });
+        }
+      })();
+
+      return;
     }
-  })();
-  return;
-}
+
     // ====================================
     // 캐릭터 이동 동기화
     // ====================================
@@ -666,21 +713,27 @@ if (m.type === 'inventory_craft') {
       }
 
       // 순간이동을 방지하기 위한 서버 좌표 검증
-      const seconds=Math.max(
+      const seconds = Math.max(
         .08,
-        Math.min(1,(now-(p.lastMove||p.joinedAt))/1000)
+        Math.min(
+          1,
+          (now - (p.lastMove || p.joinedAt)) / 1000
+        )
       );
 
-      const maxStep=6.5*seconds+.4;
+      const maxStep = 6.5 * seconds + .4;
 
-      if(Math.hypot(x-p.x,z-p.z)>maxStep){
-        send(ws,{
-          type:'position_correct',
-          x:p.x,
-          y:p.y,
-          z:p.z
+      if (
+        Math.hypot(x - p.x, z - p.z) > maxStep
+      ) {
+        send(ws, {
+          type: 'position_correct',
+          x: p.x,
+          y: p.y,
+          z: p.z
         });
-        p.lastMove=now;
+
+        p.lastMove = now;
         return;
       }
 
@@ -695,7 +748,6 @@ if (m.type === 'inventory_craft') {
       );
 
       if (Number.isFinite(Number(m.y))) {
-
         p.y = Math.max(
           0,
           Math.min(2.5, Number(m.y))
@@ -705,7 +757,6 @@ if (m.type === 'inventory_craft') {
       p.seated = m.seated === true;
 
       if (Number.isFinite(direction)) {
-
         p.direction = Math.atan2(
           Math.sin(direction),
           Math.cos(direction)
@@ -849,7 +900,6 @@ if (m.type === 'inventory_craft') {
       }
 
       if (p.vote) {
-
         votes[p.vote] = Math.max(
           0,
           votes[p.vote] - 1
@@ -876,7 +926,6 @@ if (m.type === 'inventory_craft') {
   ws.on('close', () => {
 
     if (p.vote) {
-
       votes[p.vote] = Math.max(
         0,
         votes[p.vote] - 1
@@ -898,7 +947,6 @@ if (m.type === 'inventory_craft') {
   // ======================================
 
   ws.on('error', err => {
-
     console.error(
       'WebSocket:',
       err.message
@@ -1015,7 +1063,7 @@ function updateMagicCollisions() {
       }
     }
 
-    const bossPoint=raid.collision(
+    const bossPoint = raid.collision(
       shot,
       startX,
       startZ,
@@ -1023,17 +1071,17 @@ function updateMagicCollisions() {
       endZ
     );
 
-    if(
+    if (
       bossPoint &&
-      (!nearest || bossPoint.t<nearest.t)
-    ){
-      magicShots.splice(i,1);
-      raid.hit(shot,bossPoint);
+      (!nearest || bossPoint.t < nearest.t)
+    ) {
+      magicShots.splice(i, 1);
+      raid.hit(shot, bossPoint);
       continue;
     }
 
     if (!nearest) {
-      shot.x=endX;
+      shot.x = endX;
       shot.z = endZ;
       continue;
     }
@@ -1238,7 +1286,6 @@ app.get('/api/candles/:symbol', async (req, res) => {
     !SYMBOLS.includes(symbol) ||
     ![60, 900, 3600].includes(granularity)
   ) {
-
     return res.status(400).json({
       error: 'Invalid request'
     });
@@ -1369,7 +1416,6 @@ server.listen(
   port,
   '0.0.0.0',
   () => {
-
     console.log(
       `JMC Lounge listening on ${port}`
     );
