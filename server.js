@@ -1233,7 +1233,7 @@ if (m.type === 'pvp_profile_request') {
         return;
       }
 
-      const message = clean(m.message);
+      const message = clean(m.message, 100);
 
       if (!message) {
         return;
