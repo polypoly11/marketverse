@@ -140,8 +140,46 @@ export async function createItemInventory(pool, send) {
       );
     }
 
-    // 보스 레이드별로 한 번만 지급
-    // 동일 run_id 중복 지급은 DB 기본키로 방지
+    // ========================================
+    // 고래비늘 최대 보유량 5개
+    // ========================================
+
+    const MAX_SCALES = 5;
+
+    // 동일 이용자가 여러 창에서 동시에
+    // 획득하는 경우에도 최대치 초과 방지
+    await db.query(
+      'SELECT pg_advisory_xact_lock(hashtext($1))',
+      [player.inventoryHash]
+    );
+
+    const result = await db.query(`
+      SELECT COUNT(*)::INT AS count
+      FROM jmc_item_drops
+      WHERE owner_hash = $1
+        AND craft_id IS NULL
+    `, [
+      player.inventoryHash
+    ]);
+
+    const currentCount =
+      Number(result.rows[0]?.count) || 0;
+
+    // 이미 5개 이상 보유하면 추가 획득 불가
+    if (currentCount >= MAX_SCALES) {
+      const error = new Error(
+        '고래의 비늘은 최대 5개까지 보유할 수 있습니다. 먼저 5개를 조합해 주세요.'
+      );
+
+      error.code = 'WHALE_SCALE_FULL';
+
+      throw error;
+    }
+
+    // ========================================
+    // 보유량 확인 후 비늘 1개 지급
+    // ========================================
+
     await db.query(`
       INSERT INTO jmc_item_drops (
         run_id,
@@ -158,11 +196,9 @@ export async function createItemInventory(pool, send) {
     console.log(
       '[JMC inventory] 고래의 비늘 지급',
       'runId:', runId,
-      'player:', player.name
+      'player:', player.name,
+      'count:', currentCount + 1
     );
-
-    // 실제 저장 확정(COMMIT)과
-    // 아이템창 갱신은 boss-raid.js에서 처리
   }
 
   // ========================================
