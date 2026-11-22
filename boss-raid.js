@@ -473,12 +473,24 @@ function hit(shot,point,damageOverride=null) {
       publish();
 
     } catch(e) {
-      console.error('[RAID] claim failed:',e.message);
+      if (e.code === 'WHALE_SCALE_FULL') {
+        send(ws, {
+          type: 'raid_notice',
+          message:
+            '🐋 고래의 비늘은 최대 5개까지 보유할 수 있습니다. 먼저 5개를 조합해 주세요.'
+        });
+      } else {
+        console.error(
+          '[RAID] claim failed:',
+          e.message
+        );
 
-      send(ws,{
-        type:'raid_notice',
-        message:'고래의 비늘 저장에 실패했습니다. 다시 시도하세요.'
-      });
+        send(ws, {
+          type: 'raid_notice',
+          message:
+            '고래의 비늘 저장에 실패했습니다. 다시 시도하세요.'
+        });
+      }
 
     } finally {
       claiming=false;
