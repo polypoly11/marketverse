@@ -545,20 +545,9 @@ export function installMissileClient({
     );
   }
 
-  desktopMissileButton.addEventListener(
-    'pointercancel',
-    () => {
-      desktopMissileButton.style.background =
-        'rgba(38,52,76,.96)';
-
-      release();
-    }
-  );
-
   // ========================================
   // 3D 미사일 모델
   // ========================================
-
   function createRocket() {
     const rocket = new THREE.Group();
 
