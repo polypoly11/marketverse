@@ -5166,60 +5166,6 @@ function showDeathPopup(){
     word-break:keep-all;
   `;
 
-  const countdown=document.createElement('p');
-  countdown.textContent=
-    '3초 후 입장 화면으로 돌아갑니다.';
-
-  countdown.style.cssText=`
-    font-size:13px;
-    margin:0 0 20px;
-    color:#dfb0bc;
-  `;
-
-  const button=document.createElement('button');
-  button.type='button';
-  button.textContent='다시 입장하기';
-
-  button.style.cssText=`
-    cursor:pointer;
-    width:100%;
-    border:0;
-    border-radius:10px;
-    background:#dfc18d;
-    color:#182537;
-    font-size:15px;
-    font-weight:800;
-    padding:14px 20px;
-  `;
-
-  let transitioning=false;
-  let seconds=3;
-  let timerId;
-
-  const returnToEntry=()=>{
-    if(transitioning)return;
-    transitioning=true;
-    clearInterval(timerId);
-
-    try{
-      sessionStorage.setItem(
-        'jmc-reentry-required',
-        '1'
-      );
-    }catch{
-      try{
-        localStorage.removeItem('jmc-profile');
-      }catch{}
-    }
-
-    location.reload();
-  };
-
-  button.addEventListener(
-    'click',
-    returnToEntry
-  );
-
   const button=document.createElement('button');
   button.type='button';
   button.textContent='다시 입장하기';
