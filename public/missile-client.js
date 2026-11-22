@@ -1364,27 +1364,6 @@ if (aiming) {
   );
 
   // 목표물 변경 시 락온 확인음 초기화
-  if (locked?.id !== aimLastTargetId) {
-    aimLastTargetId = locked?.id ?? null;
-    aimLockAnnounced = false;
-  }
-
-  if (lockReady && !aimLockAnnounced) {
-    // 목표물 락온 완료
-    playAimBeep(true);
-    aimLockAnnounced = true;
-  } else if (
-    !lockReady &&
-    now - aimLastBeepAt >= 250
-  ) {
-    // 조준 중 0.25초마다 탐색음
-    playAimBeep(false);
-    aimLastBeepAt = now;
-  }
-
-} else {
-  crosshair.style.display = 'none';
-}
 
     // 미사일 보유량 / 충전 시간 표시
     const remaining = nextAt
