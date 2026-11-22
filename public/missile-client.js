@@ -383,12 +383,23 @@ export function installMissileClient({
 
     const target = locked;
 
+  function release() {
+    if (!aiming) return;
+
+    const elapsed =
+      performance.now() - pressedAt;
+
+    const target = locked;
+
     aiming = false;
     locked = null;
 
     aimLastBeepAt = 0;
     aimLockAnnounced = false;
     aimLastTargetId = null;
+
+    lastAimSyncAt = 0;
+    lastSyncedTargetId = null;
 
     crosshair.style.display = 'none';
 
@@ -402,6 +413,11 @@ export function installMissileClient({
         targetId: target.id
       });
     }
+
+    // 발사하거나 S키를 떼면 경고 종료
+    send({
+      type: 'missile_aim_end'
+    });
   }
 
   window.addEventListener(
