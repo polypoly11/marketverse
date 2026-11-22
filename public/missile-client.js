@@ -383,14 +383,6 @@ export function installMissileClient({
 
     const target = locked;
 
-  function release() {
-    if (!aiming) return;
-
-    const elapsed =
-      performance.now() - pressedAt;
-
-    const target = locked;
-
     aiming = false;
     locked = null;
 
