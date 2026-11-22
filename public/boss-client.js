@@ -1486,13 +1486,13 @@ function jmcTailOnMessage(m) {
 
   if (m.type === 'boss_tail_result') {
 
-    if (m.outOfRange) {
-      say('✅ 공격 범위 밖! 피해 0');
-    } else if (m.dodged) {
-      say('✅ 점프 성공! 고래 공격 회피');
-    } else {
-      say('💥 고래 꼬리 공격 적중! HP -40');
-    }
+if (m.outOfRange) {
+  // 공격 범위 밖에서는 알림 표시하지 않음
+} else if (m.dodged) {
+  say('✅ 점프 성공! 고래 공격 회피');
+} else {
+  say('💥 고래 꼬리 공격 적중! HP -40');
+}
 
     return true;
   }
