@@ -220,25 +220,67 @@ export function installMissileClient({
 
   document.body.appendChild(indicator);
 
-  // SVG가 화면에 부착된 이후 경로의 실제 길이를 구한다.
-  // 일부 브라우저에서 부착 전 getTotalLength()가 0을
-  // 반환하여 충전 테두리가 처음부터 가득 보이던 문제 방지.
-  let missilePathLength = missileBorderProgress.getTotalLength();
+  // ========================================
+  // 시간 비율에 맞춰 테두리의 실제 일부만 그린다.
+  // SVG stroke-dasharray 방식은 브라우저에 따라
+  // 절반 충전에도 전체 윤곽선이 보일 수 있어 사용하지 않는다.
+  // ========================================
 
-  if (!Number.isFinite(missilePathLength) || missilePathLength <= 0) {
-    // 경로 길이 계산을 지원하지 않는 경우 SVG 정규화 길이 사용
-    missileBorderProgress.setAttribute('pathLength', '100');
-    missilePathLength = 100;
+  const missilePathLength =
+    missileBorderTrack.getTotalLength();
+
+  // 점선 기능을 완전히 비활성화하고, 표시할 경로 자체를 잘라낸다.
+  missileBorderProgress.removeAttribute('pathLength');
+  missileBorderProgress.setAttribute('stroke-dasharray', 'none');
+  missileBorderProgress.setAttribute('stroke-dashoffset', '0');
+  missileBorderProgress.setAttribute('d', '');
+
+  let lastMissileBorderProgress = -1;
+
+  function drawMissileBorder(progress) {
+    const fraction = Math.max(0, Math.min(1, progress));
+
+    // 약 0.2초 단위로만 경로 재계산 (프레임 부담 방지)
+    if (
+      lastMissileBorderProgress >= 0 &&
+      Math.abs(fraction - lastMissileBorderProgress) < 0.001
+    ) return;
+
+    lastMissileBorderProgress = fraction;
+
+    if (fraction <= 0) {
+      missileBorderProgress.setAttribute('d', '');
+      return;
+    }
+
+    if (fraction >= 1) {
+      missileBorderProgress.setAttribute('d', borderPath);
+      return;
+    }
+
+    // 브라우저의 SVG 경로 길이 기능이 실패한 경우에는
+    // 완료되지 않은 테두리를 전체 표시하지 않는다.
+    if (
+      !Number.isFinite(missilePathLength) ||
+      missilePathLength <= 0
+    ) {
+      missileBorderProgress.setAttribute('d', '');
+      return;
+    }
+
+    const visibleLength = missilePathLength * fraction;
+    const steps = Math.max(2, Math.ceil(120 * fraction));
+    let partialPath = 'M50 2';
+
+    for (let i = 1; i <= steps; i++) {
+      const point = missileBorderTrack.getPointAtLength(
+        visibleLength * i / steps
+      );
+      partialPath += ` L${point.x.toFixed(3)} ${point.y.toFixed(3)}`;
+    }
+
+    missileBorderProgress.setAttribute('d', partialPath);
   }
-
-  missileBorderProgress.setAttribute(
-    'stroke-dasharray',
-    `${missilePathLength} ${missilePathLength}`
-  );
-  missileBorderProgress.setAttribute(
-    'stroke-dashoffset',
-    String(missilePathLength)
-  );
 
   // ========================================
   // 실제 충전 진행률 계산
@@ -262,10 +304,7 @@ export function installMissileClient({
       missileText.textContent =
         `🚀\n${current}/${maximum}\nMAX`;
 
-      missileBorderProgress.setAttribute(
-        'stroke-dashoffset',
-        '0'
-      );
+      drawMissileBorder(1);
 
       missileBorderProgress.setAttribute(
         'stroke',
@@ -284,10 +323,7 @@ export function installMissileClient({
       missileText.textContent =
         `🚀\n${current}/${maximum}\n--:--`;
 
-      missileBorderProgress.setAttribute(
-        'stroke-dashoffset',
-        String(missilePathLength)
-      );
+      drawMissileBorder(0);
 
       return;
     }
@@ -305,14 +341,8 @@ export function installMissileClient({
       )
     );
 
-    // 둥근 사각형 테두리를 시계 방향으로 채움
-    const offset =
-      missilePathLength * (1 - progress);
-
-    missileBorderProgress.setAttribute(
-      'stroke-dashoffset',
-      String(offset)
-    );
+    // 남은 시간 1분 30초면 정확히 절반까지만 그린다.
+    drawMissileBorder(progress);
 
     missileBorderProgress.setAttribute(
       'stroke',
