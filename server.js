@@ -132,6 +132,96 @@ const MAGIC_HIT_RADIUS = 0.72;
 const magicShots = [];
 
 // ========================================
+// NPC 관전 모드: 서버가 전환 및 랜덤 외형을 관리
+// 전투 → NPC 10초, NPC → 전투 5초
+// 전환 대기 중에는 기존 모드의 피해 판정 유지
+// ========================================
+const NPC_TO_SPECTATE_MS = 10000;
+const NPC_TO_COMBAT_MS = 5000;
+const NPC_FORMS = ['ghost_seal', 'holo_drone', 'mongle'];
+const npcSessions = new Map();
+
+const npcOwnerKey = p => p.googleSub
+  ? `google:${p.googleSub}`
+  : (p.cookieInventoryHash
+      ? `guest:${p.cookieInventoryHash}`
+      : `session:${p.id}`);
+
+function npcModePayload(p) {
+  return {
+    type: 'npc_mode_state',
+    mode: p.npcMode || 'combat',
+    pendingMode: p.npcPendingMode || null,
+    transitionEndsAt: p.npcTransitionEndsAt || null,
+    form: p.npcForm || null,
+    serverNow: Date.now()
+  };
+}
+
+function rememberNpcSession(p) {
+  const key = npcOwnerKey(p);
+  const value = {
+    mode: p.npcMode,
+    pendingMode: p.npcPendingMode,
+    transitionEndsAt: p.npcTransitionEndsAt,
+    form: p.npcForm,
+    savedAt: Date.now()
+  };
+  npcSessions.set(key, value);
+}
+
+function publishNpcMode(p) {
+  const key = npcOwnerKey(p);
+  rememberNpcSession(p);
+  for (const [ws, player] of clients) {
+    if (npcOwnerKey(player) !== key) continue;
+    player.npcMode = p.npcMode;
+    player.npcPendingMode = p.npcPendingMode;
+    player.npcTransitionEndsAt = p.npcTransitionEndsAt;
+    player.npcForm = p.npcForm;
+    send(ws, npcModePayload(player));
+  }
+  presence();
+}
+
+function restoreNpcSession(p) {
+  const old = npcSessions.get(npcOwnerKey(p));
+  if (!old) return;
+  p.npcMode = old.mode || 'combat';
+  p.npcPendingMode = old.pendingMode || null;
+  p.npcTransitionEndsAt = old.transitionEndsAt || 0;
+  p.npcForm = old.form || null;
+}
+
+// 서버 전환 완료 판정. 다른 이용자가 공격해도 취소되지 않는다.
+function updateNpcModes() {
+  const now = Date.now();
+  const handled = new Set();
+  for (const p of clients.values()) {
+    if (!p.ready || !p.npcPendingMode || now < p.npcTransitionEndsAt) {
+      continue;
+    }
+    const key = npcOwnerKey(p);
+    if (handled.has(key)) continue;
+    handled.add(key);
+
+    const nextMode = p.npcPendingMode;
+    p.npcMode = nextMode;
+    p.npcPendingMode = null;
+    p.npcTransitionEndsAt = 0;
+    p.npcForm = nextMode === 'npc'
+      ? NPC_FORMS[crypto.randomInt(NPC_FORMS.length)]
+      : null;
+
+    // 다음 missile-server.js 단계에서 미사일 충전 정지/재개 연결
+    missileSystem.modeChanged?.(p, nextMode);
+    publishNpcMode(p);
+  }
+}
+setInterval(updateNpcModes, 100).unref();
+
+
+// ========================================
 // 한국시간 자정 채팅 초기화
 // ========================================
 
@@ -224,7 +314,11 @@ function presence() {
       z,
       direction,
       seated,
-      hp
+      hp,
+      npcMode,
+      npcPendingMode,
+      npcTransitionEndsAt,
+      npcForm
     }) => ({
       id,
       name,
@@ -234,7 +328,11 @@ function presence() {
       z,
       direction,
       seated,
-      hp
+      hp,
+      npcMode: npcMode || 'combat',
+      npcPendingMode: npcPendingMode || null,
+      npcTransitionEndsAt: npcTransitionEndsAt || null,
+      npcForm: npcForm || null
     }));
 
   broadcast({
@@ -470,6 +568,8 @@ function updateBossTailAttack() {
 
   for (const [ws, player] of clients) {
     if (!player.ready || player.hp <= 0) continue;
+    // 관전 중에는 고래의 광역공격에도 면역
+    if (player.npcMode === 'npc') continue;
 
     // 고래 중심(0, -13) 기준 공격 반경 8
     const distanceFromBoss = Math.hypot(
@@ -619,8 +719,15 @@ wss.on('connection', async (ws, req) => {
 
     lastMagic: 0,
     lastJumpAt: 0,
-    hp: MAX_HP
+    hp: MAX_HP,
+    npcMode: 'combat',
+    npcPendingMode: null,
+    npcTransitionEndsAt: 0,
+    npcForm: null
   };
+
+  // 재접속해도 진행 중인 변신 대기 및 NPC 상태 복원
+  restoreNpcSession(p);
 
   clients.set(ws, p);
 
@@ -744,6 +851,7 @@ if (firstJoin) {
         maxHp: MAX_HP
       });
 
+      send(ws, npcModePayload(p));
       presence();
 
       return;
@@ -752,6 +860,40 @@ if (firstJoin) {
     if (!p.ready) {
       return;
     }
+
+    // NPC 모드 전환 요청은 서버 시계로만 관리
+    if (m.type === 'npc_mode_request') {
+      const requestedMode = m.mode;
+      if (!['combat', 'npc'].includes(requestedMode) || p.hp <= 0) {
+        return;
+      }
+      if (p.npcPendingMode) {
+        send(ws, npcModePayload(p));
+        return;
+      }
+      if (requestedMode === p.npcMode) {
+        send(ws, npcModePayload(p));
+        return;
+      }
+
+      // 같은 이용자의 다른 탭에서도 전환 중이면 중복 전환 차단
+      const key = npcOwnerKey(p);
+      const shared = npcSessions.get(key);
+      if (shared?.pendingMode) {
+        restoreNpcSession(p);
+        send(ws, npcModePayload(p));
+        return;
+      }
+
+      p.npcPendingMode = requestedMode;
+      p.npcTransitionEndsAt = Date.now() +
+        (requestedMode === 'npc' ? NPC_TO_SPECTATE_MS : NPC_TO_COMBAT_MS);
+      // NPC 변신 신청 즉시 공격 불가, 10초간은 피격 가능
+      // NPC → 전투 대기 5초간은 기존 NPC 면역 상태 유지
+      publishNpcMode(p);
+      return;
+    }
+
     if (missileSystem.handle(ws, p, m)) {
   return;
 }
@@ -989,6 +1131,11 @@ if (m.type === 'pvp_profile_request') {
     // ====================================
 
     if (m.type === 'magic') {
+
+      // 관전 중이거나 NPC 전환을 신청한 이용자는 공격 불가
+      if (p.npcMode === 'npc' || p.npcPendingMode === 'npc') {
+        return;
+      }
 
       // 관리자가 마법 공격을 중단한 경우
       if (!adminState.magicEnabled) {
@@ -1228,7 +1375,8 @@ function updateMagicCollisions() {
       if (
         !target.ready ||
         target.hp <= 0 ||
-        target === shot.owner
+        target === shot.owner ||
+        target.npcMode === 'npc'
       ) {
         continue;
       }
