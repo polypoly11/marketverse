@@ -1618,9 +1618,15 @@ function updateNpcLocalAvatar() {
 const npcModePanel=document.createElement('div');
 npcModePanel.id='jmc-npc-mode-panel';
 npcModePanel.style.cssText=`
-  position:absolute;top:62px;right:12px;z-index:48;
-  display:flex;align-items:center;justify-content:flex-end;
-  max-width:min(210px,45vw);pointer-events:none;
+  position:absolute;
+  top:8px;
+  right:8px;
+  z-index:48;
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  max-width:calc(100% - 16px);
+  pointer-events:none;
 `;
 const npcModeButton=document.createElement('button');
 npcModeButton.type='button';
