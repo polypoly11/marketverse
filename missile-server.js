@@ -63,8 +63,9 @@ export function createMissileSystem({
   // 계정별 보유 한도
   // ========================================
 
-  const maximum = p => p.googleSub ? 5 : 3;
-  const starting = p => p.googleSub ? 5 : 3;
+  // 게스트와 구글 계정 모두 최대 5개
+  const maximum = p => 5;
+  const starting = p => 5;
 
   function keyFor(p) {
     if (p.googleSub) {
@@ -1112,11 +1113,7 @@ export function createMissileSystem({
     const result = await db.query(`
       UPDATE jmc_missile_inventory
       SET
-        quantity = CASE
-          WHEN owner_key LIKE 'google:%'
-            THEN 5
-          ELSE 3
-        END,
+        quantity = 5,
         last_seen = NOW()
       WHERE owner_key = ANY($1::text[])
       RETURNING
