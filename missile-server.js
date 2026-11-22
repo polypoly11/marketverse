@@ -739,15 +739,18 @@ export function createMissileSystem({
         };
       }
 
-      // 목표와 폭발 위치의 거리별 피해량
+      // 일반 사용자: 직격 40 / 근접 25 / 외곽 10
+      // 고래 보스: 유효 공격 범위 내 명중 시 120 고정
       function damageAt(distance) {
+        const isBoss = missile.targetId === 'boss';
         const surfaceDistance = Math.max(
           0,
-          distance -
-            (missile.targetId === 'boss'
-              ? BOSS_RADIUS
-              : 0)
+          distance - (isBoss ? BOSS_RADIUS : 0)
         );
+
+        if (isBoss) {
+          return surfaceDistance <= SPLASH_RADIUS ? 120 : 0;
+        }
 
         if (surfaceDistance <= BODY_RADIUS) {
           return 40;
