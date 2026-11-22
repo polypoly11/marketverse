@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import { createItemInventory } from './item-inventory.js';
+import { createGiftCoupons } from './gift-coupons.js';
 
 // 독립적인 보스 레이드 상태.
 // 실제 쿠폰 이벤트에는 DATABASE_URL + pg가 필요합니다.
@@ -80,7 +81,7 @@ export async function createBossRaid({clients,send,broadcast}) {
     pool,
     (ws, data) => send(ws, renameInventoryText(data))
   );
-
+const giftCoupons = await createGiftCoupons(pool);
   let run = {
     id:null,
     state:'idle',
@@ -584,6 +585,7 @@ function hit(shot,point,damageOverride=null) {
     hit,
     pickup,
     inventory,
+    giftCoupons,
     rewards,
     verify,
     markPaid,
