@@ -5220,24 +5220,53 @@ function showDeathPopup(){
     returnToEntry
   );
 
+  const button=document.createElement('button');
+  button.type='button';
+  button.textContent='다시 입장하기';
+
+  button.style.cssText=`
+    cursor:pointer;
+    width:100%;
+    border:0;
+    border-radius:10px;
+    background:#dfc18d;
+    color:#182537;
+    font-size:15px;
+    font-weight:800;
+    padding:14px 20px;
+  `;
+
+  let transitioning=false;
+
+  const returnToEntry=()=>{
+    if(transitioning)return;
+    transitioning=true;
+
+    try{
+      sessionStorage.setItem(
+        'jmc-reentry-required',
+        '1'
+      );
+    }catch{
+      try{
+        localStorage.removeItem('jmc-profile');
+      }catch{}
+    }
+
+    location.reload();
+  };
+
+  button.addEventListener(
+    'click',
+    returnToEntry
+  );
+
   dialog.append(
     title,
     message,
-    countdown,
     button
   );
 
   overlay.append(dialog);
   document.body.appendChild(overlay);
-
-  timerId=setInterval(()=>{
-    seconds--;
-
-    if(seconds<=0){
-      returnToEntry();
-    }else{
-      countdown.textContent=
-        `${seconds}초 후 입장 화면으로 돌아갑니다.`;
-    }
-  },1000);
 }
