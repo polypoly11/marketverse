@@ -1808,7 +1808,8 @@ function installSceneLiveChat() {
       max-height:83px !important;
       margin:0 !important;
       padding:8px 84px 8px 10px !important;
-      overflow:hidden !important;
+      overflow-x:hidden !important;
+      overflow-y:auto !important;
       border:1px solid rgba(214,231,248,.2) !important;
       border-radius:12px !important;
       background:rgba(9,15,27,.76) !important;
@@ -1822,14 +1823,25 @@ function installSceneLiveChat() {
     #scene > .jmc-scene-chat #messages > .msg {
       display:block !important;
       box-sizing:border-box !important;
-      height:22px !important;
+      height:auto !important;
+      min-height:22px !important;
       line-height:22px !important;
       margin:0 !important;
       padding:0 !important;
+      white-space:normal !important;
+      overflow:visible !important;
+      text-overflow:clip !important;
+      overflow-wrap:anywhere !important;
+      word-break:break-word !important;
+    }
+
+    /* 접힌 채팅창은 마지막 메시지 한 줄만 미리보기 */
+    #scene > .jmc-scene-chat.jmc-chat-collapsed
+    #messages > .msg {
+      height:22px !important;
       white-space:nowrap !important;
       overflow:hidden !important;
       text-overflow:ellipsis !important;
-      overflow-wrap:normal !important;
     }
 
     #scene > .jmc-scene-chat:not(.jmc-chat-large)
@@ -1960,6 +1972,13 @@ function installSceneLiveChat() {
 }
 
 installSceneLiveChat();
+
+// 채팅 최대 100자 제한
+const jmcChatInput = document.getElementById('chat-input');
+
+if (jmcChatInput) {
+  jmcChatInput.maxLength = 100;
+}
 
 // ========================================
 // 마법 발사 / 피격 효과음
