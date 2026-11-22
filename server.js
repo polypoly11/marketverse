@@ -863,7 +863,39 @@ if (m.type === 'pvp_profile_request') {
 
       return;
     }
+    // ====================================
+    // 행운의 선물상자 개봉
+    // ====================================
 
+    if (m.type === 'inventory_box_open') {
+      if (!p.ready || !p.googleSub) {
+        send(ws, {
+          type: 'inventory_notice',
+          message:
+            '선물상자 개봉은 Google 로그인 후 가능합니다.'
+        });
+        return;
+      }
+
+      void raid.inventory.openBox(
+        ws,
+        p,
+        m.boxId
+      ).catch(error => {
+        console.error(
+          '[JMC] 선물상자 개봉 오류:',
+          error
+        );
+
+        send(ws, {
+          type: 'inventory_notice',
+          message:
+            '선물상자 개봉에 실패했습니다.'
+        });
+      });
+
+      return;
+    }
     // ====================================
     // 캐릭터 이동 동기화
     // ====================================
