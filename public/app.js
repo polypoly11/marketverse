@@ -1477,6 +1477,204 @@ $('detail').onclick = e=>{
 
 const sceneEl = $('scene');
 
+// ========================================
+// JMC NPC 관전 모드: 3종 반투명 3D 아바타
+// 서버가 지정한 외형만 사용하며 브라우저에서 랜덤 선정하지 않음
+// ========================================
+const NPC_FORM_NAMES = {
+  ghost_seal: '꼬마 유령 물범',
+  holo_drone: '홀로그램 드론',
+  mongle: '몽글이'
+};
+let npcMode = 'combat';
+let npcPendingMode = null;
+let npcTransitionEndsAt = 0;
+let npcForm = null;
+let npcServerOffset = 0;
+
+function makeNpcModel(form) {
+  const group = new THREE.Group();
+  group.userData.npcForm = form;
+  const cyan = new THREE.MeshStandardMaterial({
+    color: 0x82ecff, emissive: 0x2dbde5, emissiveIntensity: .4,
+    transparent: true, opacity: .58, roughness: .28,
+    metalness: .12, depthWrite: false
+  });
+  const mint = new THREE.MeshStandardMaterial({
+    color: 0x7bffdc, emissive: 0x30bba0, emissiveIntensity: .38,
+    transparent: true, opacity: .59, depthWrite: false
+  });
+  const white = new THREE.MeshBasicMaterial({color:0xecffff,transparent:true,opacity:.83,depthWrite:false});
+  const dark = new THREE.MeshBasicMaterial({color:0x17334c,transparent:true,opacity:.92,depthWrite:false});
+  const neon = new THREE.MeshBasicMaterial({color:0x70fff0,transparent:true,opacity:.74,depthWrite:false,side:THREE.DoubleSide});
+  const add = (geometry,material,x,y,z,sx=1,sy=1,sz=1)=>{
+    const mesh = new THREE.Mesh(geometry,material);
+    mesh.position.set(x,y,z);
+    mesh.scale.set(sx,sy,sz);
+    group.add(mesh);
+    return mesh;
+  };
+  const ball = (mat,x,y,z,sx,sy,sz)=>add(new THREE.SphereGeometry(1,16,12),mat,x,y,z,sx,sy,sz);
+  if(form==='ghost_seal') {
+    // 살짝 떠 있는 유령 꼬리 + 물범 얼굴·지느러미
+    ball(cyan,0,1.28,0,.66,.78,.54);
+    ball(cyan,0,.77,-.29,.39,.38,.37);
+    for(const x of [-.57,.57]){
+      const fin=ball(cyan,x,.91,.16,.32,.13,.38);
+      fin.rotation.z=x>0?-.42:.42;
+    }
+    for(const x of [-.24,.24]){
+      ball(white,x,1.52,.48,.15,.17,.085);
+      ball(dark,x,1.52,.56,.073,.10,.042);
+    }
+    ball(dark,0,1.25,.56,.13,.095,.065);
+    ball(cyan,0,.36,-.48,.29,.35,.33);
+  } else if(form==='holo_drone') {
+    ball(cyan,0,1.40,0,.53,.43,.5);
+    ball(dark,0,1.44,.43,.35,.19,.11);
+    for(const x of [-.17,.17]) ball(neon,x,1.46,.544,.07,.07,.027);
+    const torus=new THREE.TorusGeometry(.74,.043,7,44);
+    const ring1=add(torus,neon,0,1.38,0);
+    ring1.rotation.x=Math.PI/2.8;
+    const ring2=add(torus,cyan,0,1.38,0);
+    ring2.rotation.y=Math.PI/2.5;
+    group.userData.rings=[ring1,ring2];
+    ball(white,0,1.39,-.49,.13,.13,.13);
+  } else {
+    // 몽글이: 둥근 물방울 형태의 민트빛 작은 정령
+    ball(mint,0,1.28,0,.62,.68,.52);
+    ball(mint,-.34,1.55,-.11,.35,.31,.32);
+    ball(mint,.35,1.48,-.08,.35,.32,.3);
+    ball(mint,0,.81,0,.46,.31,.37);
+    for(const x of [-.23,.23]){
+      ball(white,x,1.42,.48,.15,.17,.07);
+      ball(dark,x,1.43,.542,.075,.10,.03);
+    }
+    ball(dark,0,1.17,.52,.115,.055,.027);
+    for(const x of [-.39,.39]) ball(neon,x,.78,.22,.16,.16,.15);
+  }
+  return group;
+}
+
+function setNpcAppearance(avatar, mode, form) {
+  if(!avatar) return;
+  const isNpc = mode === 'npc' && Boolean(NPC_FORM_NAMES[form]);
+  const activeForm = isNpc ? form : null;
+  if(avatar.userData.npcAppliedForm===activeForm) return;
+  if(avatar.userData.npcVisual) {
+    const old=avatar.userData.npcVisual;
+    avatar.remove(old);
+    old.traverse(obj=>{
+      if(obj.isMesh) {
+        obj.geometry?.dispose();
+        if(Array.isArray(obj.material)) obj.material.forEach(mat=>mat.dispose());
+        else obj.material?.dispose();
+      }
+    });
+    delete avatar.userData.npcVisual;
+  }
+  avatar.userData.npcAppliedForm=activeForm;
+  avatar.userData.npcMode=isNpc?'npc':'combat';
+  if(avatar.userData.bodyGroup) avatar.userData.bodyGroup.visible=!isNpc;
+  if(avatar.userData.pvpMarker) avatar.userData.pvpMarker.visible=!isNpc;
+  if(isNpc) {
+    const visual=makeNpcModel(activeForm);
+    avatar.add(visual);
+    avatar.userData.npcVisual=visual;
+  }
+  if(avatar.userData.hpBar?.sprite)
+    avatar.userData.hpBar.sprite.visible=!isNpc;
+  // 머리 위 이름표에는 관전 상태를 분명히 표시
+  const label=avatar.userData.originalNpcName;
+  if(label) setCharacterName(avatar,isNpc?`${label} · 관전중`:label);
+}
+
+function animateNpcModel(avatar, now) {
+  const visual=avatar?.userData?.npcVisual;
+  if(!visual)return;
+  const t=now*.001;
+  visual.position.y=Math.sin(t*2.6)*.10;
+  if(visual.userData.rings){
+    visual.userData.rings[0].rotation.z=t*.75;
+    visual.userData.rings[1].rotation.y=t*.85;
+  }
+}
+
+function updateNpcLocalAvatar() {
+  if(!myAvatar || !profile)return;
+  myAvatar.userData.originalNpcName=profile.name;
+  setNpcAppearance(myAvatar,npcMode,npcForm);
+}
+
+// 모드 버튼은 scene 내부에 배치해 PC·모바일에서 함께 사용
+const npcModePanel=document.createElement('div');
+npcModePanel.id='jmc-npc-mode-panel';
+npcModePanel.style.cssText=`
+  position:absolute;top:62px;right:12px;z-index:48;
+  display:flex;flex-direction:column;align-items:flex-end;gap:5px;
+  max-width:min(210px,45vw);pointer-events:none;
+`;
+const npcModeButton=document.createElement('button');
+npcModeButton.type='button';
+npcModeButton.style.cssText=`
+  pointer-events:auto;padding:9px 12px;border-radius:12px;
+  border:1px solid rgba(158,244,230,.7);
+  background:rgba(12,39,55,.95);color:#e9fff9;
+  box-shadow:0 4px 14px rgba(0,0,0,.3);
+  font:700 12px Arial,sans-serif;cursor:pointer;touch-action:manipulation;
+`;
+const npcModeHint=document.createElement('div');
+npcModeHint.style.cssText=`
+  color:#d6edf0;background:rgba(7,20,33,.79);border-radius:8px;
+  padding:4px 7px;font:11px Arial,sans-serif;text-align:right;
+`;
+npcModePanel.append(npcModeButton,npcModeHint);
+sceneEl.appendChild(npcModePanel);
+
+function updateNpcUi() {
+  const canUse=Boolean(profile) && !defeated && !reentryRequired &&
+    socket?.readyState===WebSocket.OPEN && $('profile-modal').hidden;
+  npcModePanel.style.display=canUse?'flex':'none';
+  const currentServerNow=Date.now()+npcServerOffset;
+  const remaining=Math.max(0,Math.ceil((npcTransitionEndsAt-currentServerNow)/1000));
+  if(npcPendingMode) {
+    npcModeButton.disabled=true;
+    npcModeButton.textContent=npcPendingMode==='npc'
+      ? `🛡 관전 모드 전환 ${remaining}초`
+      : `⚔ 전투 모드 복귀 ${remaining}초`;
+    npcModeButton.style.opacity='.75';
+    npcModeHint.textContent=npcPendingMode==='npc'
+      ? '변신 대기 중 피격 가능 · 공격 불가'
+      : '복귀 대기 중 면역 · 공격 불가';
+  } else {
+    npcModeButton.disabled=!canUse;
+    npcModeButton.style.opacity='1';
+    npcModeButton.textContent=npcMode==='npc'?'⚔ 전투 모드로':'🛡 NPC 관전 모드';
+    npcModeHint.textContent=npcMode==='npc'
+      ? `${NPC_FORM_NAMES[npcForm]||'관전 중'} · 공격 면역 · 충전 정지`
+      : 'NPC 전환 10초 · 복귀 5초';
+  }
+}
+
+npcModeButton.addEventListener('click',()=>{
+  if(npcPendingMode || defeated || reentryRequired || !profile)return;
+  send({type:'npc_mode_request',mode:npcMode==='npc'?'combat':'npc'});
+  npcModeButton.disabled=true;
+});
+
+function applyNpcModeState(m) {
+  npcMode=m.mode==='npc'?'npc':'combat';
+  npcPendingMode=m.pendingMode==='npc'||m.pendingMode==='combat'
+    ?m.pendingMode:null;
+  npcTransitionEndsAt=Number(m.transitionEndsAt)||0;
+  npcForm=NPC_FORM_NAMES[m.form]?m.form:null;
+  if(Number.isFinite(Number(m.serverNow)))
+    npcServerOffset=Number(m.serverNow)-Date.now();
+  updateNpcLocalAvatar();
+  updateNpcUi();
+}
+
+
 // ====================================================
 // JMC 메타버스 내부 라이브 채팅
 // 접힘: 최신 1줄 / 펼침: 최근 3줄
@@ -2678,6 +2876,7 @@ const missileClient = installMissileClient({
   send: msg => send(msg),
 
   isBlocked: () =>
+    npcMode === 'npc' || Boolean(npcPendingMode) ||
     defeated ||
     reentryRequired ||
     !profile ||
@@ -2805,6 +3004,7 @@ function updateMyAvatar(){
   myAvatar.userData.targetDirection=dir;
   myAvatar.userData.seated=wasSeated;
   scene.add(myAvatar);
+  updateNpcLocalAvatar();
 }
 
 function updateOthers(players){
@@ -2838,7 +3038,10 @@ function updateOthers(players){
     );
 
     setCharacterHpBar(avatar,p.hp??100);
-    setCharacterName(avatar,p.name);
+    avatar.userData.originalNpcName=p.name;
+    const isNpc=p.npcMode==='npc' && Boolean(NPC_FORM_NAMES[p.npcForm]);
+    setCharacterName(avatar,isNpc?`${p.name} · 관전중`:p.name);
+    setNpcAppearance(avatar,p.npcMode,p.npcForm);
     avatar.userData.seated=p.seated===true;
 
     if(Number.isFinite(Number(p.direction))){
@@ -3459,6 +3662,9 @@ function animate(now){
   camera.lookAt(smoothCameraLookAt);
 
   tickBubbles(now);
+  animateNpcModel(myAvatar,now);
+  for(const a of others.values())animateNpcModel(a,now);
+  updateNpcUi();
   raidClient.update(now,dt);
   renderer.render(scene,camera);
 }
@@ -3617,6 +3823,10 @@ if (m.type === 'pvp_profile') {
   showPvpProfile(m);
   return;
 }
+    if(m.type==='npc_mode_state'){
+      applyNpcModeState(m);
+      return;
+    }
     if (missileClient.onMessage(m)) {
   return;
 }
@@ -3842,7 +4052,7 @@ const MAGIC_SPEED=13;
 const MAGIC_LIFETIME=1100;
 
 function castMagic(){
-  if(!myAvatar||defeated||reentryRequired)return;
+  if(!myAvatar||defeated||reentryRequired||npcMode==='npc'||npcPendingMode)return;
   send({type:'magic'});
 }
 
