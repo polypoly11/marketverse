@@ -74,7 +74,7 @@ const CAMERA_HEIGHT = isMobileDevice ? 3.2 : 3.3;
 const CAMERA_FOLLOW_SPEED = 9;
 
 const BOARD_Z = -18.65;
-const BOARD_WIDTH = 17;
+const BOARD_WIDTH = 23;
 const sphere = new THREE.SphereGeometry(1,20,14);
 
 function makeAnimal(id){
@@ -1995,14 +1995,46 @@ const boardTexture=new THREE.CanvasTexture(boardCanvas);
 boardTexture.colorSpace=THREE.SRGBColorSpace;
 
 const board=new THREE.Mesh(
-  new THREE.PlaneGeometry(17,8.2),
+  new THREE.PlaneGeometry(23,10.5),
   new THREE.MeshBasicMaterial({
     map:boardTexture,
     side:THREE.DoubleSide
   })
 );
-board.position.set(0,4.5,BOARD_Z);
+board.position.set(0,5.5,BOARD_Z);
 scene.add(board);
+
+// 대형 전광판 전용 후면 프레임: 기존 벽 높이보다 큰 화면도 자연스럽게 지지
+const boardBacking = new THREE.Mesh(
+  new THREE.BoxGeometry(23.32,10.82,0.14),
+  new THREE.MeshStandardMaterial({
+    color:0x111c2a,
+    metalness:0.7,
+    roughness:0.3
+  })
+);
+boardBacking.position.set(0,5.5,BOARD_Z-0.13);
+scene.add(boardBacking);
+
+// 가장자리의 얇은 골드 메탈 프레임
+const boardFrameMat = new THREE.MeshStandardMaterial({
+  color:0xb89a68,
+  metalness:0.85,
+  roughness:0.25
+});
+for(const [w,h,x,y] of [
+  [23.36,0.085,0,10.91],
+  [23.36,0.085,0,0.09],
+  [0.085,10.9,-11.68,5.5],
+  [0.085,10.9,11.68,5.5]
+]){
+  const rail = new THREE.Mesh(
+    new THREE.BoxGeometry(w,h,0.12),
+    boardFrameMat
+  );
+  rail.position.set(x,y,BOARD_Z-0.025);
+  scene.add(rail);
+}
 
 // ====================================================
 // JMC PREMIUM TRADING WALL
@@ -3282,6 +3314,7 @@ function sendMove(force=false){
 
   lastSent=now;
 }
+
 // 카메라 시선의 부드러운 추적
 const smoothCameraLookAt = cameraLookAtFor(
   myAvatar?.position || new THREE.Vector3(0,0,-8)
