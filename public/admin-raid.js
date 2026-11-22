@@ -29,6 +29,44 @@
       <h3 id="raid-status">상태 확인 중</h3>
 
       <div style="
+        margin:16px 0;
+        padding:18px;
+        border:1px solid #c5a66e;
+        border-radius:13px;
+        background:rgba(15,29,47,.75);
+        text-align:center;
+      ">
+        <p style="
+          margin:0 0 10px;
+          color:#b5c8df;
+          font-size:13px;
+        ">
+          🐋 다음 고래 등장까지
+        </p>
+
+        <strong
+          id="raid-countdown"
+          style="
+            display:block;
+            font-size:34px;
+            font-weight:900;
+            font-variant-numeric:tabular-nums;
+            color:#f3d39b;
+          "
+        >
+          --:--
+        </strong>
+
+        <p style="
+          margin:9px 0 0;
+          color:#91a7bc;
+          font-size:12px;
+        ">
+          고래 처치 후 10분 자동 재소환
+        </p>
+      </div>
+
+      <div style="
         height:13px;
         border-radius:10px;
         background:#442838;
@@ -195,7 +233,72 @@
     return body;
   }
 
-  let state=null;
+  let state = null;
+  let serverTimeOffset = 0;
+
+  // ========================================
+  // 관리자 전용 고래 등장 카운트다운
+  // ========================================
+
+  function updateRaidCountdown() {
+    const el = document.getElementById(
+      'raid-countdown'
+    );
+
+    if (!el || !state) return;
+
+    if (state.state === 'active') {
+      el.textContent = '전투 진행 중';
+      return;
+    }
+
+    const nextSpawnAt = Number(
+      state.nextSpawnAt
+    );
+
+    if (
+      !Number.isFinite(nextSpawnAt) ||
+      nextSpawnAt <= 0
+    ) {
+      el.textContent = '소환 대기';
+      return;
+    }
+
+    if (![
+      'loot',
+      'claimed',
+      'expired'
+    ].includes(state.state)) {
+      el.textContent = '소환 대기';
+      return;
+    }
+
+    const serverNow =
+      Date.now() + serverTimeOffset;
+
+    const seconds = Math.max(
+      0,
+      Math.ceil(
+        (nextSpawnAt - serverNow) / 1000
+      )
+    );
+
+    if (seconds === 0) {
+      el.textContent = '곧 등장합니다';
+      return;
+    }
+
+    const minutes = Math.floor(
+      seconds / 60
+    );
+
+    const remainingSeconds =
+      seconds % 60;
+
+    el.textContent =
+      `${String(minutes).padStart(2,'0')}:` +
+      `${String(remainingSeconds).padStart(2,'0')}`;
+  }
 
   async function refresh() {
     if(
@@ -209,7 +312,15 @@
         api('/api/admin/raid/rewards')
       ]);
 
-      state=status.raid;
+      state = status.raid;
+
+      // 서버 시간 기준으로 카운트다운 동기화
+      if (Number.isFinite(Number(status.now))) {
+        serverTimeOffset =
+          Number(status.now) - Date.now();
+      }
+
+      updateRaidCountdown();
 
       const labels={
         idle:'소환 대기',
@@ -416,5 +527,10 @@
     }
   };
 
-  setInterval(refresh,3000);
+  // 기존 관리자 데이터 갱신: 3초
+  setInterval(refresh, 3000);
+
+  // 카운트다운 표시만 1초마다 갱신
+  // 서버에 추가 요청하지 않음
+  setInterval(updateRaidCountdown, 1000);
 })();
