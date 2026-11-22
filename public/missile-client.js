@@ -651,6 +651,224 @@ export function installMissileClient({
   }
 
   // ========================================
+  // JMC SF 어깨 미사일 런처 — 시각 연출 전용
+  // 기존 서버의 미사일 발사/명중 좌표는 변경하지 않는다.
+  // ========================================
+
+  const activeLauncherActors = new Set();
+
+  function getLauncherAvatar(shooterId) {
+    if (!shooterId) return null;
+    return String(shooterId) === String(getMyId())
+      ? getAvatar()
+      : getOthers().get(shooterId) || null;
+  }
+
+  function ensureMissileLauncher(avatar) {
+    if (!avatar) return null;
+    if (avatar.userData.jmcMissileLauncher) {
+      return avatar.userData.jmcMissileLauncher;
+    }
+
+    const parent = avatar.userData.bodyGroup || avatar;
+    const group = new THREE.Group();
+    group.position.set(0.66, 1.66, 0.45);
+    group.rotation.set(-0.065, -0.10, -0.10);
+    group.visible = false;
+    parent.add(group);
+
+    const gunmetal = new THREE.MeshStandardMaterial({
+      color: 0x18283b, metalness: 0.88, roughness: 0.25
+    });
+    const armor = new THREE.MeshStandardMaterial({
+      color: 0x627a99, metalness: 0.82, roughness: 0.23
+    });
+    const black = new THREE.MeshStandardMaterial({
+      color: 0x0b1322, metalness: 0.6, roughness: 0.36
+    });
+    const cyan = new THREE.MeshBasicMaterial({color: 0x5af1ff});
+    const purple = new THREE.MeshBasicMaterial({color: 0xa17bff});
+
+    // 발사관은 캐릭터 정면(+Z)을 향한다.
+    const barrel = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.17, 0.20, 1.14, 14),
+      gunmetal
+    );
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.z = 0.22;
+    group.add(barrel);
+
+    const upperArmor = new THREE.Mesh(
+      new THREE.BoxGeometry(0.38, 0.15, 0.68), armor
+    );
+    upperArmor.position.set(0, 0.16, 0.21);
+    group.add(upperArmor);
+
+    const rearStock = new THREE.Mesh(
+      new THREE.BoxGeometry(0.34, 0.31, 0.28), black
+    );
+    rearStock.position.z = -0.47;
+    group.add(rearStock);
+
+    const muzzleShell = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.245, 0.22, 0.18, 16),
+      armor
+    );
+    muzzleShell.rotation.x = Math.PI / 2;
+    muzzleShell.position.z = 0.82;
+    group.add(muzzleShell);
+
+    const muzzleDark = new THREE.Mesh(
+      new THREE.CircleGeometry(0.16, 16), black
+    );
+    muzzleDark.position.z = 0.919;
+    group.add(muzzleDark);
+
+    const muzzleRing = new THREE.Mesh(
+      new THREE.TorusGeometry(0.19, 0.027, 6, 18), cyan
+    );
+    muzzleRing.position.z = 0.927;
+    group.add(muzzleRing);
+
+    for (const z of [-0.13, 0.35]) {
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(0.198, 0.018, 6, 18),
+        z < 0 ? purple : cyan
+      );
+      ring.position.z = z;
+      group.add(ring);
+    }
+
+    // 조준용 에너지 레일
+    const rail = new THREE.Mesh(
+      new THREE.BoxGeometry(0.07, 0.035, 0.72), cyan
+    );
+    rail.position.set(0, 0.252, 0.20);
+    group.add(rail);
+
+    // 손으로 잡고 있는 것처럼 보이는 하단 손잡이
+    const grip = new THREE.Mesh(
+      new THREE.BoxGeometry(0.13, 0.30, 0.16), black
+    );
+    grip.position.set(0, -0.30, -0.03);
+    grip.rotation.x = -0.24;
+    group.add(grip);
+
+    const sight = new THREE.Mesh(
+      new THREE.BoxGeometry(0.14, 0.11, 0.19), armor
+    );
+    sight.position.set(0, 0.33, 0.40);
+    group.add(sight);
+
+    // 포구 섬광: 실제 미사일 발사 직후 0.15초만 표시
+    const flash = new THREE.Group();
+    flash.position.z = 1.02;
+    flash.visible = false;
+    const core = new THREE.Mesh(
+      new THREE.SphereGeometry(0.20, 10, 8),
+      new THREE.MeshBasicMaterial({
+        color: 0xc5ffff,
+        transparent: true,
+        opacity: 0.95,
+        depthWrite: false
+      })
+    );
+    flash.add(core);
+    const blast = new THREE.Mesh(
+      new THREE.ConeGeometry(0.22, 0.65, 12),
+      new THREE.MeshBasicMaterial({
+        color: 0x54efff,
+        transparent: true,
+        opacity: 0.82,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      })
+    );
+    blast.rotation.x = Math.PI / 2;
+    blast.position.z = 0.25;
+    flash.add(blast);
+    group.add(flash);
+
+    const muzzle = new THREE.Object3D();
+    muzzle.position.z = 1.0;
+    group.add(muzzle);
+
+    const state = {
+      group,
+      muzzle,
+      flash,
+      aiming: false,
+      hideAt: 0,
+      flashUntil: 0,
+      recoilAt: 0
+    };
+    avatar.userData.jmcMissileLauncher = state;
+    return state;
+  }
+
+  function showMissileLauncher(avatar) {
+    const state = ensureMissileLauncher(avatar);
+    if (!state) return;
+    state.aiming = true;
+    state.hideAt = Infinity;
+    state.flash.visible = false;
+    state.group.visible = true;
+    activeLauncherActors.add(avatar);
+  }
+
+  function stopMissileLauncher(avatar) {
+    const state = avatar?.userData?.jmcMissileLauncher;
+    if (!state) return;
+    state.aiming = false;
+    state.hideAt = performance.now() + 180;
+  }
+
+  function fireMissileLauncher(avatar) {
+    const state = ensureMissileLauncher(avatar);
+    if (!state) return;
+    const now = performance.now();
+    state.aiming = false;
+    state.group.visible = true;
+    state.flash.visible = true;
+    state.flashUntil = now + 160;
+    state.recoilAt = now;
+    state.hideAt = now + 520;
+    activeLauncherActors.add(avatar);
+  }
+
+  function launcherWorldMuzzle(avatar) {
+    const state = avatar?.userData?.jmcMissileLauncher;
+    if (!state) return null;
+    avatar.updateWorldMatrix(true, true);
+    return state.muzzle.getWorldPosition(new THREE.Vector3());
+  }
+
+  function animateMissileLaunchers(now) {
+    for (const avatar of activeLauncherActors) {
+      const state = avatar?.userData?.jmcMissileLauncher;
+      if (!state) {
+        activeLauncherActors.delete(avatar);
+        continue;
+      }
+      const recoilAge = now - state.recoilAt;
+      const recoil = recoilAge >= 0 && recoilAge < 350
+        ? Math.sin((recoilAge / 350) * Math.PI) * 0.20
+        : 0;
+      state.group.position.z = 0.45 - recoil;
+      state.flash.visible = now < state.flashUntil;
+      if (state.flash.visible) {
+        const left = (state.flashUntil - now) / 160;
+        state.flash.scale.setScalar(0.6 + (1 - left) * 1.15);
+      }
+      if (!state.aiming && now >= state.hideAt) {
+        state.group.visible = false;
+        state.flash.visible = false;
+        activeLauncherActors.delete(avatar);
+      }
+    }
+  }
+
+  // ========================================
   // S키 / 모바일 조준 및 발사
   // ========================================
 
@@ -664,6 +882,7 @@ export function installMissileClient({
     }
 
     aiming = true;
+    showMissileLauncher(getAvatar());
     pressedAt = performance.now();
     locked = null;
 
@@ -701,10 +920,14 @@ export function installMissileClient({
       target &&
       !isBlocked?.()
     ) {
+      // 즉시 런처 포구 섬광 및 반동 표시 (서버 판정 변경 없음)
+      fireMissileLauncher(getAvatar());
       send({
         type: 'missile_fire',
         targetId: target.id
       });
+    } else {
+      stopMissileLauncher(getAvatar());
     }
 
     // 발사하거나 S키를 떼면 경고 종료
@@ -1665,7 +1888,16 @@ export function installMissileClient({
       const y = Number(m.y) || 1.2;
       const z = Number(m.z) || 0;
 
-      object.position.set(x, y, z);
+      // 발사 직후만 런처 포구에서 나타나게 하고,
+      // 이후 이동/명중은 기존 서버 좌표 그대로 사용한다.
+      const shooter = getLauncherAvatar(m.shooterId);
+      if (shooter) fireMissileLauncher(shooter);
+      const muzzlePosition = shooter ? launcherWorldMuzzle(shooter) : null;
+      if (muzzlePosition) {
+        object.position.copy(muzzlePosition);
+      } else {
+        object.position.set(x, y, z);
+      }
       object.rotation.y = Number(m.angle) || 0;
 
       scene.add(object);
@@ -1745,6 +1977,7 @@ export function installMissileClient({
 
     lastFrame = now;
 
+    animateMissileLaunchers(now);
     updateImpacts(dt, now);
     updateMissileSounds(now);
 
