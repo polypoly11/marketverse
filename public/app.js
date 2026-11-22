@@ -1489,6 +1489,7 @@ const NPC_FORM_NAMES = {
 let npcMode = 'combat';
 let npcPendingMode = null;
 let npcTransitionEndsAt = 0;
+let npcCooldownEndsAt = 0;
 let npcForm = null;
 let npcServerOffset = 0;
 
@@ -1637,6 +1638,7 @@ function updateNpcUi() {
   npcModePanel.style.display=canUse?'flex':'none';
   const currentServerNow=Date.now()+npcServerOffset;
   const remaining=Math.max(0,Math.ceil((npcTransitionEndsAt-currentServerNow)/1000));
+  const cooldownSeconds=Math.max(0,Math.ceil((npcCooldownEndsAt-currentServerNow)/1000));
   if(npcPendingMode) {
     npcModeButton.disabled=true;
     npcModeButton.textContent=npcPendingMode==='npc'
@@ -1647,17 +1649,23 @@ function updateNpcUi() {
       ? '변신 대기 중 피격 가능 · 공격 불가'
       : '복귀 대기 중 면역 · 공격 불가';
   } else {
-    npcModeButton.disabled=!canUse;
-    npcModeButton.style.opacity='1';
-    npcModeButton.textContent=npcMode==='npc'?'⚔ 전투 모드로':'🛡 NPC 관전 모드';
-    npcModeHint.textContent=npcMode==='npc'
-      ? `${NPC_FORM_NAMES[npcForm]||'관전 중'} · 공격 면역 · 충전 정지`
-      : 'NPC 전환 10초 · 복귀 5초';
+    const coolingDown=npcMode==='combat' && cooldownSeconds>0;
+    npcModeButton.disabled=!canUse || coolingDown;
+    npcModeButton.style.opacity=coolingDown?'.7':'1';
+    npcModeButton.textContent=coolingDown
+      ? `🛡 NPC 전환 대기 ${cooldownSeconds}초`
+      : npcMode==='npc'?'⚔ 전투 모드로':'🛡 NPC 관전 모드';
+    npcModeHint.textContent=coolingDown
+      ? '전투 복귀 후 60초 재전환 제한'
+      : npcMode==='npc'
+        ? `${NPC_FORM_NAMES[npcForm]||'관전 중'} · 공격 면역 · 충전 정지`
+        : 'NPC 전환 10초 · 복귀 5초';
   }
 }
 
 npcModeButton.addEventListener('click',()=>{
-  if(npcPendingMode || defeated || reentryRequired || !profile)return;
+  if(npcPendingMode || defeated || reentryRequired || !profile ||
+     (npcMode==='combat' && Date.now()+npcServerOffset<npcCooldownEndsAt))return;
   send({type:'npc_mode_request',mode:npcMode==='npc'?'combat':'npc'});
   npcModeButton.disabled=true;
 });
@@ -1667,6 +1675,7 @@ function applyNpcModeState(m) {
   npcPendingMode=m.pendingMode==='npc'||m.pendingMode==='combat'
     ?m.pendingMode:null;
   npcTransitionEndsAt=Number(m.transitionEndsAt)||0;
+  npcCooldownEndsAt=Number(m.npcCooldownEndsAt)||0;
   npcForm=NPC_FORM_NAMES[m.form]?m.form:null;
   if(Number.isFinite(Number(m.serverNow)))
     npcServerOffset=Number(m.serverNow)-Date.now();
