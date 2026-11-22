@@ -24,6 +24,8 @@ export function installMissileClient({
   let count = 0;
   let maxMissiles = 5;
   let nextAt = null;
+  let rechargePaused = false;
+  let pausedRemainingMs = null;
   let pressedAt = 0;
   let aiming = false;
   let locked = null;
@@ -297,6 +299,45 @@ export function installMissileClient({
       1,
       Number(maxMissiles) || 5
     );
+
+    // NPC 모드에선 서버가 저장한 잔여 시간을 그대로 표시한다.
+    // 진행 게이지도 정지하며, 클라이언트 시각으로 차감하지 않는다.
+    if (rechargePaused) {
+      const remainingMs = Math.max(
+        0,
+        Number(pausedRemainingMs) || 0
+      );
+      const progress = Math.max(
+        0,
+        Math.min(1, 1 - remainingMs / MISSILE_RECHARGE_MS)
+      );
+      const totalSeconds = Math.ceil(remainingMs / 1000);
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      const remainingText =
+        `${String(minutes).padStart(2, '0')}:` +
+        `${String(seconds).padStart(2, '0')}`;
+
+      missileText.textContent = current >= maximum
+        ? `🚀\n${current}/${maximum}\n⏸ MAX`
+        : `🚀\n${current}/${maximum}\n⏸ ${remainingText}`;
+
+      drawMissileBorder(current >= maximum ? 1 : progress);
+      missileBorderProgress.setAttribute('stroke', '#9aaebd');
+      indicator.title =
+        '🛡 NPC 관전 모드: 미사일 충전 일시정지\n' +
+        `남은 충전시간: ${remainingText}\n` +
+        '전투 모드로 완전히 복귀하면 이어서 충전됩니다.';
+      return;
+    }
+
+    // 기존 전투 모드 툴팁 복원
+    indicator.title =
+      '🚀 유도 미사일 사용법\n' +
+      'S키 또는 모바일 🚀 버튼을 0.7초 이상 누른 뒤 떼면 발사\n' +
+      '다른 이용자와 고래 보스 공격 가능\n' +
+      '직격 40 / 근접 25 / 외곽 10 / 회피 0 피해\n' +
+      '접속 중 3분마다 1개 충전';
 
     // 최대 보유량 충전 완료
     if (current >= maximum) {
@@ -600,9 +641,10 @@ export function installMissileClient({
       ([id, avatar]) => ({
         id,
         x: avatar.position.x,
-        z: avatar.position.z
+        z: avatar.position.z,
+        npc: avatar.userData.npcMode === 'npc'
       })
-    );
+    ).filter(entry => !entry.npc);
 
     if (bossActive) {
       entries.push({
@@ -876,6 +918,7 @@ export function installMissileClient({
     if (
       aiming ||
       isBlocked?.() ||
+      rechargePaused ||
       count <= 0
     ) {
       return;
@@ -918,7 +961,8 @@ export function installMissileClient({
     if (
       elapsed >= LOCK_MS &&
       target &&
-      !isBlocked?.()
+      !isBlocked?.() &&
+      !rechargePaused
     ) {
       // 즉시 런처 포구 섬광 및 반동 표시 (서버 판정 변경 없음)
       fireMissileLauncher(getAvatar());
@@ -1870,6 +1914,12 @@ export function installMissileClient({
       count = Number(m.count) || 0;
       maxMissiles = Number(m.max) || 5;
       nextAt = m.nextAt || null;
+      rechargePaused = m.paused === true;
+      pausedRemainingMs = rechargePaused &&
+        Number.isFinite(Number(m.pausedRemainingMs))
+          ? Math.max(0, Number(m.pausedRemainingMs))
+          : null;
+      updateMissileBorder();
       return true;
     }
 
@@ -1977,6 +2027,11 @@ export function installMissileClient({
 
     lastFrame = now;
 
+    // NPC 전환 요청이 시작되면 진행 중인 조준을 즉시 해제한다.
+    if (aiming && (isBlocked?.() || rechargePaused)) {
+      release();
+    }
+
     animateMissileLaunchers(now);
     updateImpacts(dt, now);
     updateMissileSounds(now);
@@ -1996,7 +2051,8 @@ export function installMissileClient({
 
     if (
       incomingAimWarnings.size > 0 &&
-      !isBlocked?.()
+      !isBlocked?.() &&
+      !rechargePaused
     ) {
       const anyLocked = [
         ...incomingAimWarnings.values()
