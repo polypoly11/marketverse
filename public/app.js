@@ -2922,25 +2922,16 @@ function cameraDistance(position){
     THREE.MathUtils.degToRad(camera.fov/2)
   );
 
-  const tanHalfHorizontal=
-    tanHalfVertical*Math.max(.25,camera.aspect||1);
+function cameraLookAtFor(position){
 
-  const requiredToShowBoard=
-    (BOARD_WIDTH/2+1.4)/tanHalfHorizontal;
+  const focus=isMobileDevice
+    ?0
+    :boardFocus(position);
 
-  const distanceFromPlayerToBoard=Math.max(
-    0,position.z-BOARD_Z
-  );
-
-  const neededBehindPlayer=Math.max(
-    CAMERA_BASE_DISTANCE,
-    requiredToShowBoard-distanceFromPlayerToBoard
-  );
-
-  return THREE.MathUtils.lerp(
-    CAMERA_BASE_DISTANCE,
-    Math.min(CAMERA_MAX_DISTANCE,neededBehindPlayer),
-    focus
+  return new THREE.Vector3(
+    position.x,
+    position.y+1.15+focus*1.25,
+    position.z
   );
 }
 
