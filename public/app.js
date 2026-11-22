@@ -2004,77 +2004,372 @@ const board=new THREE.Mesh(
 board.position.set(0,4.5,BOARD_Z);
 scene.add(board);
 
+// ====================================================
+// JMC PREMIUM TRADING WALL
+// 기존 3D 전광판 텍스처/가격 API 유지
+// ====================================================
+
+function boardRoundedRect(c,x,y,w,h,r){
+  c.beginPath();
+  c.roundRect(x,y,w,h,r);
+}
+
 function refreshBoard(){
   const c=boardCtx;
+  const W=boardCanvas.width;
+  const H=boardCanvas.height;
 
-  c.fillStyle='#071421';
-  c.fillRect(0,0,1280,620);
+  c.save();
+  c.clearRect(0,0,W,H);
 
-  c.fillStyle='#dfc79a';
-  c.font='bold 34px Arial';
-  c.fillText('JMC INVEST LOUNGE',40,55);
+  // 다크 글래스 배경
+  const background=c.createLinearGradient(0,0,W,H);
+  background.addColorStop(0,'#0d2232');
+  background.addColorStop(.5,'#07121f');
+  background.addColorStop(1,'#102435');
+  c.fillStyle=background;
+  c.fillRect(0,0,W,H);
 
-  c.fillStyle='#88a5b8';
-  c.font='20px Arial';
-  c.fillText('BTC · ETH · SOL · XRP',870,55);
+  // 섬세한 배경 격자
+  c.strokeStyle='rgba(112,157,180,.055)';
+  c.lineWidth=1;
+  for(let x=0;x<W;x+=64){
+    c.beginPath();c.moveTo(x,0);c.lineTo(x,H);c.stroke();
+  }
+  for(let y=0;y<H;y+=62){
+    c.beginPath();c.moveTo(0,y);c.lineTo(W,y);c.stroke();
+  }
+
+  // 샴페인 골드 외곽 장식
+  c.strokeStyle='#bc9861';
+  c.lineWidth=4;
+  c.strokeRect(7,7,W-14,H-14);
+  c.strokeStyle='rgba(233,202,144,.30)';
+  c.lineWidth=1;
+  c.strokeRect(14,14,W-28,H-28);
+
+  // 헤더
+  const headerGradient=c.createLinearGradient(0,12,0,84);
+  headerGradient.addColorStop(0,'#172b3b');
+  headerGradient.addColorStop(1,'#091723');
+  c.fillStyle=headerGradient;
+  c.fillRect(22,20,W-44,64);
+  c.fillStyle='#e8cc96';
+  c.font='bold 33px Arial,sans-serif';
+  c.textAlign='left';
+  c.fillText('JMC INVEST LOUNGE',42,60);
+  c.fillStyle='#91aebd';
+  c.font='16px Arial,sans-serif';
+  c.fillText('PREMIUM DIGITAL ASSET TERMINAL',473,57);
+  c.fillStyle='#43e4be';
+  c.beginPath();c.arc(1156,50,7,0,Math.PI*2);c.fill();
+  c.fillStyle='#a4f5df';
+  c.font='bold 19px Arial,sans-serif';
+  c.fillText('LIVE',1172,57);
 
   symbols.forEach((s,i)=>{
     const x=36+(i%2)*608;
     const y=90+Math.floor(i/2)*255;
+    const w=588;
+    const h=240;
 
-    c.fillStyle='#10263a';
-    c.fillRect(x,y,588,240);
-    c.strokeStyle='#315065';
-    c.strokeRect(x,y,588,240);
+    // 고급 유리 패널
+    c.save();
+    boardRoundedRect(c,x,y,w,h,13);
+    const surface=c.createLinearGradient(x,y,x+w,y+h);
+    surface.addColorStop(0,'#132b3c');
+    surface.addColorStop(.6,'#0a1b2c');
+    surface.addColorStop(1,'#081523');
+    c.fillStyle=surface;
+    c.fill();
+    c.strokeStyle='rgba(209,176,116,.70)';
+    c.lineWidth=2;
+    c.stroke();
+    c.clip();
 
-    c.fillStyle='#f0e1c2';
-    c.font='bold 23px Arial';
-    c.fillText(s.id+' / USD',x+18,y+34);
+    // 패널 상단 금색 라인
+    const gold=c.createLinearGradient(x,y,x+w,y);
+    gold.addColorStop(0,'rgba(231,198,132,.75)');
+    gold.addColorStop(.6,'rgba(231,198,132,.17)');
+    gold.addColorStop(1,'rgba(231,198,132,.55)');
+    c.fillStyle=gold;
+    c.fillRect(x+1,y+1,w-2,3);
 
-    c.fillStyle='#42dfbd';
-    c.font='bold 29px Arial';
-    c.fillText(money(s.price),x+180,y+35);
+    // 코인 심볼 및 이름
+    c.fillStyle='#f3e4c7';
+    c.font='bold 23px Arial,sans-serif';
+    c.textAlign='left';
+    c.fillText(`${s.id} / USD`,x+22,y+35);
+    c.fillStyle='#90adbc';
+    c.font='16px Arial,sans-serif';
+    c.fillText(s.name,x+174,y+35);
 
-    const data=s.candles.filter(d=>
+    // 가격: 코인별 소수점 표기 유지
+    c.fillStyle='#ffffff';
+    c.font='bold 35px Arial,sans-serif';
+    c.fillText(money(s.price),x+22,y+82,380);
+
+    const raw=Array.isArray(s.candles)?s.candles:[];
+    const data=raw.filter(d=>
       [d.open,d.high,d.low,d.close].every(Number.isFinite)
-    );
+    ).slice(-64);
+    const change=data.length>0 && data[0].open>0
+      ? (data[data.length-1].close/data[0].open-1)*100
+      : null;
+    const positive=change===null || change>=0;
 
-    if(!data.length){
-      c.fillStyle='#809ab0';
-      c.font='18px Arial';
-      c.fillText('캔들 데이터 연결 대기',x+20,y+155);
-      return;
+    // 가격 증감은 표시된 캔들 구간 기준
+    boardRoundedRect(c,x+442,y+48,122,36,9);
+    c.fillStyle=change===null
+      ? 'rgba(119,145,164,.18)'
+      : positive?'rgba(55,190,144,.18)':'rgba(231,100,118,.18)';
+    c.fill();
+    c.fillStyle=change===null?'#a7b9c8':positive?'#67e1b8':'#f493a0';
+    c.font='bold 18px Arial,sans-serif';
+    c.textAlign='center';
+    c.fillText(
+      change===null?'--':`${change>=0?'+':''}${change.toFixed(2)}%`,
+      x+503,y+72
+    );
+    c.textAlign='left';
+
+    // 차트 바탕과 가격 격자
+    const plotX=x+20,plotY=y+104,plotW=548,plotH=106;
+    c.fillStyle='rgba(3,13,23,.34)';
+    c.fillRect(plotX,plotY,plotW,plotH);
+    c.strokeStyle='rgba(100,148,170,.20)';
+    c.lineWidth=1;
+    for(let k=1;k<4;k++){
+      const yy=plotY+k*plotH/4;
+      c.beginPath();c.moveTo(plotX,yy);c.lineTo(plotX+plotW,yy);c.stroke();
+    }
+    for(let k=1;k<6;k++){
+      const xx=plotX+k*plotW/6;
+      c.beginPath();c.moveTo(xx,plotY);c.lineTo(xx,plotY+plotH);c.stroke();
     }
 
-    const lo=Math.min(...data.map(d=>d.low));
-    const hi=Math.max(...data.map(d=>d.high));
-    const span=hi-lo||1;
-    const step=550/data.length;
+    if(data.length){
+      const lo=Math.min(...data.map(d=>d.low));
+      const hi=Math.max(...data.map(d=>d.high));
+      const pad=(hi-lo)*.09||Math.max(0.001,hi*.001);
+      const min=lo-pad,max=hi+pad;
+      const step=plotW/data.length;
+      const yy=v=>plotY+(max-v)/(max-min)*plotH;
 
-    data.forEach((d,j)=>{
-      const xx=x+18+step*(j+.5);
-      const yy=v=>y+220-(v-lo)/span*156;
-      const color=d.close>=d.open?'#42dfbd':'#f17a98';
+      data.forEach((d,j)=>{
+        const xx=plotX+step*(j+.5);
+        const up=d.close>=d.open;
+        const color=up?'#52dbb5':'#ee7990';
+        c.strokeStyle=color;
+        c.fillStyle=color;
+        c.lineWidth=1.2;
+        c.beginPath();c.moveTo(xx,yy(d.high));c.lineTo(xx,yy(d.low));c.stroke();
+        const t=yy(Math.max(d.open,d.close));
+        const b=yy(Math.min(d.open,d.close));
+        c.fillRect(xx-Math.max(1.5,step*.28),t,
+          Math.max(3,Math.min(8,step*.56)),Math.max(2,b-t));
+      });
+    }else{
+      c.fillStyle='#9eb7c5';
+      c.textAlign='center';
+      c.font='18px Arial,sans-serif';
+      c.fillText('캔들 데이터를 불러오는 중...',x+w/2,y+169);
+      c.textAlign='left';
+    }
 
-      c.strokeStyle=color;
-      c.fillStyle=color;
-      c.beginPath();
-      c.moveTo(xx,yy(d.high));
-      c.lineTo(xx,yy(d.low));
-      c.stroke();
-
-      const top=yy(Math.max(d.open,d.close));
-      const bottom=yy(Math.min(d.open,d.close));
-      const bw=Math.max(2,step*.6);
-
-      c.fillRect(xx-bw/2,top,bw,Math.max(2,bottom-top));
-    });
+    // 조작 안내
+    c.fillStyle='#8ca4b5';
+    c.font='14px Arial,sans-serif';
+    c.fillText('COINBASE · CANDLE MARKET DATA',x+20,y+229);
+    c.fillStyle='#cfb581';
+    c.font='bold 14px Arial,sans-serif';
+    c.textAlign='right';
+    c.fillText('CLICK TO OPEN TRADINGVIEW  ›',x+w-20,y+229);
+    c.textAlign='left';
+    c.restore();
   });
 
+  c.restore();
   boardTexture.needsUpdate=true;
 }
 
 refreshBoard();
+
+// ====================================================
+// 전광판 클릭 시 TradingView 확장 차트 표시
+// 3D 전광판은 기존 CanvasTexture 유지
+// 클릭한 경우에만 TradingView 공식 위젯을 로드
+// ====================================================
+
+const jmcBoardRaycaster=new THREE.Raycaster();
+const jmcBoardPointer=new THREE.Vector2();
+let jmcBoardPointerStart=null;
+
+const jmcTvOverlay=document.createElement('div');
+jmcTvOverlay.id='jmc-tv-overlay';
+jmcTvOverlay.hidden=true;
+jmcTvOverlay.style.cssText=`
+  position:fixed;inset:0;z-index:99995;
+  display:none;align-items:center;justify-content:center;
+  padding:18px;box-sizing:border-box;
+  background:rgba(1,8,16,.89);backdrop-filter:blur(9px);
+`;
+
+const jmcTvCard=document.createElement('div');
+jmcTvCard.style.cssText=`
+  width:min(1320px,100%);height:min(88dvh,880px);
+  min-height:320px;display:flex;flex-direction:column;
+  box-sizing:border-box;overflow:hidden;
+  background:#081827;border:1px solid #b99a67;
+  border-radius:16px;box-shadow:0 24px 90px rgba(0,0,0,.70);
+`;
+
+const jmcTvHeader=document.createElement('div');
+jmcTvHeader.style.cssText=`
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;padding:14px 18px;
+  border-bottom:1px solid rgba(202,169,107,.45);
+  color:#f3ddb3;font:700 16px Arial,sans-serif;
+`;
+const jmcTvTitle=document.createElement('strong');
+jmcTvTitle.textContent='JMC · TRADINGVIEW';
+const jmcTvClose=document.createElement('button');
+jmcTvClose.type='button';
+jmcTvClose.textContent='✕ 닫기';
+jmcTvClose.style.cssText=`
+  border:1px solid #b99a67;border-radius:9px;
+  background:#263c4c;color:#fff;
+  font:700 13px Arial,sans-serif;
+  padding:9px 13px;cursor:pointer;
+`;
+jmcTvHeader.append(jmcTvTitle,jmcTvClose);
+
+const jmcTvContent=document.createElement('div');
+jmcTvContent.style.cssText='flex:1;min-height:0;position:relative;background:#081523';
+jmcTvCard.append(jmcTvHeader,jmcTvContent);
+jmcTvOverlay.appendChild(jmcTvCard);
+document.body.appendChild(jmcTvOverlay);
+
+function jmcCloseTradingView(){
+  jmcTvOverlay.hidden=true;
+  jmcTvOverlay.style.display='none';
+  jmcTvContent.replaceChildren();
+}
+
+jmcTvClose.addEventListener('click',jmcCloseTradingView);
+jmcTvOverlay.addEventListener('pointerdown',event=>{
+  if(event.target===jmcTvOverlay)jmcCloseTradingView();
+});
+window.addEventListener('keydown',event=>{
+  if(event.key==='Escape' && !jmcTvOverlay.hidden){
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    jmcCloseTradingView();
+  }
+});
+
+function jmcOpenTradingView(symbol){
+  const tvSymbols={
+    BTC:'COINBASE:BTCUSD',
+    ETH:'COINBASE:ETHUSD',
+    SOL:'COINBASE:SOLUSD',
+    XRP:'COINBASE:XRPUSD'
+  };
+  const tradingSymbol=tvSymbols[symbol];
+  if(!tradingSymbol)return;
+
+  jmcTvTitle.textContent=`JMC INVEST LOUNGE  ·  ${symbol}/USD`;
+  jmcTvOverlay.hidden=false;
+  jmcTvOverlay.style.display='flex';
+  jmcTvContent.replaceChildren();
+
+  const widget=document.createElement('div');
+  widget.className='tradingview-widget-container';
+  widget.style.cssText='width:100%;height:100%;';
+  const widgetInner=document.createElement('div');
+  widgetInner.className='tradingview-widget-container__widget';
+  widgetInner.style.cssText='width:100%;height:100%;';
+  widget.appendChild(widgetInner);
+  jmcTvContent.appendChild(widget);
+
+  const config={
+    autosize:true,
+    symbol:tradingSymbol,
+    interval:'15',
+    timezone:'Asia/Seoul',
+    theme:'dark',
+    style:'1',
+    locale:'kr',
+    allow_symbol_change:true,
+    calendar:false,
+    hide_top_toolbar:false,
+    hide_legend:false,
+    save_image:false,
+    backgroundColor:'rgba(8,21,35,1)',
+    gridColor:'rgba(100,129,155,0.10)',
+    support_host:'https://www.tradingview.com'
+  };
+  const widgetScript=document.createElement('script');
+  widgetScript.type='text/javascript';
+  widgetScript.async=true;
+  widgetScript.src=
+    'https://s3.tradingview.com/external-embedding/embed-widget-advanced-chart.js';
+  widgetScript.textContent=JSON.stringify(config);
+  widgetScript.onerror=()=>{
+    if(!jmcTvOverlay.hidden){
+      widgetInner.textContent='TradingView 차트를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.';
+      widgetInner.style.color='#f1d4a0';
+      widgetInner.style.padding='24px';
+    }
+  };
+  widget.appendChild(widgetScript);
+}
+
+renderer.domElement.addEventListener('pointerdown',event=>{
+  if(event.button!==0)return;
+  jmcBoardPointerStart={x:event.clientX,y:event.clientY};
+});
+
+renderer.domElement.addEventListener('pointerup',event=>{
+  if(event.button!==0 || !jmcBoardPointerStart)return;
+  const moved=Math.hypot(
+    event.clientX-jmcBoardPointerStart.x,
+    event.clientY-jmcBoardPointerStart.y
+  );
+  jmcBoardPointerStart=null;
+  if(moved>9 || !profile || defeated || reentryRequired ||
+     !$('profile-modal').hidden || !jmcTvOverlay.hidden)return;
+
+  const rect=renderer.domElement.getBoundingClientRect();
+  if(!rect.width || !rect.height)return;
+  jmcBoardPointer.set(
+    (event.clientX-rect.left)/rect.width*2-1,
+    -(event.clientY-rect.top)/rect.height*2+1
+  );
+  jmcBoardRaycaster.setFromCamera(jmcBoardPointer,camera);
+  const boardHits=jmcBoardRaycaster.intersectObject(board,false);
+  if(!boardHits.length || !boardHits[0].uv)return;
+
+  // 전광판보다 앞에 있는 캐릭터 클릭은 기존 PVP 동작 유지
+  const potentialAvatars=[...others.values()];
+  if(myAvatar)potentialAvatars.push(myAvatar);
+  for(const avatar of potentialAvatars){
+    if(!avatar.visible)continue;
+    const hit=jmcBoardRaycaster.intersectObject(avatar,true)[0];
+    if(hit && hit.distance<boardHits[0].distance)return;
+  }
+
+  const u=boardHits[0].uv.x*1280;
+  const v=(1-boardHits[0].uv.y)*620;
+  const col=u>=36 && u<=624?0:u>=644 && u<=1232?1:-1;
+  const row=v>=90 && v<=330?0:v>=345 && v<=585?1:-1;
+  if(col<0 || row<0)return;
+  const symbol=symbols[row*2+col]?.id;
+  if(!symbol)return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  jmcOpenTradingView(symbol);
+});
 
 const others=new Map();
 // ========================================
