@@ -93,15 +93,9 @@
         style="font-size:12px;line-height:1.65;margin-top:12px">
       </div>
 
-      <hr style="border:0;border-top:1px solid #344358;margin:18px 0">
-
-      <strong style="font-size:13px;color:#a7b9ce">
-        이전 교환 신청 기록
-      </strong>
-
-      <div id="jmc-inventory-history"
-        style="font-size:12px;line-height:1.65;margin-top:10px">
-      </div>
+<div id="jmc-inventory-history" hidden
+  style="display:none">
+</div>
     `;
 
     document.body.append(toggle, panel);
@@ -593,63 +587,108 @@ note.textContent = enabled
           card.append(image);
         }
 
-        const code = document.createElement('p');
+         // ========================================
+        // 기프티콘 이미지 저장
+        // ========================================
 
-        code.textContent =
-          `쿠폰번호: ${coupon.coupon_code || ''}`;
+        const hasCouponImage =
+          typeof coupon.image_data === 'string' &&
+          /^data:image\/(?:png|jpeg|webp);base64,/.test(
+            coupon.image_data
+          );
 
-        code.style.cssText = `
-          color:#fff;
-          font-size:13px;
-          font-weight:700;
-          user-select:text;
-        `;
+        if (hasCouponImage) {
+          const saveButton = document.createElement('button');
 
-        card.append(code);
+          saveButton.type = 'button';
+          saveButton.textContent = '📥 기프티콘 이미지 저장';
 
-        if (coupon.expires_at) {
-          const expires = document.createElement('p');
+          saveButton.style.cssText = `
+            width:100%;
+            padding:13px;
+            margin-top:10px;
+            border:0;
+            border-radius:9px;
+            background:#d9bb87;
+            color:#172638;
+            font-size:14px;
+            font-weight:800;
+            cursor:pointer;
+          `;
 
-          expires.textContent =
-            `유효기간: ${String(coupon.expires_at).slice(0,10)}`;
+          saveButton.onclick = async () => {
+            try {
+              const response = await fetch(
+                coupon.image_data
+              );
 
-          expires.style.cssText =
-            'color:#c3d0df;font-size:12px';
+              const blob = await response.blob();
 
-          card.append(expires);
+              const objectUrl =
+                URL.createObjectURL(blob);
+
+              const mimeType =
+                blob.type || 'image/png';
+
+              const extension =
+                mimeType.includes('jpeg')
+                  ? 'jpg'
+                  : mimeType.includes('webp')
+                    ? 'webp'
+                    : 'png';
+
+              const safeBrand = String(
+                coupon.brand || 'gift'
+              ).replace(/[\\/:*?"<>|]/g, '_');
+
+              const fileName =
+                `${safeBrand}_기프티콘_${coupon.id}.${extension}`;
+
+              const link = document.createElement('a');
+
+              link.href = objectUrl;
+              link.download = fileName;
+
+              document.body.appendChild(link);
+              link.click();
+              link.remove();
+
+              // 다운로드 처리 후 임시 URL 해제
+              setTimeout(() => {
+                URL.revokeObjectURL(objectUrl);
+              }, 30000);
+
+            } catch (error) {
+              console.error(
+                '[JMC] 기프티콘 이미지 저장 실패:',
+                error
+              );
+
+              alert(
+                '이미지를 저장하지 못했습니다.\n' +
+                '바코드 이미지를 길게 눌러 저장해 주세요.'
+              );
+            }
+          };
+
+          card.append(saveButton);
+
+        } else {
+          // 이미지가 없는 쿠폰은 번호만 표시
+          const code = document.createElement('p');
+
+          code.textContent =
+            `쿠폰번호: ${coupon.coupon_code || ''}`;
+
+          code.style.cssText = `
+            color:#fff;
+            font-size:13px;
+            font-weight:700;
+            user-select:text;
+          `;
+
+          card.append(code);
         }
-
-        const copyButton = document.createElement('button');
-
-        copyButton.type = 'button';
-        copyButton.textContent = '쿠폰번호 복사';
-
-        copyButton.style.cssText = `
-          width:100%;
-          padding:10px;
-          margin-top:9px;
-          border:0;
-          border-radius:8px;
-          background:#d9bb87;
-          color:#172638;
-          font-weight:700;
-          cursor:pointer;
-        `;
-
-        copyButton.onclick = async () => {
-          try {
-            await navigator.clipboard.writeText(
-              String(coupon.coupon_code || '')
-            );
-
-            alert('쿠폰번호를 복사했습니다.');
-
-          } catch {
-            alert('쿠폰번호를 길게 눌러 복사해 주세요.');
-          }
-        };
-
-        card.append(copyButton);
         container.append(card);
       }
     }
