@@ -541,7 +541,68 @@ export function mountAdmin(app, context) {
       }
     }
   );
+  // =====================================
+  // 관리자 본인 고래비늘 5개 채우기
+  // =====================================
 
+  app.post(
+    '/api/admin/inventory/refill',
+    safeOrigin,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const adminSub = req.jmcAdminUser?.sub;
+
+        if (!adminSub) {
+          return res.status(403).json({
+            error: '관리자 Google 계정 확인 실패'
+          });
+        }
+
+        const ownerHash =
+          googleAuth.ownerHash(adminSub);
+
+        const result =
+          await raid.inventory.adminRefill(
+            ownerHash
+          );
+
+        // 관리자 계정으로 게임에 접속한
+        // 모든 브라우저 인벤토리 즉시 갱신
+        for (const [ws, player] of clients) {
+          if (
+            player.ready &&
+            player.googleSub === adminSub
+          ) {
+            await raid.inventory.sendSnapshot(
+              ws,
+              player
+            );
+          }
+        }
+
+        remember(
+          `관리자 고래비늘 충전: ${result.count}개`
+        );
+
+        res.json({
+          ok: true,
+          ...result
+        });
+
+      } catch (error) {
+        console.error(
+          '[ADMIN] 고래비늘 충전 오류:',
+          error
+        );
+
+        res.status(500).json({
+          error:
+            '고래비늘 충전에 실패했습니다.'
+        });
+      }
+    }
+  );
   // =====================================
   // 채팅 / 마법 기능 ON-OFF
   // =====================================
