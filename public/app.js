@@ -2092,14 +2092,14 @@ function refreshBoard(){
   c.fillText('JMC INVEST LOUNGE',42,60);
   c.fillStyle='#91aebd';
   c.font='16px Arial,sans-serif';
-  c.fillText('PREMIUM DIGITAL ASSET TERMINAL',473,57);
+  c.fillText('PREMIUM MULTI-ASSET TERMINAL',473,57);
   c.fillStyle='#43e4be';
   c.beginPath();c.arc(1156,50,7,0,Math.PI*2);c.fill();
   c.fillStyle='#a4f5df';
   c.font='bold 19px Arial,sans-serif';
-  c.fillText('LIVE',1172,57);
+  c.fillText('MARKET',1164,57);
 
-  symbols.forEach((s,i)=>{
+  symbols.slice(0,2).forEach((s,i)=>{
     const x=36+(i%2)*608;
     const y=90+Math.floor(i/2)*255;
     const w=588;
@@ -2221,11 +2221,196 @@ function refreshBoard(){
     c.restore();
   });
 
+  // ==================================================
+  // 한국 주식·미국 ETF 패널: 실제 가격·차트는 공식 TradingView 위젯 사용
+  // API에서 임의로 가져오거나 가격을 만들어 표시하지 않음
+  // ==================================================
+  const koreanStocks=[
+    {id:'000660',name:'SK하이닉스',currency:'KRW',market:'KRX · 약 20분 지연',x:36},
+    {id:'SOXL',name:'반도체 3배 ETF',currency:'USD',market:'NYSE Arca · TradingView 제공 시세',x:644}
+  ];
+  for(const stock of koreanStocks){
+    const x=stock.x, y=345, w=588, h=240;
+    c.save();
+    boardRoundedRect(c,x,y,w,h,13);
+    const surface=c.createLinearGradient(x,y,x+w,y+h);
+    surface.addColorStop(0,'#132b3c');
+    surface.addColorStop(.6,'#0a1b2c');
+    surface.addColorStop(1,'#081523');
+    c.fillStyle=surface;
+    c.fill();
+    c.strokeStyle='rgba(209,176,116,.70)';
+    c.lineWidth=2;
+    c.stroke();
+    c.clip();
+
+    const gold=c.createLinearGradient(x,y,x+w,y);
+    gold.addColorStop(0,'rgba(231,198,132,.75)');
+    gold.addColorStop(.6,'rgba(231,198,132,.17)');
+    gold.addColorStop(1,'rgba(231,198,132,.55)');
+    c.fillStyle=gold;
+    c.fillRect(x+1,y+1,w-2,3);
+
+    c.fillStyle='#f3e4c7';
+    c.font='bold 23px Arial,sans-serif';
+    c.textAlign='left';
+    c.fillText(`${stock.id} / ${stock.currency}`,x+22,y+35);
+    c.fillStyle='#9eb6c5';
+    c.font='bold 19px Arial,sans-serif';
+    c.fillText(stock.name,x+(stock.id==='SOXL'?190:226),y+35);
+
+    c.fillStyle='#0a1928';
+    c.fillRect(x+19,y+48,w-38,170);
+    c.fillStyle='#8da8b8';
+    c.font='bold 17px Arial,sans-serif';
+    c.textAlign='center';
+    c.fillText('TradingView 차트 연결 중',x+w/2,y+146);
+    c.textAlign='left';
+
+    c.fillStyle='#9dafbd';
+    c.font='13px Arial,sans-serif';
+    c.fillText(stock.market,x+20,y+229);
+    c.textAlign='right';
+    c.fillStyle='#cfb581';
+    c.font='bold 13px Arial,sans-serif';
+    c.fillText('CLICK TO EXPAND  ›',x+w-18,y+229);
+    c.restore();
+  }
+
   c.restore();
   boardTexture.needsUpdate=true;
 }
 
 refreshBoard();
+
+// ====================================================
+// JMC KRX 주식 · 미국 ETF TradingView 공식 위젯 2개
+// 3D CanvasTexture에서 외부 iframe을 직접 그릴 수 없어
+// 전광판 위치에 맞춰 DOM 위젯을 겹쳐 배치한다.
+// 외부 데이터를 추출하거나 재배포하지 않는다.
+// ====================================================
+const jmcStockWidgetDefs=[
+  {symbol:'KRX:000660',name:'SK하이닉스',x:55},
+  {symbol:'AMEX:SOXL',name:'SOXL',x:663}
+];
+const jmcStockWidgetLayer=document.createElement('div');
+jmcStockWidgetLayer.id='jmc-market-widget-layer';
+jmcStockWidgetLayer.style.cssText=`
+  position:absolute;inset:0;z-index:1;pointer-events:none;
+  overflow:hidden;visibility:hidden;
+`;
+sceneEl.appendChild(jmcStockWidgetLayer);
+
+const jmcStockWidgetEntries=jmcStockWidgetDefs.map(def=>{
+  const viewport=document.createElement('div');
+  viewport.style.cssText=`
+    position:absolute;left:0;top:0;
+    width:550px;height:170px;
+    transform-origin:top left;
+    overflow:hidden;pointer-events:none;
+    background:#081523;
+    border-radius:4px;
+  `;
+  const widget=document.createElement('div');
+  widget.className='tradingview-widget-container';
+  widget.style.cssText='width:550px;height:170px;pointer-events:none;';
+  const widgetInner=document.createElement('div');
+  widgetInner.className='tradingview-widget-container__widget';
+  widgetInner.style.cssText='width:550px;height:170px;pointer-events:none;';
+  widget.appendChild(widgetInner);
+  viewport.appendChild(widget);
+
+  // TradingView 공식 출처 링크: 사용자 클릭 가능하게 유지
+  const credit=document.createElement('a');
+  credit.href=`https://www.tradingview.com/symbols/${def.symbol.replace(':','-')}/`;
+  credit.target='_blank';
+  credit.rel='noopener nofollow';
+  credit.textContent='by TradingView';
+  credit.style.cssText=`
+    position:absolute;right:6px;bottom:2px;z-index:2;
+    font:11px Arial,sans-serif;color:#a5bfd2;
+    text-decoration:underline;pointer-events:auto;
+    background:rgba(8,21,35,.8);padding:1px 3px;
+  `;
+  viewport.appendChild(credit);
+  jmcStockWidgetLayer.appendChild(viewport);
+
+  // TradingView 공식 코드의 JS 위젯을 원본 그대로 로드한다.
+  // 내부 시세에 접근하거나 3D 캔버스로 복사하지 않는다.
+  const script=document.createElement('script');
+  script.async=true;
+  script.type='text/javascript';
+  script.src='https://s3.tradingview.com/external-embedding/embed-widget-symbol-overview.js';
+  script.textContent=JSON.stringify({
+    symbols:[[def.name,`${def.symbol}|1M`]],
+    chartOnly:false,
+    width:550,height:170,
+    autosize:false,
+    locale:'kr',
+    colorTheme:'dark',
+    showVolume:false,
+    showMA:false,
+    hideDateRanges:true,
+    hideMarketStatus:false,
+    hideSymbolLogo:true,
+    scalePosition:'right',
+    scaleMode:'Normal',
+    noTimeScale:true,
+    valuesTracking:'1',
+    changeMode:'price-only',
+    chartType:'candlesticks',
+    upColor:'#52dbb5',
+    downColor:'#ee7990',
+    borderUpColor:'#52dbb5',
+    borderDownColor:'#ee7990',
+    wickUpColor:'#52dbb5',
+    wickDownColor:'#ee7990',
+    dateRanges:['1w|15','1m|1D','3m|1D'],
+    support_host:'https://www.tradingview.com'
+  });
+  widget.appendChild(script);
+  return {...def,viewport};
+});
+
+// 전광판의 1280×620 캔버스 좌표를 3D 화면 좌표로 투영
+function jmcProjectBoardPixel(px,py){
+  const world=board.localToWorld(new THREE.Vector3(
+    (px/1280-.5)*23,
+    (.5-py/620)*10.5,
+    .03
+  ));
+  const ndc=world.project(camera);
+  return {
+    x:(ndc.x+1)*sceneEl.clientWidth/2,
+    y:(1-ndc.y)*sceneEl.clientHeight/2,
+    z:ndc.z
+  };
+}
+
+function jmcPositionStockWidgets(){
+  const hide=!profile || defeated || reentryRequired ||
+    !$('profile-modal').hidden || !jmcTvOverlay.hidden ||
+    Math.cos(yaw)>-.70 || !sceneEl.clientWidth || !sceneEl.clientHeight;
+  jmcStockWidgetLayer.style.visibility=hide?'hidden':'visible';
+  if(hide)return;
+
+  camera.updateMatrixWorld();
+  for(const entry of jmcStockWidgetEntries){
+    const lt=jmcProjectBoardPixel(entry.x,393);
+    const rb=jmcProjectBoardPixel(entry.x+550,563);
+    const w=rb.x-lt.x;
+    const h=rb.y-lt.y;
+    const visible=lt.z>-1 && lt.z<1 && rb.z>-1 && rb.z<1 &&
+      w>=120 && h>=42 &&
+      lt.x<sceneEl.clientWidth && rb.x>0 &&
+      lt.y<sceneEl.clientHeight && rb.y>0;
+    entry.viewport.style.display=visible?'block':'none';
+    if(!visible)continue;
+    entry.viewport.style.transform=
+      `translate(${lt.x.toFixed(1)}px,${lt.y.toFixed(1)}px) `+
+      `scale(${(w/550).toFixed(5)},${(h/170).toFixed(5)})`;
+  }
+}
 
 // ====================================================
 // 전광판 클릭 시 TradingView 확장 차트 표시
@@ -2305,12 +2490,14 @@ function jmcOpenTradingView(symbol){
     BTC:'COINBASE:BTCUSD',
     ETH:'COINBASE:ETHUSD',
     SOL:'COINBASE:SOLUSD',
-    XRP:'COINBASE:XRPUSD'
+    XRP:'COINBASE:XRPUSD',
+    '000660':'KRX:000660',
+    SOXL:'AMEX:SOXL'
   };
   const tradingSymbol=tvSymbols[symbol];
   if(!tradingSymbol)return;
 
-  jmcTvTitle.textContent=`JMC INVEST LOUNGE  ·  ${symbol}/USD`;
+  jmcTvTitle.textContent=`JMC INVEST LOUNGE  ·  ${symbol==='000660'?'SK하이닉스 (000660 / KRW)':symbol==='SOXL'?'SOXL (USD)':symbol+'/USD'}`;
   jmcTvOverlay.hidden=false;
   jmcTvOverlay.style.display='flex';
   jmcTvContent.replaceChildren();
@@ -2327,7 +2514,7 @@ function jmcOpenTradingView(symbol){
   const config={
     autosize:true,
     symbol:tradingSymbol,
-    interval:'15',
+    interval:symbol==='000660'?'D':'15',
     timezone:'Asia/Seoul',
     theme:'dark',
     style:'1',
@@ -2396,7 +2583,9 @@ renderer.domElement.addEventListener('pointerup',event=>{
   const col=u>=36 && u<=624?0:u>=644 && u<=1232?1:-1;
   const row=v>=90 && v<=330?0:v>=345 && v<=585?1:-1;
   if(col<0 || row<0)return;
-  const symbol=symbols[row*2+col]?.id;
+  const symbol=row===0
+    ? symbols[col]?.id
+    : ['000660','SOXL'][col];
   if(!symbol)return;
   event.preventDefault();
   event.stopImmediatePropagation();
@@ -3457,6 +3646,7 @@ function animate(now){
   );
 
   camera.lookAt(smoothCameraLookAt);
+  jmcPositionStockWidgets();
 
   tickBubbles(now);
   raidClient.update(now,dt);
