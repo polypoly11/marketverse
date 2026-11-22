@@ -183,23 +183,11 @@ export function installMissileClient({
     'non-scaling-stroke'
   );
 
-  // 실제 SVG 경로 길이를 이용해 진행률 계산
+  // 먼저 경로를 SVG에 등록한다.
+  // 경로 길이는 SVG가 실제 DOM에 붙은 다음 계산해야 한다.
   missileBorderSvg.append(
     missileBorderTrack,
     missileBorderProgress
-  );
-
-  const missilePathLength =
-    missileBorderProgress.getTotalLength();
-
-  missileBorderProgress.setAttribute(
-    'stroke-dasharray',
-    `${missilePathLength} ${missilePathLength}`
-  );
-
-  missileBorderProgress.setAttribute(
-    'stroke-dashoffset',
-    String(missilePathLength)
   );
 
   // 발광 효과
@@ -231,6 +219,26 @@ export function installMissileClient({
   );
 
   document.body.appendChild(indicator);
+
+  // SVG가 화면에 부착된 이후 경로의 실제 길이를 구한다.
+  // 일부 브라우저에서 부착 전 getTotalLength()가 0을
+  // 반환하여 충전 테두리가 처음부터 가득 보이던 문제 방지.
+  let missilePathLength = missileBorderProgress.getTotalLength();
+
+  if (!Number.isFinite(missilePathLength) || missilePathLength <= 0) {
+    // 경로 길이 계산을 지원하지 않는 경우 SVG 정규화 길이 사용
+    missileBorderProgress.setAttribute('pathLength', '100');
+    missilePathLength = 100;
+  }
+
+  missileBorderProgress.setAttribute(
+    'stroke-dasharray',
+    `${missilePathLength} ${missilePathLength}`
+  );
+  missileBorderProgress.setAttribute(
+    'stroke-dashoffset',
+    String(missilePathLength)
+  );
 
   // ========================================
   // 실제 충전 진행률 계산
