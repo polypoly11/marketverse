@@ -1614,29 +1614,25 @@ function updateNpcLocalAvatar() {
   setNpcAppearance(myAvatar,npcMode,npcForm);
 }
 
-// 모드 버튼은 scene 내부에 배치해 PC·모바일에서 함께 사용
+// PC·모바일 공통: 관전 모드 버튼 하나에 전환 시간·쿨타임 표시
 const npcModePanel=document.createElement('div');
 npcModePanel.id='jmc-npc-mode-panel';
 npcModePanel.style.cssText=`
   position:absolute;top:62px;right:12px;z-index:48;
-  display:flex;flex-direction:column;align-items:flex-end;gap:5px;
+  display:flex;align-items:center;justify-content:flex-end;
   max-width:min(210px,45vw);pointer-events:none;
 `;
 const npcModeButton=document.createElement('button');
 npcModeButton.type='button';
 npcModeButton.style.cssText=`
-  pointer-events:auto;padding:9px 12px;border-radius:12px;
+  pointer-events:auto;min-width:120px;padding:9px 12px;border-radius:12px;
   border:1px solid rgba(158,244,230,.7);
   background:rgba(12,39,55,.95);color:#e9fff9;
   box-shadow:0 4px 14px rgba(0,0,0,.3);
   font:700 12px Arial,sans-serif;cursor:pointer;touch-action:manipulation;
+  white-space:nowrap;
 `;
-const npcModeHint=document.createElement('div');
-npcModeHint.style.cssText=`
-  color:#d6edf0;background:rgba(7,20,33,.79);border-radius:8px;
-  padding:4px 7px;font:11px Arial,sans-serif;text-align:right;
-`;
-npcModePanel.append(npcModeButton,npcModeHint);
+npcModePanel.appendChild(npcModeButton);
 sceneEl.appendChild(npcModePanel);
 
 function updateNpcUi() {
@@ -1646,27 +1642,28 @@ function updateNpcUi() {
   const currentServerNow=Date.now()+npcServerOffset;
   const remaining=Math.max(0,Math.ceil((npcTransitionEndsAt-currentServerNow)/1000));
   const cooldownSeconds=Math.max(0,Math.ceil((npcCooldownEndsAt-currentServerNow)/1000));
+
   if(npcPendingMode) {
     npcModeButton.disabled=true;
     npcModeButton.textContent=npcPendingMode==='npc'
-      ? `🛡 관전 모드 전환 ${remaining}초`
-      : `⚔ 전투 모드 복귀 ${remaining}초`;
+      ? `🛡 관전 모드 ${remaining}초`
+      : `⚔ 전투 복귀 ${remaining}초`;
+    npcModeButton.title=npcPendingMode==='npc'
+      ? '전환 대기 중 피격 가능 · 공격 불가'
+      : '복귀 대기 중 공격 면역 · 공격 불가';
     npcModeButton.style.opacity='.75';
-    npcModeHint.textContent=npcPendingMode==='npc'
-      ? '변신 대기 중 피격 가능 · 공격 불가'
-      : '복귀 대기 중 면역 · 공격 불가';
   } else {
     const coolingDown=npcMode==='combat' && cooldownSeconds>0;
     npcModeButton.disabled=!canUse || coolingDown;
     npcModeButton.style.opacity=coolingDown?'.7':'1';
     npcModeButton.textContent=coolingDown
-      ? `🛡 NPC 전환 대기 ${cooldownSeconds}초`
-      : npcMode==='npc'?'⚔ 전투 모드로':'🛡 NPC 관전 모드';
-    npcModeHint.textContent=coolingDown
-      ? '전투 복귀 후 60초 재전환 제한'
+      ? `🛡 관전 대기 ${cooldownSeconds}초`
+      : npcMode==='npc'?'⚔ 전투 모드로':'🛡 관전 모드';
+    npcModeButton.title=coolingDown
+      ? '전투 복귀 후 60초 동안 관전 모드 재전환 제한'
       : npcMode==='npc'
-        ? `${NPC_FORM_NAMES[npcForm]||'관전 중'} · 공격 면역 · 충전 정지`
-        : 'NPC 전환 10초 · 복귀 5초';
+        ? `${NPC_FORM_NAMES[npcForm]||'관전 중'} · 공격 면역 · 미사일 충전 정지`
+        : '관전 모드 전환 10초 · 전투 모드 복귀 5초';
   }
 }
 
