@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 
-const REWARD_MS = 10 * 60 * 1000;
+const REWARD_MS = 3 * 60 * 1000;
 const DAMAGE = 40;
 const RANGE = 15;
 const LOCK_MS = 700;
@@ -144,7 +144,7 @@ export function createMissileSystem({
         VALUES (
           $1,
           $2,
-          NOW() + INTERVAL '10 minutes',
+          NOW() + INTERVAL '3 minutes',
           NOW()
         )
 
@@ -158,7 +158,7 @@ export function createMissileSystem({
             ELSE jmc_missile_inventory.quantity
           END,
 
-          next_at = NOW() + INTERVAL '10 minutes',
+          next_at = NOW() + INTERVAL '3 minutes',
           last_seen = NOW()
 
         RETURNING
@@ -238,9 +238,9 @@ export function createMissileSystem({
               quantity + 1,
               $2
             ),
-            next_at =
-              NOW() + INTERVAL '10 minutes',
-            last_seen = NOW()
+             next_at =
+               NOW() + INTERVAL '3 minutes',
+             last_seen = NOW()
 
           WHERE owner_key = $1
             AND next_at <= NOW()
