@@ -1,4 +1,3 @@
-
 export function installMissileClient({
   THREE,
   scene,
@@ -813,119 +812,172 @@ export function installMissileClient({
   // 3D 미사일 모델
   // ========================================
   function createRocket() {
+    // 비행 판정/속도와 분리된 3D 외형 전용 객체
+    // 기존 미사일 진행 방향(+Z) 유지
     const rocket = new THREE.Group();
 
-    const bodyMat = new THREE.MeshStandardMaterial({
-      color: 0x2787d9,
-      metalness: 0.65,
+    const hull = new THREE.MeshStandardMaterial({
+      color: 0x182a46,
+      metalness: 0.84,
       roughness: 0.24
     });
-
-    const noseMat = new THREE.MeshStandardMaterial({
-      color: 0xe63d40,
-      metalness: 0.3,
-      roughness: 0.35
+    const armor = new THREE.MeshStandardMaterial({
+      color: 0x536f92,
+      metalness: 0.88,
+      roughness: 0.2
     });
-
-    const finMat = new THREE.MeshStandardMaterial({
-      color: 0xf4bd48,
-      metalness: 0.4,
-      roughness: 0.3
+    const tipMat = new THREE.MeshStandardMaterial({
+      color: 0xa4c9e4,
+      metalness: 0.75,
+      roughness: 0.18
     });
-
-    const engineMat = new THREE.MeshBasicMaterial({
-      color: 0xffa32b
+    const cyan = new THREE.MeshBasicMaterial({ color: 0x58f2ff });
+    const violet = new THREE.MeshBasicMaterial({ color: 0x9c67ff });
+    const flameMat = new THREE.MeshBasicMaterial({
+      color: 0x63f3ff,
+      transparent: true,
+      opacity: 0.85,
+      depthWrite: false
     });
-
-    const metalMat = new THREE.MeshStandardMaterial({
-      color: 0x313641,
-      metalness: 0.8,
-      roughness: 0.3
+    const haloMat = new THREE.MeshBasicMaterial({
+      color: 0x855dff,
+      transparent: true,
+      opacity: 0.34,
+      depthWrite: false,
+      side: THREE.DoubleSide
+    });
+    const trailMat = new THREE.MeshBasicMaterial({
+      color: 0x37cfff,
+      transparent: true,
+      opacity: 0.19,
+      depthWrite: false,
+      side: THREE.DoubleSide
     });
 
     const body = new THREE.Mesh(
-      new THREE.CylinderGeometry(
-        0.18,
-        0.18,
-        0.9,
-        16
-      ),
-      bodyMat
+      new THREE.CylinderGeometry(0.17, 0.2, 1.05, 16),
+      hull
     );
-
     body.rotation.x = Math.PI / 2;
     rocket.add(body);
 
-    const nose = new THREE.Mesh(
-      new THREE.ConeGeometry(
-        0.18,
-        0.42,
-        16
-      ),
-      noseMat
+    const frontArmor = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.16, 0.19, 0.32, 16),
+      armor
     );
+    frontArmor.rotation.x = Math.PI / 2;
+    frontArmor.position.z = 0.34;
+    rocket.add(frontArmor);
 
+    const nose = new THREE.Mesh(
+      new THREE.ConeGeometry(0.17, 0.5, 16),
+      tipMat
+    );
     nose.rotation.x = Math.PI / 2;
-    nose.position.z = 0.64;
-
+    nose.position.z = 0.78;
     rocket.add(nose);
 
+    // 몸체를 따라 이어지는 얇은 네온 띠
+    for (const z of [-0.36, 0.12, 0.47]) {
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(0.191, 0.018, 5, 20),
+        cyan
+      );
+      ring.position.z = z;
+      rocket.add(ring);
+    }
+
+    // X형 미래형 꼬리 날개 네 장
     for (let i = 0; i < 4; i++) {
-      const fin = new THREE.Mesh(
-        new THREE.BoxGeometry(
-          0.08,
-          0.32,
-          0.35
-        ),
-        finMat
+      const wingGroup = new THREE.Group();
+      wingGroup.rotation.z = i * Math.PI / 2;
+
+      const wing = new THREE.Mesh(
+        new THREE.BoxGeometry(0.055, 0.42, 0.46),
+        armor
       );
+      wing.position.set(0, 0.30, -0.30);
+      wing.rotation.x = -0.23;
+      wingGroup.add(wing);
 
-      const a = i * Math.PI / 2;
-
-      fin.position.set(
-        Math.cos(a) * 0.18,
-        Math.sin(a) * 0.18,
-        -0.3
+      const strip = new THREE.Mesh(
+        new THREE.BoxGeometry(0.065, 0.025, 0.37),
+        i % 2 ? violet : cyan
       );
-
-      fin.rotation.z = a;
-
-      rocket.add(fin);
+      strip.position.set(0, 0.49, -0.30);
+      strip.rotation.x = -0.23;
+      wingGroup.add(strip);
+      rocket.add(wingGroup);
     }
 
     const nozzle = new THREE.Mesh(
-      new THREE.CylinderGeometry(
-        0.15,
-        0.2,
-        0.18,
-        12
-      ),
-      metalMat
+      new THREE.CylinderGeometry(0.16, 0.22, 0.22, 16),
+      armor
     );
-
     nozzle.rotation.x = Math.PI / 2;
-    nozzle.position.z = -0.52;
-
+    nozzle.position.z = -0.59;
     rocket.add(nozzle);
 
-    const flame = new THREE.Mesh(
-      new THREE.ConeGeometry(
-        0.12,
-        0.5,
-        12
-      ),
-      engineMat
+    const core = new THREE.Mesh(
+      new THREE.SphereGeometry(0.135, 10, 8),
+      cyan
     );
+    core.position.z = -0.71;
+    rocket.add(core);
 
+    // 엔진의 밝은 중심 불꽃 / 보라색 바깥 불꽃
+    const flame = new THREE.Mesh(
+      new THREE.ConeGeometry(0.13, 0.94, 12),
+      flameMat
+    );
     flame.rotation.x = -Math.PI / 2;
-    flame.position.z = -0.85;
-
+    flame.position.z = -1.13;
     rocket.add(flame);
 
+    const outerFlame = new THREE.Mesh(
+      new THREE.ConeGeometry(0.23, 1.30, 12),
+      haloMat
+    );
+    outerFlame.rotation.x = -Math.PI / 2;
+    outerFlame.position.z = -1.27;
+    rocket.add(outerFlame);
+
+    // 빛의 꼬리는 미사일과 함께 이동하므로 서버 탄도와 무관
+    const trail = new THREE.Mesh(
+      new THREE.ConeGeometry(0.15, 2.05, 10),
+      trailMat
+    );
+    trail.rotation.x = -Math.PI / 2;
+    trail.position.z = -1.75;
+    rocket.add(trail);
+
+    // 소수의 재사용 가능한 광입자: 매 프레임 새 객체를 만들지 않음
+    const particleGeometry = new THREE.SphereGeometry(0.032, 5, 4);
+    const particles = [];
+    for (let i = 0; i < 10; i++) {
+      const particle = new THREE.Mesh(
+        particleGeometry,
+        new THREE.MeshBasicMaterial({
+          color: i % 3 === 0 ? 0xa775ff : 0x60eeff,
+          transparent: true,
+          opacity: 0.7,
+          depthWrite: false
+        })
+      );
+      particle.userData.phase = i / 10;
+      rocket.add(particle);
+      particles.push(particle);
+    }
+
+    // 기존 애니메이션 코드에서 접근하는 이름 유지
     rocket.userData.flame = flame;
-
+    rocket.userData.sfEffects = {
+      outerFlame,
+      core,
+      trail,
+      particles
+    };
     rocket.scale.setScalar(1.3);
-
     return rocket;
   }
 
@@ -1791,6 +1843,28 @@ export function installMissileClient({
         flame.scale.y =
           0.8 +
           Math.sin(now * 0.025) * 0.2;
+      }
+
+      // SF 엔진 광원과 비행 입자 애니메이션 (시각효과만 변경)
+      const sf = shot.object.userData.sfEffects;
+      if (sf) {
+        const t = now * 0.001;
+        sf.outerFlame.scale.y = 0.86 + Math.sin(t * 22) * 0.17;
+        sf.core.scale.setScalar(1 + Math.sin(t * 18) * 0.15);
+        sf.trail.material.opacity = 0.19 + Math.sin(t * 14) * 0.04;
+
+        for (let i = 0; i < sf.particles.length; i++) {
+          const particle = sf.particles[i];
+          const cycle = (t * 1.7 + particle.userData.phase) % 1;
+          const spread = 0.04 + cycle * 0.24;
+          particle.position.set(
+            Math.sin(i * 2.4 + t * 3) * spread,
+            Math.cos(i * 2.4 + t * 3) * spread,
+            -0.75 - cycle * 2.3
+          );
+          particle.scale.setScalar(Math.max(0.15, 1.2 - cycle * 0.95));
+          particle.material.opacity = 0.82 * (1 - cycle);
+        }
       }
 
       if (now > shot.deadline) {
