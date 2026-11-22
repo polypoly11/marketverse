@@ -43,6 +43,13 @@ export function createMissileSystem({
       )
     `);
 
+    // 관전 모드 중 남은 충전시간을 DB에 영구 보관한다.
+    // NULL: 전투 모드에서 충전 중 / 숫자: NPC 모드에서 일시정지
+    await pool.query(`
+      ALTER TABLE jmc_missile_inventory
+      ADD COLUMN IF NOT EXISTS paused_remaining_ms BIGINT
+    `);
+
     return pool;
   })().catch(error => {
     console.error(
@@ -76,28 +83,102 @@ export function createMissileSystem({
   // 인벤토리 상태 전송
   // ========================================
 
+  const isNpc = p => p.npcMode === 'npc';
+  const cannotAttack = p =>
+    isNpc(p) || p.npcPendingMode === 'npc';
+
+  function ownerHasNpc(ownerKey) {
+    return [...clients.values()].some(p =>
+      p.ready && p.missileOwnerKey === ownerKey && isNpc(p)
+    );
+  }
+
   function state(ws, p) {
+    const paused = p.missilePausedRemainingMs !== null &&
+      p.missilePausedRemainingMs !== undefined;
     send(ws, {
       type: 'missile_state',
       count: p.missileCount ?? 0,
       max: maximum(p),
-      nextAt: p.missileNextAt ?? null
+      nextAt: paused ? null : (p.missileNextAt ?? null),
+      paused,
+      pausedRemainingMs: paused ? p.missilePausedRemainingMs : null
     });
   }
 
-  // 같은 계정으로 여러 창에 접속한 경우
-  // 모든 창의 보유량을 동기화한다.
-  function syncOwner(ownerKey, quantity, nextAt) {
+  // 같은 계정의 다른 탭에도 동일한 충전 상태를 알린다.
+  function syncOwner(ownerKey, quantity, nextAt, pausedRemainingMs = null) {
     for (const [ws, p] of clients) {
-      if (p.missileOwnerKey !== ownerKey) {
-        continue;
-      }
-
+      if (p.missileOwnerKey !== ownerKey) continue;
       p.missileCount = quantity;
       p.missileNextAt = nextAt;
-
+      p.missilePausedRemainingMs = pausedRemainingMs;
       state(ws, p);
     }
+  }
+
+  // 서버 시각과 PostgreSQL에서 관전 중 충전시간을 원자적으로 정지/재개.
+  // 변경 쿼리마다 DB 행을 갱신하므로 자동충전과 경합해도 중복 지급되지 않는다.
+  const modeUpdating = new Set();
+  const modeDirty = new Set();
+  async function updateOwnerMode(ownerKey) {
+    if (!ownerKey) return;
+    if (modeUpdating.has(ownerKey)) {
+      modeDirty.add(ownerKey);
+      return;
+    }
+    modeUpdating.add(ownerKey);
+    try {
+      const db = await dbReady;
+      if (!db) return;
+      // 짧은 간격으로 모드가 바뀐 경우 DB 작업 직전 상태를 다시 확인한다.
+      for (let attempt = 0; attempt < 5; attempt++) {
+        modeDirty.delete(ownerKey);
+        const shouldPause = ownerHasNpc(ownerKey);
+        const result = await db.query(shouldPause ? `
+          UPDATE jmc_missile_inventory
+          SET paused_remaining_ms = GREATEST(0,
+            FLOOR(EXTRACT(EPOCH FROM (next_at - NOW())) * 1000)::bigint
+          ), last_seen = NOW()
+          WHERE owner_key = $1 AND paused_remaining_ms IS NULL
+          RETURNING quantity,
+            (EXTRACT(EPOCH FROM next_at) * 1000)::bigint AS next_ms,
+            paused_remaining_ms
+        ` : `
+          UPDATE jmc_missile_inventory
+          SET next_at = NOW() +
+            (paused_remaining_ms * INTERVAL '1 millisecond'),
+            paused_remaining_ms = NULL, last_seen = NOW()
+          WHERE owner_key = $1 AND paused_remaining_ms IS NOT NULL
+          RETURNING quantity,
+            (EXTRACT(EPOCH FROM next_at) * 1000)::bigint AS next_ms,
+            paused_remaining_ms
+        `, [ownerKey]);
+        if (result.rows[0]) {
+          const row = result.rows[0];
+          syncOwner(ownerKey, Number(row.quantity),
+            Number(row.next_ms),
+            row.paused_remaining_ms === null ? null : Number(row.paused_remaining_ms));
+        }
+        if (shouldPause === ownerHasNpc(ownerKey) &&
+            !modeDirty.has(ownerKey)) break;
+      }
+    } finally {
+      modeUpdating.delete(ownerKey);
+      if (modeDirty.delete(ownerKey)) {
+        void updateOwnerMode(ownerKey).catch(error =>
+          console.error('[MISSILE] 후속 모드 반영 실패:', error)
+        );
+      }
+    }
+  }
+
+  function modeChanged(p) {
+    const ownerKey = p.missileOwnerKey;
+    if (!ownerKey) return;
+    void updateOwnerMode(ownerKey).catch(error =>
+      console.error('[MISSILE] NPC 모드 충전 동기화 실패:', error)
+    );
   }
 
   // ========================================
@@ -123,6 +204,7 @@ export function createMissileSystem({
     p.missileOwnerKey = ownerKey;
     p.missileCount = 0;
     p.missileNextAt = null;
+    p.missilePausedRemainingMs = null;
     p.missileAimAt = 0;
     p.missileLoading = true;
 
@@ -139,13 +221,15 @@ export function createMissileSystem({
           owner_key,
           quantity,
           next_at,
-          last_seen
+          last_seen,
+          paused_remaining_ms
         )
         VALUES (
           $1,
           $2,
           NOW() + INTERVAL '3 minutes',
-          NOW()
+          NOW(),
+          NULL
         )
 
         ON CONFLICT (owner_key)
@@ -158,14 +242,19 @@ export function createMissileSystem({
             ELSE jmc_missile_inventory.quantity
           END,
 
-          next_at = NOW() + INTERVAL '3 minutes',
+          next_at = CASE
+            WHEN jmc_missile_inventory.paused_remaining_ms IS NOT NULL
+            THEN jmc_missile_inventory.next_at
+            ELSE NOW() + INTERVAL '3 minutes'
+          END,
           last_seen = NOW()
 
         RETURNING
           quantity,
           (
             EXTRACT(EPOCH FROM next_at) * 1000
-          )::bigint AS next_ms
+          )::bigint AS next_ms,
+          paused_remaining_ms
       `, [
         ownerKey,
         starting(p),
@@ -177,8 +266,11 @@ export function createMissileSystem({
       syncOwner(
         ownerKey,
         Number(row.quantity),
-        Number(row.next_ms)
+        Number(row.next_ms),
+        row.paused_remaining_ms === null ? null : Number(row.paused_remaining_ms)
       );
+      // NPC 상태로 재접속했으면 DB에도 일시정지를 강제한다.
+      modeChanged(p);
 
     })().catch(error => {
       console.error(
@@ -197,7 +289,7 @@ export function createMissileSystem({
   }
 
   // ========================================
-  // 접속 중 10분마다 1개 충전
+  // 접속 중 3분마다 1개 충전
   // ========================================
 
   const ticking = new Set();
@@ -210,7 +302,10 @@ export function createMissileSystem({
         p.ready &&
         p.hp > 0 &&
         p.missileOwnerKey &&
-        !p.missileLoading
+        !p.missileLoading &&
+        !isNpc(p) &&
+        !modeUpdating.has(p.missileOwnerKey) &&
+        !ownerHasNpc(p.missileOwnerKey)
       ) {
         owners.set(p.missileOwnerKey, [ws, p]);
       }
@@ -219,6 +314,8 @@ export function createMissileSystem({
     for (const [ownerKey, [ws, p]] of owners) {
       if (
         ticking.has(ownerKey) ||
+        p.missilePausedRemainingMs !== null &&
+          p.missilePausedRemainingMs !== undefined ||
         !p.missileNextAt ||
         Date.now() < p.missileNextAt
       ) {
@@ -243,13 +340,15 @@ export function createMissileSystem({
              last_seen = NOW()
 
           WHERE owner_key = $1
+            AND paused_remaining_ms IS NULL
             AND next_at <= NOW()
 
           RETURNING
             quantity,
             (
               EXTRACT(EPOCH FROM next_at) * 1000
-            )::bigint AS next_ms
+            )::bigint AS next_ms,
+            paused_remaining_ms
         `, [
           ownerKey,
           maximum(p)
@@ -261,7 +360,8 @@ export function createMissileSystem({
           syncOwner(
             ownerKey,
             Number(row.quantity),
-            Number(row.next_ms)
+            Number(row.next_ms),
+            row.paused_remaining_ms === null ? null : Number(row.paused_remaining_ms)
           );
         }
 
@@ -304,6 +404,7 @@ export function createMissileSystem({
         v.id === id &&
         v.ready &&
         v.hp > 0 &&
+        !isNpc(v) &&
         v !== p
     );
 
@@ -392,6 +493,7 @@ export function createMissileSystem({
       if (
         p.ready &&
         p.hp > 0 &&
+        !cannotAttack(p) &&
         !p.missileLoading &&
         p.missileCount > 0
       ) {
@@ -411,6 +513,7 @@ export function createMissileSystem({
       if (
         !p.ready ||
         p.hp <= 0 ||
+        cannotAttack(p) ||
         !p.missileAimAt ||
         p.missileLoading ||
         p.missileCount <= 0 ||
@@ -473,6 +576,7 @@ export function createMissileSystem({
     if (
       !p.ready ||
       p.hp <= 0 ||
+      cannotAttack(p) ||
       p.missileLoading ||
       !p.missileCount ||
       !aimAt ||
@@ -505,7 +609,7 @@ export function createMissileSystem({
     void (async () => {
       const db = await dbReady;
 
-      if (!db || !p.missileOwnerKey) {
+      if (!db || !p.missileOwnerKey || cannotAttack(p)) {
         return;
       }
 
@@ -519,6 +623,7 @@ export function createMissileSystem({
 
         WHERE owner_key = $1
           AND quantity > 0
+          AND paused_remaining_ms IS NULL
 
         RETURNING
           quantity,
@@ -538,10 +643,30 @@ export function createMissileSystem({
 
       const row = result.rows[0];
 
+      // DB 처리 중 NPC 전환이 끝난 경우 탄약을 돌려준다.
+      if (cannotAttack(p)) {
+        const refunded = await db.query(`
+          UPDATE jmc_missile_inventory
+          SET quantity = LEAST(quantity + 1, $2), last_seen = NOW()
+          WHERE owner_key = $1
+          RETURNING quantity,
+            (EXTRACT(EPOCH FROM next_at) * 1000)::bigint AS next_ms,
+            paused_remaining_ms
+        `, [p.missileOwnerKey, maximum(p)]);
+        if (refunded.rows[0]) {
+          const back = refunded.rows[0];
+          syncOwner(p.missileOwnerKey, Number(back.quantity),
+            Number(back.next_ms),
+            back.paused_remaining_ms === null ? null : Number(back.paused_remaining_ms));
+        }
+        return;
+      }
+
       syncOwner(
         p.missileOwnerKey,
         Number(row.quantity),
-        Number(row.next_ms)
+        Number(row.next_ms),
+        p.missilePausedRemainingMs ?? null
       );
 
       // ====================================
@@ -696,6 +821,13 @@ export function createMissileSystem({
           return;
         }
 
+        // 타겟이 판정 순간 NPC면 시각 효과는 보여도 피해는 0.
+        if (liveTarget?.player && isNpc(liveTarget.player)) {
+          broadcast({type: 'missile_end', id,
+            targetId: missile.targetId, ...impact,
+            damage: 0, exploded: true});
+          return;
+        }
         broadcast({
           type: 'missile_hit',
           id,
@@ -720,7 +852,8 @@ export function createMissileSystem({
         if (
           !victim ||
           !victim.ready ||
-          victim.hp <= 0
+          victim.hp <= 0 ||
+          isNpc(victim)
         ) {
           return;
         }
@@ -988,7 +1121,8 @@ export function createMissileSystem({
         quantity,
         (
           EXTRACT(EPOCH FROM next_at) * 1000
-        )::bigint AS next_ms
+        )::bigint AS next_ms,
+        paused_remaining_ms
     `, [[...owners]]);
 
     let players = 0;
@@ -997,7 +1131,8 @@ export function createMissileSystem({
       syncOwner(
         row.owner_key,
         Number(row.quantity),
-        Number(row.next_ms)
+        Number(row.next_ms),
+        row.paused_remaining_ms === null ? null : Number(row.paused_remaining_ms)
       );
 
       for (const p of clients.values()) {
@@ -1020,6 +1155,7 @@ export function createMissileSystem({
     join,
     handle,
     state,
+    modeChanged,
     refillOnline
   };
 }
