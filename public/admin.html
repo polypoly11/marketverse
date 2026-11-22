@@ -1407,17 +1407,23 @@ $('refill-missiles').onclick = async () => {
 
 $('logout').onclick = async () => {
   try {
-    await fetch('/api/auth/logout', {
+    const response = await fetch('/api/auth/logout', {
       method: 'POST',
-      credentials: 'same-origin'
+      credentials: 'same-origin',
+      cache: 'no-store'
     });
+
+    if (!response.ok) {
+      throw new Error('로그아웃 요청이 실패했습니다.');
+    }
+
+    showLogin();
+    toast('로그아웃했습니다.');
 
   } catch (error) {
     console.error('[ADMIN] 로그아웃 실패:', error);
+    toast('로그아웃에 실패했습니다.', true);
   }
-
-  showLogin();
-  toast('Google 로그인 세션을 종료했습니다.');
 };
 
     changeTab('overview');
