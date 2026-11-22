@@ -217,24 +217,44 @@ padding:6px 9px;
   pickupButton.onclick=()=>claim();
   sceneEl.appendChild(pickupButton);
 
-  const notice=document.createElement('div');
+const notice=document.createElement('div');
 
-  notice.style.cssText=`
-    position:absolute;
-    z-index:60;
-    bottom:18px;
-    left:50%;
-    transform:translateX(-50%);
-    padding:11px 17px;
-    border-radius:10px;
-    background:#182d42;
-    color:white;
-    font:bold 14px Arial,sans-serif;
-    pointer-events:none;
-    max-width:90%;
-    text-align:center;
-  `;
+notice.style.cssText=`
+  position:absolute;
+  z-index:95;
+  top:110px;
+  bottom:auto;
+  left:50%;
+  transform:translateX(-50%);
+  padding:10px 16px;
+  border:1px solid rgba(185,220,255,.35);
+  border-radius:12px;
+  background:rgba(15,35,55,.88);
+  color:#ffffff;
+  font:bold 13px Arial,sans-serif;
+  pointer-events:none;
+  width:max-content;
+  max-width:calc(100% - 24px);
+  box-sizing:border-box;
+  text-align:center;
+  box-shadow:0 4px 20px rgba(0,0,0,.25);
+  backdrop-filter:blur(8px);
+`;
+const noticeMobileStyle=document.createElement('style');
 
+noticeMobileStyle.textContent=`
+  @media (max-width:980px), (pointer:coarse) {
+    #scene .jmc-boss-notice {
+      top:95px !important;
+      bottom:auto !important;
+      font-size:12px !important;
+      padding:8px 12px !important;
+    }
+  }
+`;
+
+notice.classList.add('jmc-boss-notice');
+document.head.appendChild(noticeMobileStyle);
   notice.hidden=true;
   sceneEl.appendChild(notice);
 
