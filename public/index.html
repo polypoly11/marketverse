@@ -875,7 +875,20 @@
     }
   }
 </style>
+<style>
+  /* PC에서 큰 채팅창과 미사일 아이콘 겹침 방지 */
+  @media screen and (min-width: 981px) and (pointer: fine) {
 
+    html body #scene > .jmc-scene-chat.jmc-chat-stage-2 {
+      left: 110px !important;
+      width: min(354px, calc(100% - 124px)) !important;
+      right: auto !important;
+    }
+
+  }
+</style>
+
+</head>
 </head>
 
 <!-- JMC 헤더 황금비율 디자인 최적화 -->
