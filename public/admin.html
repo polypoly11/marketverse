@@ -730,6 +730,26 @@
     🚀 전체 미사일 충전
   </button>
 </div>
+
+<div class="panel">
+  <div class="panel-head">
+    <h2>🐋 고래비늘 테스트 관리</h2>
+  </div>
+
+  <p class="muted">
+    관리자 본인 Google 계정의 고래비늘을
+    최대 5개까지 채웁니다.
+    기존 선물상자와 기프티콘은 유지됩니다.
+  </p>
+
+  <button
+    id="refill-whale-scales"
+    class="button secondary"
+    type="button"
+  >
+    🐋 고래비늘 5개 채우기
+  </button>
+</div>
         <div class="panel">
           <div class="panel-head">
             <h2>투표 관리</h2>
@@ -1362,6 +1382,36 @@ $('refill-missiles').onclick = async () => {
 
     toast(
       `미사일 충전 완료: ${result.players}명`
+    );
+
+    await refresh();
+
+  } catch (error) {
+    toast(error.message, true);
+
+  } finally {
+    button.disabled = false;
+  }
+};
+    $('refill-whale-scales').onclick = async () => {
+  if (!confirm(
+    '관리자 본인 계정의 고래비늘을 5개까지 채울까요?'
+  )) {
+    return;
+  }
+
+  const button = $('refill-whale-scales');
+
+  button.disabled = true;
+
+  try {
+    const result = await request(
+      '/api/admin/inventory/refill',
+      {}
+    );
+
+    toast(
+      `🐋 고래비늘 충전 완료: ${result.count}/${result.max}개`
     );
 
     await refresh();
