@@ -474,6 +474,121 @@ export function installMissileClient({
   );
 
   // ========================================
+  // PC 전용 미사일 버튼
+  // 모바일 버튼은 기존 코드 그대로 유지
+  // ========================================
+
+  const desktopMissileButton =
+    document.createElement('button');
+
+  desktopMissileButton.id =
+    'jmc-desktop-missile';
+
+  desktopMissileButton.type = 'button';
+
+  desktopMissileButton.innerHTML = `
+    <span style="font-size:23px">🚀</span>
+    <span style="font-size:12px;font-weight:800">
+      미사일 (S)
+    </span>
+  `;
+
+  desktopMissileButton.title =
+    '마우스로 0.7초 이상 누른 후 떼면 미사일 발사';
+
+  desktopMissileButton.setAttribute(
+    'aria-label',
+    'PC 미사일 조준 및 발사'
+  );
+
+  desktopMissileButton.style.cssText = `
+    position:fixed;
+    right:16px;
+    bottom:115px;
+    z-index:9995;
+    width:78px;
+    height:72px;
+    display:none;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:5px;
+    padding:8px;
+    border:1px solid #e5c18e;
+    border-radius:13px;
+    background:rgba(38,52,76,.96);
+    color:#fff;
+    box-shadow:0 5px 18px rgba(0,0,0,.4);
+    cursor:pointer;
+    user-select:none;
+    touch-action:none;
+  `;
+
+  document.body.appendChild(
+    desktopMissileButton
+  );
+
+  // 마우스가 있는 PC에서만 표시
+  const desktopMissileMedia =
+    window.matchMedia('(pointer:fine)');
+
+  function updateDesktopMissileButton() {
+    desktopMissileButton.style.display =
+      desktopMissileMedia.matches
+        ? 'flex'
+        : 'none';
+  }
+
+  updateDesktopMissileButton();
+
+  desktopMissileMedia.addEventListener(
+    'change',
+    updateDesktopMissileButton
+  );
+
+  // 마우스를 누르면 조준 시작
+  desktopMissileButton.addEventListener(
+    'pointerdown',
+    e => {
+      if (e.button !== 0) return;
+
+      e.preventDefault();
+
+      desktopMissileButton.setPointerCapture(
+        e.pointerId
+      );
+
+      desktopMissileButton.style.background =
+        'rgba(157,52,67,.98)';
+
+      press();
+    }
+  );
+
+  // 마우스를 떼면 발사
+  desktopMissileButton.addEventListener(
+    'pointerup',
+    e => {
+      e.preventDefault();
+
+      desktopMissileButton.style.background =
+        'rgba(38,52,76,.96)';
+
+      release();
+    }
+  );
+
+  desktopMissileButton.addEventListener(
+    'pointercancel',
+    () => {
+      desktopMissileButton.style.background =
+        'rgba(38,52,76,.96)';
+
+      release();
+    }
+  );
+
+  // ========================================
   // 3D 미사일 모델
   // ========================================
 
