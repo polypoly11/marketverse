@@ -1,3 +1,4 @@
+
 export function installMissileClient({
   THREE,
   scene,
@@ -90,7 +91,6 @@ export function installMissileClient({
   }
 
   positionInventory();
-
   setInterval(positionInventory, 300);
 
   // ========================================
@@ -362,14 +362,13 @@ export function installMissileClient({
       return;
     }
 
-aiming = true;
-pressedAt = performance.now();
-locked = null;
+    aiming = true;
+    pressedAt = performance.now();
+    locked = null;
 
-// 조준 효과음 초기화
-aimLastBeepAt = pressedAt;
-aimLockAnnounced = false;
-aimLastTargetId = null;
+    aimLastBeepAt = pressedAt;
+    aimLockAnnounced = false;
+    aimLastTargetId = null;
 
     send({
       type: 'missile_aim_start'
@@ -384,13 +383,12 @@ aimLastTargetId = null;
 
     const target = locked;
 
-aiming = false;
-locked = null;
+    aiming = false;
+    locked = null;
 
-// 조준 종료 시 효과음 상태 초기화
-aimLastBeepAt = 0;
-aimLockAnnounced = false;
-aimLastTargetId = null;
+    aimLastBeepAt = 0;
+    aimLockAnnounced = false;
+    aimLastTargetId = null;
 
     crosshair.style.display = 'none';
 
@@ -502,7 +500,6 @@ aimLastTargetId = null;
       roughness: 0.3
     });
 
-    // 몸체
     const body = new THREE.Mesh(
       new THREE.CylinderGeometry(
         0.18,
@@ -516,7 +513,6 @@ aimLastTargetId = null;
     body.rotation.x = Math.PI / 2;
     rocket.add(body);
 
-    // 탄두
     const nose = new THREE.Mesh(
       new THREE.ConeGeometry(
         0.18,
@@ -531,7 +527,6 @@ aimLastTargetId = null;
 
     rocket.add(nose);
 
-    // 날개
     for (let i = 0; i < 4; i++) {
       const fin = new THREE.Mesh(
         new THREE.BoxGeometry(
@@ -555,7 +550,6 @@ aimLastTargetId = null;
       rocket.add(fin);
     }
 
-    // 엔진 노즐
     const nozzle = new THREE.Mesh(
       new THREE.CylinderGeometry(
         0.15,
@@ -571,7 +565,6 @@ aimLastTargetId = null;
 
     rocket.add(nozzle);
 
-    // 엔진 불꽃
     const flame = new THREE.Mesh(
       new THREE.ConeGeometry(
         0.12,
@@ -629,8 +622,9 @@ aimLastTargetId = null;
       material => material.dispose()
     );
   }
+
   // ========================================
-  // 유도 미사일 비행 효과음
+  // 미사일 비행 효과음
   // ========================================
 
   let missileAudioCtx = null;
@@ -668,7 +662,6 @@ aimLastTargetId = null;
     }
   }
 
-  // 모바일 및 PC에서 사용자 조작 시 오디오 활성화
   document.addEventListener(
     'pointerdown',
     getMissileAudio,
@@ -679,72 +672,75 @@ aimLastTargetId = null;
     'keydown',
     getMissileAudio
   );
-// ========================================
-// 미사일 조준 및 락온 효과음
-// ========================================
 
-let aimLastBeepAt = 0;
-let aimLockAnnounced = false;
-let aimLastTargetId = null;
+  // ========================================
+  // 미사일 조준 및 락온 효과음
+  // ========================================
 
-function playAimBeep(isLock = false) {
-  if (!missileSoundEnabled()) return;
+  let aimLastBeepAt = 0;
+  let aimLockAnnounced = false;
+  let aimLastTargetId = null;
 
-  const ctx = getMissileAudio();
-  if (!ctx) return;
+  function playAimBeep(isLock = false) {
+    if (!missileSoundEnabled()) return;
 
-  try {
-    const now = ctx.currentTime;
+    const ctx = getMissileAudio();
+    if (!ctx) return;
 
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
+    try {
+      const now = ctx.currentTime;
 
-    osc.type = isLock ? 'sine' : 'triangle';
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
 
-    if (isLock) {
-      // 락온 성공: 상승하는 전자음
-      osc.frequency.setValueAtTime(720, now);
-      osc.frequency.exponentialRampToValueAtTime(
-        1180,
-        now + 0.16
+      osc.type = isLock ? 'sine' : 'triangle';
+
+      if (isLock) {
+        osc.frequency.setValueAtTime(720, now);
+        osc.frequency.exponentialRampToValueAtTime(
+          1180,
+          now + 0.16
+        );
+      } else {
+        osc.frequency.setValueAtTime(520, now);
+        osc.frequency.exponentialRampToValueAtTime(
+          660,
+          now + 0.07
+        );
+      }
+
+      const duration = isLock ? 0.22 : 0.09;
+      const volume = isLock ? 0.075 : 0.028;
+
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(
+        volume,
+        now + 0.012
       );
-    } else {
-      // 탐색 중: 짧은 레이더 신호음
-      osc.frequency.setValueAtTime(520, now);
-      osc.frequency.exponentialRampToValueAtTime(
-        660,
-        now + 0.07
+      gain.gain.exponentialRampToValueAtTime(
+        0.0001,
+        now + duration
+      );
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + duration + 0.01);
+
+      osc.onended = () => {
+        osc.disconnect();
+        gain.disconnect();
+      };
+    } catch (error) {
+      console.warn(
+        '[MISSILE] 조준음 재생 실패:',
+        error
       );
     }
-
-    const duration = isLock ? 0.22 : 0.09;
-    const volume = isLock ? 0.075 : 0.028;
-
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(
-      volume,
-      now + 0.012
-    );
-    gain.gain.exponentialRampToValueAtTime(
-      0.0001,
-      now + duration
-    );
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
-    osc.start(now);
-    osc.stop(now + duration + 0.01);
-
-    osc.onended = () => {
-      osc.disconnect();
-      gain.disconnect();
-    };
-  } catch (error) {
-    console.warn('[MISSILE] 조준음 재생 실패:', error);
   }
-}
-    // ========================================
+
+  // ========================================
   // 미사일 비행음: 바람 + 로켓 추진 소음
   // ========================================
 
@@ -758,7 +754,6 @@ function playAimBeep(isLock = false) {
     if (!ctx) return;
 
     try {
-      // 실제 바람 소리에 가까운 노이즈 생성
       const sampleRate = ctx.sampleRate;
       const buffer = ctx.createBuffer(
         1,
@@ -776,8 +771,6 @@ function playAimBeep(isLock = false) {
       wind.buffer = buffer;
       wind.loop = true;
 
-      // 날카로운 잡음을 줄이고
-      // 공기를 가르는 '슈우웅' 소리로 가공
       const filter = ctx.createBiquadFilter();
       filter.type = 'bandpass';
       filter.frequency.value = 1100;
@@ -790,10 +783,10 @@ function playAimBeep(isLock = false) {
         ctx.currentTime
       );
 
-gain.gain.linearRampToValueAtTime(
-  0.16,
-  ctx.currentTime + 0.12
-);
+      gain.gain.linearRampToValueAtTime(
+        0.16,
+        ctx.currentTime + 0.12
+      );
 
       wind.connect(filter);
       filter.connect(gain);
@@ -864,7 +857,6 @@ gain.gain.linearRampToValueAtTime(
       const sound = missileSounds.get(id);
       if (!sound) continue;
 
-      // 미사일 이동에 따른 바람 소리 변화
       const ctx = missileAudioCtx;
 
       if (!ctx || ctx.state !== 'running') {
@@ -880,23 +872,22 @@ gain.gain.linearRampToValueAtTime(
         0.08
       );
 
-      // 캐릭터와의 거리에 따라 음량 조절
       const me = getAvatar();
       const missilePos = shot.object.position;
 
-let volume = 0.16;
+      let volume = 0.16;
 
-if (me) {
-  const distance = Math.hypot(
-    me.position.x - missilePos.x,
-    me.position.z - missilePos.z
-  );
+      if (me) {
+        const distance = Math.hypot(
+          me.position.x - missilePos.x,
+          me.position.z - missilePos.z
+        );
 
-volume = Math.max(
-  0.05,
-  0.16 * (1 - distance / 50)
-);
-}
+        volume = Math.max(
+          0.05,
+          0.16 * (1 - distance / 50)
+        );
+      }
 
       sound.gain.gain.setTargetAtTime(
         volume,
@@ -905,17 +896,18 @@ volume = Math.max(
       );
     }
   }
-function removeMissile(id) {
-  stopMissileSound(id);
 
-  const shot = shots.get(id);
+  function removeMissile(id) {
+    stopMissileSound(id);
 
-  if (!shot) return;
+    const shot = shots.get(id);
 
-  disposeObject(shot.object);
+    if (!shot) return;
 
-  shots.delete(id);
-}
+    disposeObject(shot.object);
+
+    shots.delete(id);
+  }
 
   // ========================================
   // 피격 화면 효과
@@ -1034,7 +1026,6 @@ function removeMissile(id) {
       duration: 0.75
     });
 
-    // 완전 회피면 캐릭터 피격 모션 없음
     if (damage <= 0) return;
 
     const avatar =
@@ -1199,7 +1190,6 @@ function removeMissile(id) {
       return true;
     }
 
-    // 미사일 생성
     if (m.type === 'missile_launch') {
       const object = createRocket();
 
@@ -1230,7 +1220,6 @@ function removeMissile(id) {
       return true;
     }
 
-    // 서버에서 계산한 미사일 위치
     if (m.type === 'missile_position') {
       const shot = shots.get(m.id);
 
@@ -1247,14 +1236,12 @@ function removeMissile(id) {
       return true;
     }
 
-    // 실제 명중
     if (m.type === 'missile_hit') {
       removeMissile(m.id);
       createExplosion(m);
       return true;
     }
 
-    // 빗나간 미사일 종료
     if (m.type === 'missile_end') {
       removeMissile(m.id);
 
@@ -1288,84 +1275,62 @@ function removeMissile(id) {
       0.05
     );
 
-lastFrame = now;
+    lastFrame = now;
 
-updateImpacts(dt, now);
+    updateImpacts(dt, now);
+    updateMissileSounds(now);
 
-// 미사일 추진음 실행 및 음량 설정 반영
-updateMissileSounds(now);
+    // ========================================
+    // 목표물이 있을 때만 조준 효과음
+    // ========================================
 
-// ========================================
-// ========================================
-// 목표물이 조준칸에 잡혔을 때만 효과음 재생
-// ========================================
+    if (aiming) {
+      locked = availableTarget();
 
-if (aiming) {
-  locked = availableTarget();
+      const lockReady = Boolean(
+        locked && now - pressedAt >= LOCK_MS
+      );
 
-  const lockReady =
-    locked &&
-    now - pressedAt >= LOCK_MS;
+      updateReticle(locked, lockReady);
 
-  updateReticle(
-    locked,
-    Boolean(lockReady)
-  );
+      const visibleTarget =
+        locked && crosshair.style.display === 'flex'
+          ? locked
+          : null;
 
-  if (locked) {
+      if (visibleTarget) {
+        if (visibleTarget.id !== aimLastTargetId) {
+          aimLastTargetId = visibleTarget.id;
+          aimLockAnnounced = false;
+          aimLastBeepAt = now;
 
-    // 새로운 목표물이 조준칸에 들어온 순간
-    if (locked.id !== aimLastTargetId) {
-      aimLastTargetId = locked.id;
-      aimLockAnnounced = false;
-      aimLastBeepAt = now;
+          playAimBeep(false);
+        }
 
-      // 목표물 포착음
-      playAimBeep(false);
+        if (lockReady && !aimLockAnnounced) {
+          playAimBeep(true);
+          aimLockAnnounced = true;
+        } else if (
+          !lockReady &&
+          now - aimLastBeepAt >= 250
+        ) {
+          playAimBeep(false);
+          aimLastBeepAt = now;
+        }
+      } else {
+        locked = null;
+        aimLastTargetId = null;
+        aimLockAnnounced = false;
+        aimLastBeepAt = 0;
+      }
+    } else {
+      crosshair.style.display = 'none';
     }
 
-    if (lockReady && !aimLockAnnounced) {
-      // 조준 완료음
-      playAimBeep(true);
-      aimLockAnnounced = true;
-
-    } else if (
-      !lockReady &&
-      now - aimLastBeepAt >= 250
-    ) {
-      // 목표물을 포착한 동안에만 탐색음 반복
-      playAimBeep(false);
-      aimLastBeepAt = now;
-    }
-
-  } else {
-    // 목표물이 조준칸 밖으로 벗어나면
-    // 탐색음 중단 및 락온 알림 초기화
-    aimLastTargetId = null;
-    aimLockAnnounced = false;
-    aimLastBeepAt = 0;
-  }
-
-} else {
-  crosshair.style.display = 'none';
-}
-// ========================================
-
-if (aiming) {
-  locked = availableTarget();
-
-  const lockReady =
-    locked &&
-    now - pressedAt >= LOCK_MS;
-
-  updateReticle(
-    locked,
-    Boolean(lockReady)
-  );
-
-  // 목표물 변경 시 락온 확인음 초기화
-
+    // ========================================
     // 미사일 보유량 / 충전 시간 표시
+    // ========================================
+
     const remaining = nextAt
       ? Math.max(
           0,
@@ -1378,7 +1343,10 @@ if (aiming) {
     indicator.textContent =
       `🚀\n${count}/${maxMissiles}\n${remaining}분`;
 
+    // ========================================
     // 미사일 이동
+    // ========================================
+
     for (const [id, shot] of shots) {
       shot.object.position.lerp(
         shot.serverPosition,
@@ -1396,7 +1364,6 @@ if (aiming) {
         dir
       );
 
-      // 엔진 화염
       const flame =
         shot.object.userData.flame;
 
@@ -1406,7 +1373,6 @@ if (aiming) {
           Math.sin(now * 0.025) * 0.2;
       }
 
-      // 오래된 미사일 제거
       if (now > shot.deadline) {
         removeMissile(id);
       }
