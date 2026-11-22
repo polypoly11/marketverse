@@ -382,7 +382,8 @@ mountAdmin(app, {
   presence,
   raid,
   visitorStats,
-  missileSystem
+  missileSystem,
+  googleAuth
 });
 
 // ========================================
