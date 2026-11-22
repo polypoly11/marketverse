@@ -184,25 +184,28 @@ export function installMissileClient({
     'non-scaling-stroke'
   );
 
-  missileBorderProgress.setAttribute(
-    'pathLength',
-    '100'
-  );
-
-  missileBorderProgress.setAttribute(
-    'stroke-dasharray',
-    '100'
-  );
-
-  missileBorderProgress.setAttribute(
-    'stroke-dashoffset',
-    '100'
-  );
-
+  // 실제 SVG 경로 길이를 이용해 진행률 계산
   missileBorderSvg.append(
     missileBorderTrack,
     missileBorderProgress
   );
+
+  const missilePathLength =
+    missileBorderProgress.getTotalLength();
+
+  missileBorderProgress.setAttribute(
+    'stroke-dasharray',
+    `${missilePathLength} ${missilePathLength}`
+  );
+
+  missileBorderProgress.setAttribute(
+    'stroke-dashoffset',
+    String(missilePathLength)
+  );
+
+  // 발광 효과
+  missileBorderProgress.style.filter =
+    'drop-shadow(0 0 3px rgba(86,245,214,.9))';
 
   // ========================================
   // 아이콘 내부 정보
@@ -276,7 +279,7 @@ export function installMissileClient({
 
       missileBorderProgress.setAttribute(
         'stroke-dashoffset',
-        '100'
+        String(missilePathLength)
       );
 
       return;
@@ -295,10 +298,13 @@ export function installMissileClient({
       )
     );
 
-    // SVG 테두리 0~100% 진행
+    // 둥근 사각형 테두리를 시계 방향으로 채움
+    const offset =
+      missilePathLength * (1 - progress);
+
     missileBorderProgress.setAttribute(
       'stroke-dashoffset',
-      String(100 * (1 - progress))
+      String(offset)
     );
 
     missileBorderProgress.setAttribute(
