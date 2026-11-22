@@ -138,6 +138,7 @@ const magicShots = [];
 // ========================================
 const NPC_TO_SPECTATE_MS = 10000;
 const NPC_TO_COMBAT_MS = 5000;
+const NPC_RETURN_COOLDOWN_MS = 60000;
 const NPC_FORMS = ['ghost_seal', 'holo_drone', 'mongle'];
 const npcSessions = new Map();
 
@@ -153,6 +154,7 @@ function npcModePayload(p) {
     mode: p.npcMode || 'combat',
     pendingMode: p.npcPendingMode || null,
     transitionEndsAt: p.npcTransitionEndsAt || null,
+    npcCooldownEndsAt: p.npcCooldownEndsAt || null,
     form: p.npcForm || null,
     serverNow: Date.now()
   };
@@ -164,6 +166,7 @@ function rememberNpcSession(p) {
     mode: p.npcMode,
     pendingMode: p.npcPendingMode,
     transitionEndsAt: p.npcTransitionEndsAt,
+    npcCooldownEndsAt: p.npcCooldownEndsAt || 0,
     form: p.npcForm,
     savedAt: Date.now()
   };
@@ -178,6 +181,7 @@ function publishNpcMode(p) {
     player.npcMode = p.npcMode;
     player.npcPendingMode = p.npcPendingMode;
     player.npcTransitionEndsAt = p.npcTransitionEndsAt;
+    player.npcCooldownEndsAt = p.npcCooldownEndsAt || 0;
     player.npcForm = p.npcForm;
     send(ws, npcModePayload(player));
   }
@@ -190,6 +194,7 @@ function restoreNpcSession(p) {
   p.npcMode = old.mode || 'combat';
   p.npcPendingMode = old.pendingMode || null;
   p.npcTransitionEndsAt = old.transitionEndsAt || 0;
+  p.npcCooldownEndsAt = old.npcCooldownEndsAt || 0;
   p.npcForm = old.form || null;
 }
 
@@ -209,6 +214,10 @@ function updateNpcModes() {
     p.npcMode = nextMode;
     p.npcPendingMode = null;
     p.npcTransitionEndsAt = 0;
+    if (nextMode === 'combat') {
+      // 전투 복귀가 실제로 완료된 순간부터 NPC 재전환 60초 금지
+      p.npcCooldownEndsAt = now + NPC_RETURN_COOLDOWN_MS;
+    }
     p.npcForm = nextMode === 'npc'
       ? NPC_FORMS[crypto.randomInt(NPC_FORMS.length)]
       : null;
@@ -723,6 +732,7 @@ wss.on('connection', async (ws, req) => {
     npcMode: 'combat',
     npcPendingMode: null,
     npcTransitionEndsAt: 0,
+    npcCooldownEndsAt: 0,
     npcForm: null
   };
 
@@ -879,9 +889,20 @@ if (firstJoin) {
       // 같은 이용자의 다른 탭에서도 전환 중이면 중복 전환 차단
       const key = npcOwnerKey(p);
       const shared = npcSessions.get(key);
-      if (shared?.pendingMode) {
+      if (shared) {
+        // 다른 탭의 최신 상태를 우선하며, 오래된 탭에서 우회하지 못하게 함
         restoreNpcSession(p);
+      }
+      if (p.npcPendingMode || requestedMode === p.npcMode) {
         send(ws, npcModePayload(p));
+        return;
+      }
+      if (requestedMode === 'npc' && Date.now() < (p.npcCooldownEndsAt || 0)) {
+        send(ws, npcModePayload(p));
+        send(ws, {
+          type: 'npc_mode_notice',
+          message: '전투 복귀 후 60초가 지나야 NPC 모드로 다시 전환할 수 있습니다.'
+        });
         return;
       }
 
