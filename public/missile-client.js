@@ -63,7 +63,7 @@ export function installMissileClient({
     'S키 또는 모바일 🚀 버튼을 0.7초 이상 누른 뒤 떼면 발사\n' +
     '다른 이용자와 고래 보스 공격 가능\n' +
     '직격 40 / 근접 25 / 외곽 10 / 회피 0 피해\n' +
-    '접속 중 10분마다 1개 충전';
+       '접속 중 3분마다 1개 충전';
 
   indicator.textContent = '🚀\n0/5';
 
@@ -1433,7 +1433,7 @@ export function installMissileClient({
             (nextAt - Date.now()) / 60000
           )
         )
-      : 10;
+      : 3;
 
     indicator.textContent =
       `🚀\n${count}/${maxMissiles}\n${remaining}분`;
