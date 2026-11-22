@@ -1087,8 +1087,17 @@ if (jmcGoogleUser?.accountNickname) {
   // 구글 계정 프로필로 서버 입장
   sendProfile();
 }
-    if (jmcGoogleUser && !jmcGoogleUser.accountNickname) {
-      jmcOpenAccountProfile(true);
+    if (jmcGoogleUser) {
+      if (!jmcGoogleUser.accountNickname) {
+        // Google 계정 프로필을 아직 설정하지 않은 경우
+        jmcOpenAccountProfile(true);
+      }
+    } else {
+      // 게스트는 최초 입장 또는 사망 후 재입장 시
+      // 기존 캐릭터 설정 절차 유지
+      if (!profile || reentryRequired) {
+        showProfile();
+      }
     }
 
     jmcGoogleEnabled = data.configured === true;
@@ -1109,9 +1118,15 @@ if (jmcGoogleUser?.accountNickname) {
       : '게스트 · 로그인';
 
   } catch(error) {
-    jmcAuthNote.textContent=
+    jmcAuthNote.textContent =
       '계정 상태를 불러오지 못했습니다. 게스트로는 입장할 수 있습니다.';
-    jmcGoogleButton.hidden=true;
+
+    jmcGoogleButton.hidden = true;
+
+    // 인증 확인 실패 시에도 게스트 설정창은 정상 표시
+    if (!profile || reentryRequired) {
+      showProfile();
+    }
   }
 }
 
@@ -1184,12 +1199,13 @@ $('nickname').addEventListener('keydown',e=>{
   if(e.key==='Enter')saveProfile();
 });
 
-if(profile && !reentryRequired){
-  $('profile-modal').hidden = true;
+// Google 로그인 상태 확인 전에는
+// 캐릭터 설정창을 표시하지 않음
+$('profile-modal').hidden = true;
+
+if (profile) {
   $('my-profile').textContent =
     `${animal(profile.animal).emoji} ${profile.name}`;
-}else{
-  showProfile();
 }
 
 function plotChart(canvas,candles,mini=false){
