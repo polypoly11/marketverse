@@ -371,9 +371,6 @@ aimLastBeepAt = pressedAt;
 aimLockAnnounced = false;
 aimLastTargetId = null;
 
-// 조준 시작 알림음
-playAimBeep(false);
-
     send({
       type: 'missile_aim_start'
     });
@@ -1299,7 +1296,59 @@ updateImpacts(dt, now);
 updateMissileSounds(now);
 
 // ========================================
-// 조준 표시 및 효과음 갱신
+// ========================================
+// 목표물이 조준칸에 잡혔을 때만 효과음 재생
+// ========================================
+
+if (aiming) {
+  locked = availableTarget();
+
+  const lockReady =
+    locked &&
+    now - pressedAt >= LOCK_MS;
+
+  updateReticle(
+    locked,
+    Boolean(lockReady)
+  );
+
+  if (locked) {
+
+    // 새로운 목표물이 조준칸에 들어온 순간
+    if (locked.id !== aimLastTargetId) {
+      aimLastTargetId = locked.id;
+      aimLockAnnounced = false;
+      aimLastBeepAt = now;
+
+      // 목표물 포착음
+      playAimBeep(false);
+    }
+
+    if (lockReady && !aimLockAnnounced) {
+      // 조준 완료음
+      playAimBeep(true);
+      aimLockAnnounced = true;
+
+    } else if (
+      !lockReady &&
+      now - aimLastBeepAt >= 250
+    ) {
+      // 목표물을 포착한 동안에만 탐색음 반복
+      playAimBeep(false);
+      aimLastBeepAt = now;
+    }
+
+  } else {
+    // 목표물이 조준칸 밖으로 벗어나면
+    // 탐색음 중단 및 락온 알림 초기화
+    aimLastTargetId = null;
+    aimLockAnnounced = false;
+    aimLastBeepAt = 0;
+  }
+
+} else {
+  crosshair.style.display = 'none';
+}
 // ========================================
 
 if (aiming) {
