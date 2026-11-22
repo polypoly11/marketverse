@@ -3132,8 +3132,21 @@ function send(m){
   }
 }
 
-window.addEventListener('jmc-inventory-craft',()=>{
-  send({type:'inventory_craft'});
+window.addEventListener('jmc-inventory-craft', () => {
+  send({
+    type: 'inventory_craft'
+  });
+});
+
+window.addEventListener('jmc-inventory-box-open', e => {
+  const boxId = e.detail?.boxId;
+
+  if (!boxId) return;
+
+  send({
+    type: 'inventory_box_open',
+    boxId
+  });
 });
 
 function sendProfile(){
@@ -3236,7 +3249,9 @@ function connect(){
     if (
       m.type === 'inventory_state' ||
       m.type === 'inventory_crafted' ||
-      m.type === 'inventory_notice'
+      m.type === 'inventory_notice' ||
+      m.type === 'inventory_box_empty' ||
+      m.type === 'inventory_box_opened'
     ) {
       window.dispatchEvent(
         new CustomEvent('jmc-inventory', {
