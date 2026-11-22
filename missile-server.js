@@ -338,11 +338,57 @@ export function createMissileSystem({
   }
 
   // ========================================
+  // 조준당하는 이용자에게 경고 전달
+  // ========================================
+
+  function sendAimWarning(
+    victim,
+    attackerId,
+    active,
+    locked = false
+  ) {
+    if (!victim) return;
+
+    const victimWs = [...clients].find(
+      ([, player]) => player === victim
+    )?.[0];
+
+    if (!victimWs) return;
+
+    send(victimWs, {
+      type: 'missile_warning',
+      attackerId,
+      active,
+      locked
+    });
+  }
+
+  function stopAimWarning(p) {
+    const previousId = p.missileWarningTargetId;
+
+    if (!previousId) return;
+
+    const previous = targetFor(p, previousId);
+
+    if (previous?.player) {
+      sendAimWarning(
+        previous.player,
+        p.id,
+        false
+      );
+    }
+
+    p.missileWarningTargetId = null;
+  }
+
+  // ========================================
   // S키 미사일 발사
   // ========================================
 
   function handle(ws, p, m) {
     if (m.type === 'missile_aim_start') {
+      stopAimWarning(p);
+
       if (
         p.ready &&
         p.hp > 0 &&
@@ -355,9 +401,71 @@ export function createMissileSystem({
       return true;
     }
 
+    // ========================================
+    // 조준 중 대상 확인
+    // ========================================
+
+    if (m.type === 'missile_aim_target') {
+      const targetId = m.targetId;
+
+      if (
+        !p.ready ||
+        p.hp <= 0 ||
+        !p.missileAimAt ||
+        p.missileLoading ||
+        p.missileCount <= 0 ||
+        typeof targetId !== 'string' ||
+        targetId.length > 100
+      ) {
+        stopAimWarning(p);
+        return true;
+      }
+
+      const target = targetFor(p, targetId);
+
+      if (
+        !target?.player ||
+        !validAim(p, target)
+      ) {
+        stopAimWarning(p);
+        return true;
+      }
+
+      if (
+        p.missileWarningTargetId !== targetId
+      ) {
+        stopAimWarning(p);
+
+        p.missileWarningTargetId = targetId;
+      }
+
+      sendAimWarning(
+        target.player,
+        p.id,
+        true,
+        Date.now() - p.missileAimAt >= LOCK_MS
+      );
+
+      return true;
+    }
+
+    // ========================================
+    // 조준 종료
+    // ========================================
+
+    if (m.type === 'missile_aim_end') {
+      stopAimWarning(p);
+
+      p.missileAimAt = 0;
+
+      return true;
+    }
+
     if (m.type !== 'missile_fire') {
       return false;
     }
+
+    stopAimWarning(p);
 
     const aimAt = p.missileAimAt;
     p.missileAimAt = 0;
