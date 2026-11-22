@@ -362,9 +362,17 @@ export function installMissileClient({
       return;
     }
 
-    aiming = true;
-    pressedAt = performance.now();
-    locked = null;
+aiming = true;
+pressedAt = performance.now();
+locked = null;
+
+// 조준 효과음 초기화
+aimLastBeepAt = pressedAt;
+aimLockAnnounced = false;
+aimLastTargetId = null;
+
+// 조준 시작 알림음
+playAimBeep(false);
 
     send({
       type: 'missile_aim_start'
@@ -379,8 +387,13 @@ export function installMissileClient({
 
     const target = locked;
 
-    aiming = false;
-    locked = null;
+aiming = false;
+locked = null;
+
+// 조준 종료 시 효과음 상태 초기화
+aimLastBeepAt = 0;
+aimLockAnnounced = false;
+aimLastTargetId = null;
 
     crosshair.style.display = 'none';
 
@@ -669,7 +682,71 @@ export function installMissileClient({
     'keydown',
     getMissileAudio
   );
+// ========================================
+// 미사일 조준 및 락온 효과음
+// ========================================
 
+let aimLastBeepAt = 0;
+let aimLockAnnounced = false;
+let aimLastTargetId = null;
+
+function playAimBeep(isLock = false) {
+  if (!missileSoundEnabled()) return;
+
+  const ctx = getMissileAudio();
+  if (!ctx) return;
+
+  try {
+    const now = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = isLock ? 'sine' : 'triangle';
+
+    if (isLock) {
+      // 락온 성공: 상승하는 전자음
+      osc.frequency.setValueAtTime(720, now);
+      osc.frequency.exponentialRampToValueAtTime(
+        1180,
+        now + 0.16
+      );
+    } else {
+      // 탐색 중: 짧은 레이더 신호음
+      osc.frequency.setValueAtTime(520, now);
+      osc.frequency.exponentialRampToValueAtTime(
+        660,
+        now + 0.07
+      );
+    }
+
+    const duration = isLock ? 0.22 : 0.09;
+    const volume = isLock ? 0.075 : 0.028;
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(
+      volume,
+      now + 0.012
+    );
+    gain.gain.exponentialRampToValueAtTime(
+      0.0001,
+      now + duration
+    );
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + duration + 0.01);
+
+    osc.onended = () => {
+      osc.disconnect();
+      gain.disconnect();
+    };
+  } catch (error) {
+    console.warn('[MISSILE] 조준음 재생 실패:', error);
+  }
+}
     // ========================================
   // 미사일 비행음: 바람 + 로켓 추진 소음
   // ========================================
@@ -1221,17 +1298,44 @@ updateImpacts(dt, now);
 // 미사일 추진음 실행 및 음량 설정 반영
 updateMissileSounds(now);
 
-    // 조준 표시 갱신
-    if (aiming) {
-      locked = availableTarget();
+// ========================================
+// 조준 표시 및 효과음 갱신
+// ========================================
 
-      updateReticle(
-        locked,
-        now - pressedAt >= LOCK_MS
-      );
-    } else {
-      crosshair.style.display = 'none';
-    }
+if (aiming) {
+  locked = availableTarget();
+
+  const lockReady =
+    locked &&
+    now - pressedAt >= LOCK_MS;
+
+  updateReticle(
+    locked,
+    Boolean(lockReady)
+  );
+
+  // 목표물 변경 시 락온 확인음 초기화
+  if (locked?.id !== aimLastTargetId) {
+    aimLastTargetId = locked?.id ?? null;
+    aimLockAnnounced = false;
+  }
+
+  if (lockReady && !aimLockAnnounced) {
+    // 목표물 락온 완료
+    playAimBeep(true);
+    aimLockAnnounced = true;
+  } else if (
+    !lockReady &&
+    now - aimLastBeepAt >= 250
+  ) {
+    // 조준 중 0.25초마다 탐색음
+    playAimBeep(false);
+    aimLastBeepAt = now;
+  }
+
+} else {
+  crosshair.style.display = 'none';
+}
 
     // 미사일 보유량 / 충전 시간 표시
     const remaining = nextAt
