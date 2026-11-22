@@ -719,9 +719,14 @@ if (firstJoin) {
 } else {
   missileSystem.state(ws, p);
 }
-      if (firstJoin) {
-        void visitorStats.record(m.visitorId);
-      }
+if (firstJoin) {
+  void visitorStats.record(m.visitorId).catch(error => {
+    console.error(
+      '[JMC] 방문 통계 기록 실패:',
+      error
+    );
+  });
+}
 
       void raid.inventory.sendSnapshot(ws, p);
 
