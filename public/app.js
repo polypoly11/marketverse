@@ -453,7 +453,10 @@ function setCharacterName(avatar, value) {
   if (!avatar) return;
   const name=String(value ?? '').trim().slice(0,16);
   const old=avatar.userData.nameTag;
-  if(old?.name===name) return;
+  if(old?.name===name) {
+    old.sprite.position.y = avatar.userData.npcMode === 'npc' ? 2.65 : 3.55;
+    return;
+  }
   if(old) {
     avatar.remove(old.sprite);
     old.sprite.material.dispose();
@@ -483,7 +486,7 @@ function setCharacterName(avatar, value) {
   const sprite=new THREE.Sprite(new THREE.SpriteMaterial({
     map:texture,transparent:true,depthTest:false,depthWrite:false
   }));
-  sprite.position.set(0,3.55,0);
+  sprite.position.set(0,avatar.userData.npcMode === 'npc' ? 2.65 : 3.55,0);
   sprite.scale.set(2.75,.68,1);
   sprite.renderOrder=95;
   avatar.add(sprite);
@@ -1588,6 +1591,10 @@ function setNpcAppearance(avatar, mode, form) {
   // 머리 위 이름표에는 관전 상태를 분명히 표시
   const label=avatar.userData.originalNpcName;
   if(label) setCharacterName(avatar,isNpc?`${label} · 관전중`:label);
+  // NPC가 작아진 만큼 닉네임도 내려오고 복귀 시 원래 높이로 복원
+  if(avatar.userData.nameTag?.sprite) {
+    avatar.userData.nameTag.sprite.position.y = isNpc ? 2.65 : 3.55;
+  }
 }
 
 function animateNpcModel(avatar, now) {
@@ -3191,7 +3198,7 @@ function showBubble(item){
   });
 
   const sprite=new THREE.Sprite(material);
-  sprite.position.set(0,4.7,0);
+  sprite.position.set(0,avatar.userData.npcMode === 'npc' ? 3.6 : 4.7,0);
   sprite.scale.set(3.8,1.58,1);
   sprite.renderOrder=100;
   avatar.add(sprite);
@@ -3205,6 +3212,11 @@ function showBubble(item){
 
 function tickBubbles(now){
   for(const [id,bubble] of activeBubbles){
+    // 말풍선이 떠 있는 중에 변신해도 즉시 높이 갱신 (PC·모바일 공통)
+    const avatar = id === myId ? myAvatar : others.get(id);
+    if(avatar && bubble.sprite) {
+      bubble.sprite.position.y = avatar.userData.npcMode === 'npc' ? 3.6 : 4.7;
+    }
     if(now>=bubble.expires){
       removeBubble(id);
     }else if(now>bubble.expires-900){
