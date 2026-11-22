@@ -35,6 +35,12 @@ export function installMissileClient({
   // 미사일 인벤토리
   // ========================================
 
+  // ========================================
+  // 미사일 충전 SVG 테두리
+  // ========================================
+
+  const MISSILE_RECHARGE_MS = 3 * 60 * 1000;
+
   const indicator = document.createElement('div');
 
   indicator.id = 'jmc-missile-inventory';
@@ -46,7 +52,7 @@ export function installMissileClient({
     min-height:58px;
     box-sizing:border-box;
     padding:8px 4px 7px;
-    border:1px solid #d8ba80;
+    border:1px solid rgba(216,186,128,.35);
     border-radius:12px;
     background:rgba(15,29,47,.97);
     color:#fff;
@@ -56,8 +62,10 @@ export function installMissileClient({
     white-space:pre-line;
     cursor:help;
     box-shadow:0 5px 18px rgba(0,0,0,.28);
+    overflow:hidden;
   `;
 
+  // 기존 마우스 오버 안내 설명 그대로 유지
   indicator.title =
     '🚀 유도 미사일 사용법\n' +
     'S키 또는 모바일 🚀 버튼을 0.7초 이상 누른 뒤 떼면 발사\n' +
@@ -65,9 +73,259 @@ export function installMissileClient({
     '직격 40 / 근접 25 / 외곽 10 / 회피 0 피해\n' +
        '접속 중 3분마다 1개 충전';
 
-  indicator.textContent = '🚀\n0/5';
+  // ========================================
+  // 둥근 사각형 SVG 경로
+  // 상단 중앙에서 시작해 시계 방향으로 진행
+  // ========================================
+
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+
+  const missileBorderSvg =
+    document.createElementNS(SVG_NS, 'svg');
+
+  missileBorderSvg.setAttribute(
+    'viewBox',
+    '0 0 100 100'
+  );
+
+  missileBorderSvg.setAttribute(
+    'preserveAspectRatio',
+    'none'
+  );
+
+  missileBorderSvg.setAttribute(
+    'aria-hidden',
+    'true'
+  );
+
+  missileBorderSvg.style.cssText = `
+    position:absolute;
+    inset:0;
+    width:100%;
+    height:100%;
+    pointer-events:none;
+    overflow:visible;
+  `;
+
+  // 상단 중앙 → 우측 → 하단 → 좌측 순서
+  const borderPath =
+    'M50 2 ' +
+    'H84 Q98 2 98 16 ' +
+    'V84 Q98 98 84 98 ' +
+    'H16 Q2 98 2 84 ' +
+    'V16 Q2 2 16 2 ' +
+    'H50 Z';
+
+  // 충전되지 않은 테두리
+  const missileBorderTrack =
+    document.createElementNS(SVG_NS, 'path');
+
+  missileBorderTrack.setAttribute(
+    'd',
+    borderPath
+  );
+
+  missileBorderTrack.setAttribute(
+    'fill',
+    'none'
+  );
+
+  missileBorderTrack.setAttribute(
+    'stroke',
+    'rgba(216,186,128,.30)'
+  );
+
+  missileBorderTrack.setAttribute(
+    'stroke-width',
+    '4'
+  );
+
+  missileBorderTrack.setAttribute(
+    'vector-effect',
+    'non-scaling-stroke'
+  );
+
+  // 실제 충전되는 테두리
+  const missileBorderProgress =
+    document.createElementNS(SVG_NS, 'path');
+
+  missileBorderProgress.setAttribute(
+    'd',
+    borderPath
+  );
+
+  missileBorderProgress.setAttribute(
+    'fill',
+    'none'
+  );
+
+  missileBorderProgress.setAttribute(
+    'stroke',
+    '#56f5d6'
+  );
+
+  missileBorderProgress.setAttribute(
+    'stroke-width',
+    '4'
+  );
+
+  missileBorderProgress.setAttribute(
+    'stroke-linecap',
+    'round'
+  );
+
+  missileBorderProgress.setAttribute(
+    'stroke-linejoin',
+    'round'
+  );
+
+  missileBorderProgress.setAttribute(
+    'vector-effect',
+    'non-scaling-stroke'
+  );
+
+  missileBorderProgress.setAttribute(
+    'pathLength',
+    '100'
+  );
+
+  missileBorderProgress.setAttribute(
+    'stroke-dasharray',
+    '100'
+  );
+
+  missileBorderProgress.setAttribute(
+    'stroke-dashoffset',
+    '100'
+  );
+
+  missileBorderSvg.append(
+    missileBorderTrack,
+    missileBorderProgress
+  );
+
+  // ========================================
+  // 아이콘 내부 정보
+  // ========================================
+
+  const missileText =
+    document.createElement('div');
+
+  missileText.style.cssText = `
+    position:relative;
+    z-index:1;
+    white-space:pre-line;
+    pointer-events:none;
+    font:700 12px Arial,sans-serif;
+    line-height:1.25;
+    text-align:center;
+  `;
+
+  missileText.textContent = '🚀\n0/5\n03:00';
+
+  indicator.append(
+    missileBorderSvg,
+    missileText
+  );
 
   document.body.appendChild(indicator);
+
+  // ========================================
+  // 실제 충전 진행률 계산
+  // ========================================
+
+  function updateMissileBorder() {
+
+    const current = Math.max(
+      0,
+      Number(count) || 0
+    );
+
+    const maximum = Math.max(
+      1,
+      Number(maxMissiles) || 5
+    );
+
+    // 최대 보유량 충전 완료
+    if (current >= maximum) {
+
+      missileText.textContent =
+        `🚀\n${current}/${maximum}\nMAX`;
+
+      missileBorderProgress.setAttribute(
+        'stroke-dashoffset',
+        '0'
+      );
+
+      missileBorderProgress.setAttribute(
+        'stroke',
+        '#ffd97e'
+      );
+
+      return;
+    }
+
+    // 서버에서 받은 다음 충전 시간
+    const validNextAt =
+      Number.isFinite(Number(nextAt)) &&
+      Number(nextAt) > 0;
+
+    if (!validNextAt) {
+      missileText.textContent =
+        `🚀\n${current}/${maximum}\n--:--`;
+
+      missileBorderProgress.setAttribute(
+        'stroke-dashoffset',
+        '100'
+      );
+
+      return;
+    }
+
+    const remainingMs = Math.max(
+      0,
+      Number(nextAt) - Date.now()
+    );
+
+    const progress = Math.max(
+      0,
+      Math.min(
+        1,
+        1 - remainingMs / MISSILE_RECHARGE_MS
+      )
+    );
+
+    // SVG 테두리 0~100% 진행
+    missileBorderProgress.setAttribute(
+      'stroke-dashoffset',
+      String(100 * (1 - progress))
+    );
+
+    missileBorderProgress.setAttribute(
+      'stroke',
+      '#56f5d6'
+    );
+
+    // 남은 충전 시간
+    const totalSeconds = Math.ceil(
+      remainingMs / 1000
+    );
+
+    const minutes = Math.floor(
+      totalSeconds / 60
+    );
+
+    const seconds = totalSeconds % 60;
+
+    const timeText =
+      `${String(minutes).padStart(2,'0')}:` +
+      `${String(seconds).padStart(2,'0')}`;
+
+    missileText.textContent =
+      `🚀\n${current}/${maximum}\n${timeText}`;
+  }
+
+  updateMissileBorder();
 
   function positionInventory() {
     const item = document.getElementById(
@@ -1493,21 +1751,11 @@ export function installMissileClient({
       crosshair.style.display = 'none';
     }
 
-    // ========================================
-    // 미사일 보유량 / 충전 시간 표시
+      // ========================================
+    // 미사일 SVG 테두리 충전 진행률 갱신
     // ========================================
 
-    const remaining = nextAt
-      ? Math.max(
-          0,
-          Math.ceil(
-            (nextAt - Date.now()) / 60000
-          )
-        )
-      : 3;
-
-    indicator.textContent =
-      `🚀\n${count}/${maxMissiles}\n${remaining}분`;
+    updateMissileBorder();
 
     // ========================================
     // 미사일 이동
