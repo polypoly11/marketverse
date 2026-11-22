@@ -1643,16 +1643,16 @@ function updateNpcUi() {
   const remaining=Math.max(0,Math.ceil((npcTransitionEndsAt-currentServerNow)/1000));
   const cooldownSeconds=Math.max(0,Math.ceil((npcCooldownEndsAt-currentServerNow)/1000));
 
-  if(npcPendingMode) {
-    npcModeButton.disabled=true;
-    npcModeButton.textContent=npcPendingMode==='npc'
-      ? `🛡 관전 모드 ${remaining}초`
-      : `⚔ 전투 복귀 ${remaining}초`;
-    npcModeButton.title=npcPendingMode==='npc'
-      ? '전환 대기 중 피격 가능 · 공격 불가'
-      : '복귀 대기 중 공격 면역 · 공격 불가';
-    npcModeButton.style.opacity='.75';
-  } else {
+if(npcPendingMode) {
+  npcModeButton.disabled=true;
+  npcModeButton.textContent=npcPendingMode==='npc'
+    ? `🛡 관전 모드 ${remaining}초 · 공격 불가`
+    : `⚔ 전투 복귀 ${remaining}초`;
+  npcModeButton.title=npcPendingMode==='npc'
+    ? '전환 대기 중 피격 가능 · 공격 불가'
+    : '복귀 대기 중 공격 면역 · 공격 불가';
+  npcModeButton.style.opacity='.75';
+} else {
     const coolingDown=npcMode==='combat' && cooldownSeconds>0;
     npcModeButton.disabled=!canUse || coolingDown;
     npcModeButton.style.opacity=coolingDown?'.7':'1';
