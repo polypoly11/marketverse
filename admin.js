@@ -142,7 +142,10 @@ export function mountAdmin(app, context) {
     magicShots,
     send,
     broadcast,
-presence, raid, visitorStats, missileSystem
+    presence,
+    raid,
+    visitorStats,
+    missileSystem
   } = context;
 
   app.set('trust proxy', 1);
@@ -234,7 +237,7 @@ presence, raid, visitorStats, missileSystem
       uptime: Math.round(process.uptime()),
       memoryMB: Math.round(mem.rss / 1024 / 1024),
       online: players.length,
-visitors: visitorStats.snapshot(),
+      visitors: visitorStats.snapshot(),
       connections: clients.size,
       shots: magicShots.length,
       chatCount: history.length,
@@ -423,10 +426,8 @@ visitors: visitorStats.snapshot(),
   );
 
   // =====================================
-    // =====================================
   // 어드민 전체 미사일 충전
   // =====================================
-
   app.post(
     '/api/admin/missiles/refill',
     safeOrigin,
@@ -457,6 +458,8 @@ visitors: visitorStats.snapshot(),
       }
     }
   );
+
+  // =====================================
   // 채팅 / 마법 기능 ON-OFF
   // =====================================
   app.post(
@@ -513,6 +516,7 @@ visitors: visitorStats.snapshot(),
       res.json({ok: true});
     }
   );
+
   // ====== 고래 레이드 관리자 API ======
 
   app.post(
@@ -607,7 +611,9 @@ visitors: visitorStats.snapshot(),
     }
   );
 
+  // =====================================
   // 5개 조합 완료자 조회
+  // =====================================
   app.get(
     '/api/admin/inventory/requests',
     requireAdmin,
@@ -628,7 +634,9 @@ visitors: visitorStats.snapshot(),
     }
   );
 
+  // =====================================
   // 실제 쿠폰 지급 완료 처리
+  // =====================================
   app.post(
     '/api/admin/inventory/paid',
     safeOrigin,
@@ -654,4 +662,81 @@ visitors: visitorStats.snapshot(),
     }
   );
 
+  // ========================================
+  // 관리자 기프티콘 재고 관리
+  // ========================================
+
+  // 등록된 기프티콘 목록 및 재고 조회
+  app.get(
+    '/api/admin/gifts',
+    requireAdmin,
+    async (_req, res) => {
+      try {
+        const data = await raid.giftCoupons.list();
+
+        res.json({
+          ok: true,
+          ...data
+        });
+      } catch (error) {
+        console.error('[GIFTS] List:', error);
+
+        res.status(500).json({
+          error: '쿠폰 재고 조회에 실패했습니다.'
+        });
+      }
+    }
+  );
+
+  // 기프티콘 여러 개 등록
+  app.post(
+    '/api/admin/gifts/register',
+    safeOrigin,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        const result =
+          await raid.giftCoupons.addMany(
+            req.body?.items
+          );
+
+        remember(
+          `기프티콘 ${result.inserted}개 등록`
+        );
+
+        res.json({
+          ok: true,
+          ...result
+        });
+      } catch (error) {
+        res.status(400).json({
+          error: error.message
+        });
+      }
+    }
+  );
+
+  // 미사용 기프티콘 삭제
+  app.post(
+    '/api/admin/gifts/delete',
+    safeOrigin,
+    requireAdmin,
+    async (req, res) => {
+      try {
+        await raid.giftCoupons.removeUnused(
+          String(req.body?.id || '')
+        );
+
+        remember('미사용 기프티콘 삭제');
+
+        res.json({
+          ok: true
+        });
+      } catch (error) {
+        res.status(400).json({
+          error: error.message
+        });
+      }
+    }
+  );
 }
