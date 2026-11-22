@@ -277,7 +277,7 @@ function hit(shot,point,damageOverride=null) {
   if (run.state!=='active') return;
 
   const hitDamage=Number.isFinite(damageOverride)
-    ?Math.max(1,Math.min(40,damageOverride))
+    ?Math.max(1,Math.min(120,damageOverride))
     :run.damage;
 
   run.hp=Math.max(0,run.hp-hitDamage);
