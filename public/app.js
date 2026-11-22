@@ -2916,28 +2916,36 @@ function boardFocus(position){
 }
 
 function cameraDistance(position){
-  const focus=boardFocus(position);
+  // 모바일은 전광판 접근 시 자동 줌을 하지 않는다.
+  if(isMobileDevice){
+    return CAMERA_BASE_DISTANCE;
+  }
 
+  const focus=boardFocus(position);
   const tanHalfVertical=Math.tan(
     THREE.MathUtils.degToRad(camera.fov/2)
   );
-
-function cameraLookAtFor(position){
-
-  const focus=isMobileDevice
-    ?0
-    :boardFocus(position);
-
-  return new THREE.Vector3(
-    position.x,
-    position.y+1.15+focus*1.25,
-    position.z
+  const tanHalfHorizontal=
+    tanHalfVertical*Math.max(.25,camera.aspect||1);
+  const requiredToShowBoard=
+    (BOARD_WIDTH/2+1.4)/tanHalfHorizontal;
+  const distanceFromPlayerToBoard=Math.max(
+    0,position.z-BOARD_Z
+  );
+  const neededBehindPlayer=Math.max(
+    CAMERA_BASE_DISTANCE,
+    requiredToShowBoard-distanceFromPlayerToBoard
+  );
+  return THREE.MathUtils.lerp(
+    CAMERA_BASE_DISTANCE,
+    Math.min(CAMERA_MAX_DISTANCE,neededBehindPlayer),
+    focus
   );
 }
 
 function cameraPositionFor(position){
   const distance=cameraDistance(position);
-  const focus=boardFocus(position);
+  const focus=isMobileDevice ? 0 : boardFocus(position);
 
   return new THREE.Vector3(
     position.x-Math.sin(yaw)*distance,
@@ -2947,9 +2955,11 @@ function cameraPositionFor(position){
 }
 
 function cameraLookAtFor(position){
+  const focus=isMobileDevice ? 0 : boardFocus(position);
+
   return new THREE.Vector3(
     position.x,
-    position.y+1.15+boardFocus(position)*1.25,
+    position.y+1.15+focus*1.25,
     position.z
   );
 }
