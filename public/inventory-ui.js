@@ -69,9 +69,39 @@
       <p id="jmc-inventory-notice"
         style="line-height:1.6;color:#b5c8df;font-size:12px"></p>
       <hr style="border:0;border-top:1px solid #344358;margin:18px 0">
-      <strong>🎟️ 교환 신청 내역</strong>
+
+      <strong style="font-size:16px">
+        🎁 내 행운의 선물상자
+      </strong>
+
+      <p style="font-size:12px;color:#b5c8df">
+        선물상자를 더블클릭하면 기프티콘을 받을 수 있습니다.
+        모바일에서는 두 번 탭하세요.
+      </p>
+
+      <div id="jmc-gift-boxes"
+        style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:14px 0">
+      </div>
+
+      <hr style="border:0;border-top:1px solid #344358;margin:18px 0">
+
+      <strong style="font-size:16px">
+        🎟️ 내 기프티콘
+      </strong>
+
+      <div id="jmc-my-coupons"
+        style="font-size:12px;line-height:1.65;margin-top:12px">
+      </div>
+
+      <hr style="border:0;border-top:1px solid #344358;margin:18px 0">
+
+      <strong style="font-size:13px;color:#a7b9ce">
+        이전 교환 신청 기록
+      </strong>
+
       <div id="jmc-inventory-history"
-        style="font-size:12px;line-height:1.65;margin-top:10px"></div>
+        style="font-size:12px;line-height:1.65;margin-top:10px">
+      </div>
     `;
 
     document.body.append(toggle, panel);
@@ -128,7 +158,15 @@
 
     const craftButton = $('jmc-inventory-craft');
     const note = $('jmc-inventory-notice');
-    let state = { enabled:false, count:0, crafts:[] };
+       let state = {
+      enabled: false,
+      count: 0,
+      crafts: [],
+      boxes: [],
+      coupons: []
+    };
+
+    let openingBoxId = null;
 
     function isMobile() {
       return window.matchMedia('(max-width:980px), (pointer:coarse)').matches;
@@ -340,48 +378,364 @@
       craftButton.style.opacity = craftButton.disabled ? '.45' : '1';
       craftButton.style.cursor = craftButton.disabled ? 'not-allowed' : 'pointer';
 note.textContent = enabled
-  ? `${ITEM_NAME} ${REQUIRED_COUNT}개를 조합하면 행운의 선물 교환 신청권 1개가 생성됩니다. 행운의 선물은 운영자 확인 후 지급합니다.`
+  ? `${ITEM_NAME} ${REQUIRED_COUNT}개를 조합하면 행운의 선물상자 1개가 생성됩니다.`
   : '정식 아이템 보관을 사용하려면 서버에 PostgreSQL 연결이 필요합니다.';
 
+      renderGiftBoxes();
+      renderMyCoupons();
+
+      // 과거 교환 신청 기록만 별도 보관
       const history = $('jmc-inventory-history');
+
       history.replaceChildren();
+
       if (!state.crafts?.length) {
-        history.textContent = '아직 조합한 기록이 없습니다.';
+        history.textContent =
+          '이전 교환 신청 기록이 없습니다.';
       } else {
         for (const entry of state.crafts) {
           const div = document.createElement('div');
-          div.style.cssText = 'padding:9px 0;border-bottom:1px solid #354358;overflow-wrap:anywhere;white-space:pre-wrap';
-          const date = entry.created_at
-            ? new Date(entry.created_at).toLocaleString('ko-KR') : '';
-          const statusText = entry.status==='paid'?'✅ 지급 완료':'🕒 지급 대기';
-          div.textContent = `${statusText} · ${date}\n교환번호: ${entry.id}`;
+
+          div.style.cssText = `
+            padding:9px 0;
+            border-bottom:1px solid #354358;
+            overflow-wrap:anywhere;
+            white-space:pre-wrap;
+          `;
+
+          const parsedDate = entry.created_at
+            ? new Date(entry.created_at)
+            : null;
+
+          const date = parsedDate &&
+            Number.isFinite(parsedDate.getTime())
+              ? parsedDate.toLocaleString('ko-KR')
+              : '날짜 정보 없음';
+
+          const statusText =
+            entry.status === 'paid'
+              ? '✅ 지급 완료'
+              : '🕒 지급 대기';
+
+          div.textContent =
+            `${statusText} · ${date}\n교환번호: ${entry.id}`;
+
           history.append(div);
         }
       }
     }
+    // ========================================
+    // 행운의 선물상자 / 기프티콘 보관함
+    // ========================================
 
+    function openGiftBox(boxId) {
+      if (!boxId || openingBoxId) return;
+
+      const confirmed = confirm(
+        '🎁 행운의 선물상자\n\n' +
+        '선물상자를 열어 기프티콘을 확인할까요?\n\n' +
+        '기프티콘 재고가 없으면 상자는 소모되지 않습니다.'
+      );
+
+      if (!confirmed) return;
+
+      openingBoxId = boxId;
+
+      window.dispatchEvent(
+        new CustomEvent(
+          'jmc-inventory-box-open',
+          {
+            detail: { boxId }
+          }
+        )
+      );
+    }
+
+    function renderGiftBoxes() {
+      const container = $('jmc-gift-boxes');
+
+      container.replaceChildren();
+
+      const boxes = Array.isArray(state.boxes)
+        ? state.boxes
+        : [];
+
+      if (!boxes.length) {
+        const empty = document.createElement('p');
+        empty.textContent =
+          '보관 중인 선물상자가 없습니다.';
+        empty.style.cssText =
+          'grid-column:1/-1;color:#a7b9ce;font-size:12px';
+
+        container.append(empty);
+        return;
+      }
+
+      for (const box of boxes) {
+        const button = document.createElement('button');
+
+        button.type = 'button';
+        button.title = '더블클릭해서 선물상자 열기';
+        button.style.cssText = `
+          display:flex;
+          flex-direction:column;
+          align-items:center;
+          justify-content:center;
+          gap:7px;
+          padding:15px 5px;
+          min-height:110px;
+          border:1px solid #c5a66e;
+          border-radius:12px;
+          background:linear-gradient(145deg,#263b57,#15253a);
+          color:#fff;
+          cursor:pointer;
+          touch-action:manipulation;
+        `;
+
+        const icon = document.createElement('span');
+        icon.textContent = '🎁';
+        icon.style.fontSize = '37px';
+
+        const label = document.createElement('span');
+        label.textContent = '미개봉';
+        label.style.cssText =
+          'font-size:12px;font-weight:700;color:#f4d49f';
+
+        button.append(icon, label);
+
+        // PC 더블클릭
+        button.ondblclick = e => {
+          e.preventDefault();
+          openGiftBox(box.id);
+        };
+
+        // 모바일 연속 두 번 탭
+        let lastTapAt = 0;
+
+        button.addEventListener('pointerup', e => {
+          if (e.pointerType !== 'touch') return;
+
+          const now = performance.now();
+
+          if (now - lastTapAt < 450) {
+            lastTapAt = 0;
+            e.preventDefault();
+            openGiftBox(box.id);
+          } else {
+            lastTapAt = now;
+          }
+        });
+
+        container.append(button);
+      }
+    }
+
+    function renderMyCoupons() {
+      const container = $('jmc-my-coupons');
+
+      container.replaceChildren();
+
+      const coupons = Array.isArray(state.coupons)
+        ? state.coupons
+        : [];
+
+      if (!coupons.length) {
+        const empty = document.createElement('p');
+        empty.textContent =
+          '아직 지급받은 기프티콘이 없습니다.';
+        empty.style.color = '#a7b9ce';
+
+        container.append(empty);
+        return;
+      }
+
+      for (const coupon of coupons) {
+        const card = document.createElement('div');
+
+        card.style.cssText = `
+          padding:15px;
+          margin:10px 0;
+          border:1px solid #52637a;
+          border-radius:12px;
+          background:#17283e;
+          overflow-wrap:anywhere;
+        `;
+
+        const title = document.createElement('strong');
+        title.textContent =
+          `${coupon.brand || ''} · ${coupon.title || ''}`;
+
+        title.style.cssText =
+          'display:block;font-size:14px;color:#f5d69e;margin-bottom:12px';
+
+        card.append(title);
+
+        // 관리자가 등록한 실제 바코드 이미지
+        if (
+          typeof coupon.image_data === 'string' &&
+          /^data:image\/(?:png|jpeg|webp);base64,/.test(
+            coupon.image_data
+          )
+        ) {
+          const image = document.createElement('img');
+          image.src = coupon.image_data;
+          image.alt = '기프티콘 바코드';
+          image.style.cssText = `
+            display:block;
+            width:100%;
+            max-height:230px;
+            object-fit:contain;
+            background:#fff;
+            border-radius:8px;
+            margin-bottom:12px;
+          `;
+
+          card.append(image);
+        }
+
+        const code = document.createElement('p');
+
+        code.textContent =
+          `쿠폰번호: ${coupon.coupon_code || ''}`;
+
+        code.style.cssText = `
+          color:#fff;
+          font-size:13px;
+          font-weight:700;
+          user-select:text;
+        `;
+
+        card.append(code);
+
+        if (coupon.expires_at) {
+          const expires = document.createElement('p');
+
+          expires.textContent =
+            `유효기간: ${String(coupon.expires_at).slice(0,10)}`;
+
+          expires.style.cssText =
+            'color:#c3d0df;font-size:12px';
+
+          card.append(expires);
+        }
+
+        const copyButton = document.createElement('button');
+
+        copyButton.type = 'button';
+        copyButton.textContent = '쿠폰번호 복사';
+
+        copyButton.style.cssText = `
+          width:100%;
+          padding:10px;
+          margin-top:9px;
+          border:0;
+          border-radius:8px;
+          background:#d9bb87;
+          color:#172638;
+          font-weight:700;
+          cursor:pointer;
+        `;
+
+        copyButton.onclick = async () => {
+          try {
+            await navigator.clipboard.writeText(
+              String(coupon.coupon_code || '')
+            );
+
+            alert('쿠폰번호를 복사했습니다.');
+
+          } catch {
+            alert('쿠폰번호를 길게 눌러 복사해 주세요.');
+          }
+        };
+
+        card.append(copyButton);
+        container.append(card);
+      }
+    }
     craftButton.onclick = () => {
       if (craftButton.disabled) return;
-      if (!confirm(`${ITEM_NAME} ${REQUIRED_COUNT}개를 사용해 행운의 선물 교환 신청권을 만들까요?`)) return;
+
+      if (!confirm(
+        '🐋 고래의 비늘 5개를 사용해\n' +
+        '행운의 선물상자 1개를 만들까요?'
+      )) {
+        return;
+      }
+
       craftButton.disabled = true;
-      window.dispatchEvent(new Event('jmc-inventory-craft'));
+
+      window.dispatchEvent(
+        new Event('jmc-inventory-craft')
+      );
     };
 
     window.addEventListener('jmc-inventory', e => {
       const m = e.detail || {};
-      if (m.type==='inventory_state') {
+
+      if (m.type === 'inventory_state') {
         state = {
-          enabled:m.enabled===true,
-          count:Math.max(0,Math.floor(Number(m.count)||0)),
-          crafts:Array.isArray(m.crafts)?m.crafts:[]
+          enabled: m.enabled === true,
+          count: Math.max(
+            0,
+            Math.floor(Number(m.count) || 0)
+          ),
+          crafts: Array.isArray(m.crafts)
+            ? m.crafts
+            : [],
+          boxes: Array.isArray(m.boxes)
+            ? m.boxes
+            : [],
+          coupons: Array.isArray(m.coupons)
+            ? m.coupons
+            : []
         };
+
         render();
-      } else if (m.type==='inventory_crafted') {
+
+      } else if (m.type === 'inventory_crafted') {
         panel.hidden = false;
         refreshInventoryPosition();
-alert(`🎉 조합 성공!\n교환 신청 번호: ${m.claimId}\n운영자 확인 후 행운의 선물을 지급합니다.`);
-      } else if (m.type==='inventory_notice') {
-        alert(m.message || '인벤토리 오류');
+
+        alert(
+          '🎉 조합 성공!\n\n' +
+          '행운의 선물상자 1개를 획득했습니다.\n' +
+          '인벤토리에서 상자를 더블클릭해 열어보세요.'
+        );
+
+      } else if (m.type === 'inventory_box_empty') {
+        openingBoxId = null;
+
+        alert(
+          '🎁 행운의 선물상자\n\n' +
+          '현재 준비된 기프티콘이 없습니다.\n\n' +
+          '기프티콘이 충전되면 다시 열어주세요.\n' +
+          '선물상자는 소모되지 않고 보관됩니다.'
+        );
+
+      } else if (m.type === 'inventory_box_opened') {
+        openingBoxId = null;
+
+        panel.hidden = false;
+        refreshInventoryPosition();
+
+        const coupon = m.coupon || {};
+
+        alert(
+          '🎉 축하합니다!\n\n' +
+          '행운의 선물상자를 열었습니다.\n\n' +
+          `당첨 상품: ${coupon.brand || ''} ` +
+          `${coupon.title || ''}\n\n` +
+          '지급된 쿠폰은 내 기프티콘에서 확인하세요.'
+        );
+
+      } else if (m.type === 'inventory_notice') {
+        openingBoxId = null;
+
+        alert(
+          m.message || '인벤토리 오류'
+        );
+
         render();
       }
     });
