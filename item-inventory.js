@@ -52,6 +52,14 @@ export async function createItemInventory(pool, send) {
       CREATE INDEX IF NOT EXISTS jmc_item_crafts_owner_idx
       ON jmc_item_crafts(owner_hash, created_at)
     `);
+        // 관리자 테스트용 비늘
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS jmc_item_bonus_scales (
+        owner_hash TEXT PRIMARY KEY,
+        quantity INTEGER NOT NULL DEFAULT 0
+          CHECK (quantity BETWEEN 0 AND 5)
+      )
+    `);
   }
 
   // ========================================
@@ -80,10 +88,18 @@ export async function createItemInventory(pool, send) {
 
           // 미사용 고래비늘 수량
           pool.query(`
-            SELECT COUNT(*)::INT AS count
-            FROM jmc_item_drops
-            WHERE owner_hash=$1
-              AND craft_id IS NULL
+            SELECT (
+              (
+                SELECT COUNT(*)::INT
+                FROM jmc_item_drops
+                WHERE owner_hash=$1
+                  AND craft_id IS NULL
+              ) + COALESCE((
+                SELECT quantity
+                FROM jmc_item_bonus_scales
+                WHERE owner_hash=$1
+              ), 0)
+            ) AS count
           `, [
             player.inventoryHash
           ]),
@@ -196,10 +212,18 @@ export async function createItemInventory(pool, send) {
     );
 
     const result = await db.query(`
-      SELECT COUNT(*)::INT AS count
-      FROM jmc_item_drops
-      WHERE owner_hash=$1
-        AND craft_id IS NULL
+      SELECT (
+        (
+          SELECT COUNT(*)::INT
+          FROM jmc_item_drops
+          WHERE owner_hash=$1
+            AND craft_id IS NULL
+        ) + COALESCE((
+          SELECT quantity
+          FROM jmc_item_bonus_scales
+          WHERE owner_hash=$1
+        ), 0)
+      ) AS count
     `, [
       player.inventoryHash
     ]);
@@ -300,7 +324,20 @@ export async function createItemInventory(pool, send) {
         player.inventoryHash
       ]);
 
-      if (available.rowCount < CRAFT_REQUIRED) {
+      const bonusResult = await db.query(`
+        SELECT quantity
+        FROM jmc_item_bonus_scales
+        WHERE owner_hash=$1
+        FOR UPDATE
+      `, [player.inventoryHash]);
+
+      const bonusCount =
+        Number(bonusResult.rows[0]?.quantity) || 0;
+
+      if (
+        available.rowCount + bonusCount <
+        CRAFT_REQUIRED
+      ) {
         await db.query('ROLLBACK');
 
         send(ws, {
@@ -351,10 +388,35 @@ export async function createItemInventory(pool, send) {
         player.inventoryHash
       ]);
 
-      if (used.rowCount !== CRAFT_REQUIRED) {
+      const requiredBonus =
+        CRAFT_REQUIRED - used.rowCount;
+
+      if (
+        used.rowCount !== available.rowCount ||
+        requiredBonus < 0
+      ) {
         throw new Error(
           '고래의 비늘 보유 수량이 변경됐습니다.'
         );
+      }
+
+      if (requiredBonus > 0) {
+        const consumed = await db.query(`
+          UPDATE jmc_item_bonus_scales
+          SET quantity = quantity - $2
+          WHERE owner_hash=$1
+            AND quantity >= $2
+          RETURNING quantity
+        `, [
+          player.inventoryHash,
+          requiredBonus
+        ]);
+
+        if (consumed.rowCount !== 1) {
+          throw new Error(
+            '테스트 비늘 사용에 실패했습니다.'
+          );
+        }
       }
 
       await db.query('COMMIT');
@@ -718,7 +780,75 @@ export async function createItemInventory(pool, send) {
       );
     }
   }
+  // ========================================
+  // 관리자 테스트용 고래비늘 5개 채우기
+  // ========================================
 
+  async function adminRefill(ownerHash) {
+    if (!pool || !ownerHash) {
+      throw new Error(
+        '인벤토리 DB 또는 계정 정보가 없습니다.'
+      );
+    }
+
+    const db = await pool.connect();
+
+    try {
+      await db.query('BEGIN');
+
+      // 일반 비늘 지급·조합과 동시 실행 방지
+      await db.query(
+        'SELECT pg_advisory_xact_lock(hashtext($1))',
+        [ownerHash]
+      );
+
+      const actual = await db.query(`
+        SELECT COUNT(*)::INT AS count
+        FROM jmc_item_drops
+        WHERE owner_hash=$1
+          AND craft_id IS NULL
+      `, [ownerHash]);
+
+      const actualCount =
+        Number(actual.rows[0]?.count) || 0;
+
+      // 실제 비늘을 유지하고 부족한 수량만
+      // 관리자 테스트 비늘로 채움
+      const bonusQuantity = Math.max(
+        0,
+        MAX_SCALES - actualCount
+      );
+
+      await db.query(`
+        INSERT INTO jmc_item_bonus_scales (
+          owner_hash,
+          quantity
+        )
+        VALUES ($1,$2)
+        ON CONFLICT (owner_hash)
+        DO UPDATE SET
+          quantity=EXCLUDED.quantity
+      `, [
+        ownerHash,
+        bonusQuantity
+      ]);
+
+      await db.query('COMMIT');
+
+      return {
+        count: actualCount + bonusQuantity,
+        max: MAX_SCALES
+      };
+
+    } catch (error) {
+      await db.query('ROLLBACK').catch(() => {});
+
+      throw error;
+
+    } finally {
+      db.release();
+    }
+  }
   // ========================================
   // 외부 모듈 연결
   // ========================================
@@ -737,8 +867,10 @@ export async function createItemInventory(pool, send) {
     // 선물상자 개봉
     openBox,
 
+    // 관리자 테스트 비늘 충전
+    adminRefill,
+
     // 이전 교환 신청 관리
     requests,
     markPaid
   };
-}
