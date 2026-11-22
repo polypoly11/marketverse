@@ -697,6 +697,15 @@ export function installMissileClient({
   let aimLockAnnounced = false;
   let aimLastTargetId = null;
 
+  // 공격자의 조준 대상을 서버에 전달
+  let lastAimSyncAt = 0;
+  let lastSyncedTargetId = null;
+
+  // 나를 조준하는 공격자 목록
+  const incomingAimWarnings = new Map();
+
+  let lastVictimWarningBeepAt = 0;
+
   function playAimBeep(isLock = false) {
     if (!missileSoundEnabled()) return;
 
@@ -1191,6 +1200,32 @@ export function installMissileClient({
       return false;
     }
 
+    // ========================================
+    // 다른 이용자가 나를 조준하는 경우
+    // ========================================
+
+    if (m.type === 'missile_warning') {
+      const attackerId = String(
+        m.attackerId || ''
+      );
+
+      if (!attackerId) return true;
+
+      if (m.active) {
+        incomingAimWarnings.set(
+          attackerId,
+          {
+            locked: Boolean(m.locked),
+            expires: performance.now() + 1000
+          }
+        );
+      } else {
+        incomingAimWarnings.delete(attackerId);
+      }
+
+      return true;
+    }
+
     if (m.type === 'missile_state') {
       count = Number(m.count) || 0;
       maxMissiles = Number(m.max) || 5;
@@ -1297,6 +1332,38 @@ export function installMissileClient({
     updateMissileSounds(now);
 
     // ========================================
+    // 나를 조준하는 미사일 경고음
+    // ========================================
+
+    for (
+      const [attackerId, warning]
+      of incomingAimWarnings
+    ) {
+      if (now > warning.expires) {
+        incomingAimWarnings.delete(attackerId);
+      }
+    }
+
+    if (
+      incomingAimWarnings.size > 0 &&
+      !isBlocked?.()
+    ) {
+      const anyLocked = [
+        ...incomingAimWarnings.values()
+      ].some(warning => warning.locked);
+
+      const interval = anyLocked ? 180 : 320;
+
+      if (
+        now - lastVictimWarningBeepAt >= interval
+      ) {
+        playAimBeep(anyLocked);
+
+        lastVictimWarningBeepAt = now;
+      }
+    }
+
+    // ========================================
     // 목표물이 있을 때만 조준 효과음
     // ========================================
 
@@ -1309,12 +1376,32 @@ export function installMissileClient({
 
       updateReticle(locked, lockReady);
 
-      const visibleTarget =
-        locked && crosshair.style.display === 'flex'
-          ? locked
-          : null;
+        const visibleTarget =
+          locked && crosshair.style.display === 'flex'
+            ? locked
+            : null;
 
-      if (visibleTarget) {
+        // ========================================
+        // 현재 조준 중인 상대를 서버에 전달
+        // ========================================
+
+        const currentTargetId =
+          visibleTarget?.id || null;
+
+        if (
+          currentTargetId !== lastSyncedTargetId ||
+          now - lastAimSyncAt >= 250
+        ) {
+          send({
+            type: 'missile_aim_target',
+            targetId: currentTargetId
+          });
+
+          lastSyncedTargetId = currentTargetId;
+          lastAimSyncAt = now;
+        }
+
+        if (visibleTarget) {
         if (visibleTarget.id !== aimLastTargetId) {
           aimLastTargetId = visibleTarget.id;
           aimLockAnnounced = false;
