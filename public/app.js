@@ -3282,7 +3282,10 @@ function sendMove(force=false){
 
   lastSent=now;
 }
-
+// 카메라 시선의 부드러운 추적
+const smoothCameraLookAt = cameraLookAtFor(
+  myAvatar?.position || new THREE.Vector3(0,0,-8)
+);
 function animate(now){
   requestAnimationFrame(animate);
 
@@ -3414,7 +3417,13 @@ function animate(now){
     followAlpha
   );
 
-  camera.lookAt(cameraLookAtFor(target));
+  // 모바일 카메라 시선 흔들림 완화
+  smoothCameraLookAt.lerp(
+    cameraLookAtFor(target),
+    followAlpha
+  );
+
+  camera.lookAt(smoothCameraLookAt);
 
   tickBubbles(now);
   raidClient.update(now,dt);
