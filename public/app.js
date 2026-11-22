@@ -1638,6 +1638,25 @@ npcModeButton.style.cssText=`
   font:700 12px Arial,sans-serif;cursor:pointer;touch-action:manipulation;
   white-space:nowrap;
 `;
+
+// 모바일에서만 관전 모드 버튼 축소
+const npcMobileStyle=document.createElement('style');
+npcMobileStyle.textContent=`
+  @media (max-width:980px), (pointer:coarse) {
+    #jmc-npc-mode-panel button {
+      min-width:0 !important;
+      max-width:135px !important;
+      padding:5px 7px !important;
+      font-size:9px !important;
+      line-height:1.3 !important;
+      border-radius:7px !important;
+      white-space:normal !important;
+      text-align:center !important;
+      overflow-wrap:break-word !important;
+    }
+  }
+`;
+document.head.appendChild(npcMobileStyle);
 npcModePanel.appendChild(npcModeButton);
 sceneEl.appendChild(npcModePanel);
 
