@@ -944,7 +944,8 @@ export function installMissileClient({
     const elapsed =
       performance.now() - pressedAt;
 
-    const target = locked;
+    // 버튼을 놓는 순간 목표물을 다시 확인
+    const target = availableTarget() || locked;
 
     aiming = false;
     locked = null;
@@ -958,23 +959,28 @@ export function installMissileClient({
 
     crosshair.style.display = 'none';
 
-    if (
+    const canFire =
       elapsed >= LOCK_MS &&
       target &&
       !isBlocked?.() &&
-      !rechargePaused
-    ) {
-      // 즉시 런처 포구 섬광 및 반동 표시 (서버 판정 변경 없음)
+      !rechargePaused &&
+      count > 0;
+
+    if (canFire) {
+      // 버튼을 놓는 즉시 발사 반동과 섬광 표시
       fireMissileLauncher(getAvatar());
+
+      // 서버에 즉시 발사 요청
       send({
         type: 'missile_fire',
         targetId: target.id
       });
+
     } else {
       stopMissileLauncher(getAvatar());
     }
 
-    // 발사하거나 S키를 떼면 경고 종료
+    // 발사 요청 이후 조준 상태 종료
     send({
       type: 'missile_aim_end'
     });
