@@ -511,22 +511,19 @@ export function createMissileSystem({
     if (m.type === 'missile_aim_target') {
       const targetId = m.targetId;
 
-    // 클라이언트와 서버의 조준 시간 오차 보정
-    // 화면 조준 완료 기준은 700ms 유지
-    const AIM_GRACE_MS = 100;
-
-    if (
-      !p.ready ||
-      p.hp <= 0 ||
-      cannotAttack(p) ||
-      p.missileLoading ||
-      !p.missileCount ||
-      !aimAt ||
-      Date.now() - aimAt < LOCK_MS - AIM_GRACE_MS ||
-      p.missileFiring
-    ) {
-      return true;
-    }
+      if (
+        !p.ready ||
+        p.hp <= 0 ||
+        cannotAttack(p) ||
+        !p.missileAimAt ||
+        p.missileLoading ||
+        p.missileCount <= 0 ||
+        typeof targetId !== 'string' ||
+        targetId.length > 100
+      ) {
+        stopAimWarning(p);
+        return true;
+      }
 
       const target = targetFor(p, targetId);
 
@@ -577,6 +574,10 @@ export function createMissileSystem({
     const aimAt = p.missileAimAt;
     p.missileAimAt = 0;
 
+    // 클라이언트 조준 완료는 700ms 유지
+    // 서버 판정에만 100ms의 허용 오차 적용
+    const AIM_GRACE_MS = 100;
+
     if (
       !p.ready ||
       p.hp <= 0 ||
@@ -584,7 +585,7 @@ export function createMissileSystem({
       p.missileLoading ||
       !p.missileCount ||
       !aimAt ||
-      Date.now() - aimAt < LOCK_MS ||
+      Date.now() - aimAt < LOCK_MS - AIM_GRACE_MS ||
       p.missileFiring
     ) {
       return true;
