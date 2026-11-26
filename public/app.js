@@ -534,7 +534,7 @@ function setCharacterName(avatar, value) {
   ctx.textAlign='center';
   ctx.textBaseline='middle';
   ctx.fillStyle='#ffffff';
-  ctx.font='bold 47px Arial,sans-serif';
+  ctx.font='bold 55px Arial,sans-serif';
   ctx.fillText(name,256,58,446);
   const texture=new THREE.CanvasTexture(canvas);
   texture.colorSpace=THREE.SRGBColorSpace;
@@ -542,7 +542,7 @@ function setCharacterName(avatar, value) {
     map:texture,transparent:true,depthTest:false,depthWrite:false
   }));
   sprite.position.set(0,-.30,.20); // 캐릭터 발 아래
-  sprite.scale.set(2.35,.50,1); // 시야를 덜 가리는 컴팩트 이름표
+  sprite.scale.set(3.05,.68,1); // 발 아래 이름표 약 30% 확대
   sprite.renderOrder=95;
   avatar.add(sprite);
   avatar.userData.nameTag={name,sprite,texture};
@@ -1560,6 +1560,11 @@ $('detail').onclick = e=>{
 
 const sceneEl = $('scene');
 
+// 마우스 휠 줌: 위로 확대, 아래로 축소
+const CAMERA_MIN_ZOOM_DISTANCE = 3.0;
+let cameraZoomDistance = CAMERA_BASE_DISTANCE;
+
+
 // ========================================
 // JMC NPC 관전 모드: 3종 반투명 3D 아바타
 // 서버가 지정한 외형만 사용하며 브라우저에서 랜덤 선정하지 않음
@@ -2247,6 +2252,19 @@ renderer.domElement.style.touchAction='none';
 renderer.domElement.style.zIndex='0';
 
 sceneEl.appendChild(renderer.domElement);
+
+// 3D 캔버스만 휠 줌 적용 (채팅 등 패널 스크롤은 그대로)
+renderer.domElement.addEventListener('wheel',event=>{
+  if(event.ctrlKey)return;
+  event.preventDefault();
+  const delta=event.deltaY*(event.deltaMode===1?16:event.deltaMode===2?600:1);
+  cameraZoomDistance=THREE.MathUtils.clamp(
+    cameraZoomDistance*Math.exp(delta*.0012),
+    CAMERA_MIN_ZOOM_DISTANCE,
+    CAMERA_MAX_DISTANCE
+  );
+},{passive:false});
+
 
 scene.add(
   new THREE.HemisphereLight(
@@ -3055,7 +3073,7 @@ function boardFocus(position){
 function cameraDistance(position){
   // 모바일은 전광판 접근 시 자동 줌을 하지 않는다.
   if(isMobileDevice){
-    return CAMERA_BASE_DISTANCE;
+    return cameraZoomDistance;
   }
 
   const focus=boardFocus(position);
@@ -3070,11 +3088,11 @@ function cameraDistance(position){
     0,position.z-BOARD_Z
   );
   const neededBehindPlayer=Math.max(
-    CAMERA_BASE_DISTANCE,
+    cameraZoomDistance,
     requiredToShowBoard-distanceFromPlayerToBoard
   );
   return THREE.MathUtils.lerp(
-    CAMERA_BASE_DISTANCE,
+    cameraZoomDistance,
     Math.min(CAMERA_MAX_DISTANCE,neededBehindPlayer),
     focus
   );
