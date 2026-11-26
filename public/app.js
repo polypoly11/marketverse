@@ -18,7 +18,8 @@ const animals = [
   ['tiger','호랑이','🐯',0xe69a40],
   ['koala','코알라','🐨',0x9ea7ae],
   ['raccoon','너구리','🦝',0x777d81],
-  ['deer','사슴','🦌',0xb87d54]
+  ['deer','사슴','🦌',0xb87d54],
+  ['ichigo','쿠로사키 이치고','⚔️',0xf2782e]
 ].map(([id,name,emoji,color])=>({
   id,name,emoji,color
 }));
@@ -118,6 +119,58 @@ function makeAnimal(id){
     return m;
   }
 
+  // 이치고: 추가 모델 파일이 없어도 보이는 Three.js 기본 형상 아바타
+  if(id==='ichigo'){
+    const skin=mat(0xf2bd96), black=mat(0x17191e), orange=mat(0xf67627);
+    const cloth=mat(0x161922), silver=mat(0xd8e9f2,.33);
+    const bladeMat=new THREE.MeshStandardMaterial({color:0xd5e8f7,metalness:.8,roughness:.25,emissive:0x142b49});
+    orb(bodyGroup,0,1.14,0,.43,.63,.28,cloth);
+    // 흰색 하오리 안쪽 옷깃
+    for(const x of [-.18,.18]){
+      const collar=orb(bodyGroup,x,1.56,.27,.11,.34,.055,white);
+      collar.rotation.z=x>0?.42:-.42;
+    }
+    orb(bodyGroup,0,1.95,.02,.43,.46,.40,skin);
+    orb(bodyGroup,0,2.26,-.07,.48,.24,.4,orange);
+    for(let i=0;i<12;i++){
+      const x=((i%6)-2.5)*.17;
+      const z=i<6?.20:-.26;
+      const spike=cone(bodyGroup,x,2.48+(i%3)*.06,z,.16,.56,orange,(i%2?-.34:.34));
+      spike.rotation.x=i<6?-.15:.2;
+    }
+    for(const x of [-.18,.18]){
+      orb(bodyGroup,x,2.04,.4,.075,.055,.035,black);
+      orb(bodyGroup,x,2.12,.4,.12,.025,.03,orange);
+    }
+    // 검은 사신복 소매와 다리
+    for(const x of [-.51,.51]){
+      const sleeve=orb(bodyGroup,x,1.29,.03,.24,.5,.25,cloth);
+      sleeve.rotation.z=x>0?-.23:.23;
+    }
+    for(const x of [-.22,.22]){
+      orb(bodyGroup,x,.47,0,.20,.48,.22,cloth);
+      orb(bodyGroup,x,.16,.13,.24,.13,.29,black);
+    }
+    const belt=orb(bodyGroup,0,.82,.05,.49,.10,.32,white);
+    belt.rotation.z=.02;
+    // 오른손에 든 참백도: 어두운 손잡이와 은빛 장검
+    const sword=new THREE.Group();
+    sword.position.set(.7,.97,.12);
+    const grip=new THREE.Mesh(new THREE.CylinderGeometry(.055,.07,.52,8),black);
+    grip.position.y=.13;
+    const guard=new THREE.Mesh(new THREE.BoxGeometry(.42,.065,.11),silver);
+    guard.position.y=.42;
+    const blade=new THREE.Mesh(new THREE.BoxGeometry(.14,1.45,.045),bladeMat);
+    blade.position.y=1.17;
+    const tip=new THREE.Mesh(new THREE.ConeGeometry(.10,.28,4),bladeMat);
+    tip.position.y=2.01;
+    tip.rotation.y=Math.PI/4;
+    sword.add(grip,guard,blade,tip);
+    sword.rotation.z=-.32;
+    sword.rotation.x=.14;
+    bodyGroup.add(sword);
+    root.userData.ichigoSword=sword;
+  } else {
   orb(bodyGroup,0,.91,0,.53,.68,.42,fur);
   orb(bodyGroup,0,1.82,.1,.67,.61,.58,fur);
   orb(bodyGroup,0,.92,.37,.36,.45,.1,light);
@@ -284,6 +337,8 @@ function makeAnimal(id){
       orb(bodyGroup,x,1.64,.45,.29,.25,.2,light);
     }
   }
+
+  } // 기존 동물 모델 분기 종료
 
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(.7,24),
@@ -1113,8 +1168,8 @@ if (jmcGoogleUser?.accountNickname) {
       : 'Google 계정으로 로그인';
 
     jmcAuthNote.textContent = jmcGoogleUser
-      ? `${jmcGoogleUser.name || 'Google 이용자'} · 비늘은 Google 계정에 보관됩니다.`
-      : '게스트 입장은 기존 버튼을 이용하세요. 선물 신청은 Google 로그인이 필요합니다.';
+      ? `${jmcGoogleUser.name || 'Google 이용자'} · 결정은 Google 계정에 보관됩니다.`
+      : '게스트도 고래의 결정 조합과 선물상자 개봉을 이용할 수 있습니다.';
 
     jmcAccountButton.textContent = jmcGoogleUser
       ? `Google · ${jmcGoogleUser.name || '로그인'}`
@@ -3042,7 +3097,7 @@ function updateMyAvatar(){
 
   const pos=myAvatar
     ?myAvatar.position.clone()
-    :new THREE.Vector3(0,0,-8);
+    :new THREE.Vector3(0,0,5);
 
   const dir=myAvatar?myAvatar.rotation.y:Math.PI;
   const wasSeated=myAvatar?.userData.seated||false;
@@ -3583,7 +3638,7 @@ function sendMove(force=false){
 
 // 카메라 시선의 부드러운 추적
 const smoothCameraLookAt = cameraLookAtFor(
-  myAvatar?.position || new THREE.Vector3(0,0,-8)
+  myAvatar?.position || new THREE.Vector3(0,0,5)
 );
 function animate(now){
   requestAnimationFrame(animate);
@@ -3707,7 +3762,7 @@ function animate(now){
   }
 
   const target=myAvatar?.position||
-    new THREE.Vector3(0,0,-8);
+    new THREE.Vector3(0,0,5);
 
   const followAlpha=1-Math.exp(-CAMERA_FOLLOW_SPEED*dt);
 
@@ -4164,6 +4219,50 @@ function spawnRemoteMagic(m){
   const direction=new THREE.Vector3(
     Math.sin(facing),0,Math.cos(facing)
   ).normalize();
+
+  // 이치고 전용 월아천충: 서버 검증을 거친 발사자 캐릭터로 판정
+  if(m.animal==='ichigo'){
+    const projectile=new THREE.Group();
+    const crescent=new THREE.Shape();
+    const outer=1.03, inner=.57;
+    const start=-Math.PI*.69, end=Math.PI*.69;
+    for(let i=0;i<=24;i++){
+      const t=start+(end-start)*i/24;
+      const x=Math.sin(t)*outer, y=Math.cos(t)*outer;
+      if(i===0)crescent.moveTo(x,y);else crescent.lineTo(x,y);
+    }
+    for(let i=24;i>=0;i--){
+      const t=start+(end-start)*i/24;
+      crescent.lineTo(Math.sin(t)*inner,Math.cos(t)*inner);
+    }
+    crescent.closePath();
+    const core=new THREE.Mesh(
+      new THREE.ShapeGeometry(crescent),
+      new THREE.MeshBasicMaterial({color:0xb7f8ff,side:THREE.DoubleSide,
+        transparent:true,opacity:.96,depthWrite:false,blending:THREE.AdditiveBlending})
+    );
+    const aura=new THREE.Mesh(
+      new THREE.ShapeGeometry(crescent),
+      new THREE.MeshBasicMaterial({color:0x168dff,side:THREE.DoubleSide,
+        transparent:true,opacity:.46,depthWrite:false,blending:THREE.AdditiveBlending})
+    );
+    aura.scale.set(1.3,1.3,1);
+    aura.position.z=-.025;
+    projectile.add(core,aura);
+    projectile.position.set(x,y+1.15,z);
+    projectile.position.addScaledVector(direction,.85);
+    projectile.rotation.y=facing;
+    scene.add(projectile);
+    magicProjectiles.push({id:m.shotId,ownerId:m.senderId,object:projectile,
+      direction,born:performance.now(),core:null,aura,freezeUntil:0,predictedContact:false});
+    const caster=m.senderId===myId?myAvatar:others.get(m.senderId);
+    if(caster?.userData?.ichigoSword){
+      caster.userData.ichigoSword.rotation.z=-1.05;
+      caster.userData.ichigoSword.userData.swingAt=performance.now();
+    }
+    playMagicCastSfx(magicSoundVolume(x,z));
+    return;
+  }
 
   const projectile = new THREE.Group();
 
@@ -4634,6 +4733,16 @@ function updateMagic(now){
           0,
           .2
         );
+  }
+
+  // 참백도 참격 모션을 다른 이용자에게도 표시
+  for(const avatar of [myAvatar,...others.values()]){
+    const sword=avatar?.userData?.ichigoSword;
+    if(!sword)continue;
+    const elapsed=now-(sword.userData.swingAt||0);
+    sword.rotation.z=elapsed<260
+      ?-1.05+Math.sin(Math.min(1,elapsed/260)*Math.PI)*.8
+      :THREE.MathUtils.lerp(sword.rotation.z,-.32,.18);
   }
 
   for(let i=magicProjectiles.length-1;i>=0;i--){
