@@ -2,7 +2,7 @@
   function init() {
     if (document.getElementById('jmc-inventory-toggle')) return;
 
-    const ITEM_NAME = '고래의 비늘';
+    const ITEM_NAME = '고래의 결정';
     const REQUIRED_COUNT = 5;
     const $ = id => document.getElementById(id);
 
@@ -57,7 +57,7 @@
         <button type="button" id="jmc-inventory-close" aria-label="인벤토리 닫기"
           style="border:0;background:transparent;color:#fff;font-size:22px;cursor:pointer">×</button>
       </div>
-      <p style="color:#d9b779;margin:20px 0 8px">🐋 고래의 비늘</p>
+      <p style="color:#d9b779;margin:20px 0 8px">🐋 고래의 결정</p>
       <div id="jmc-inventory-slots"
         style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px"></div>
       <p id="jmc-inventory-count"
@@ -306,7 +306,7 @@
       ctx.fillStyle = gradient;
       ctx.fill(scale);
 
-      // 비늘 표면의 심해 결
+      // 결정 표면의 심해 결
       ctx.save();
       ctx.clip(scale);
       for (let i = 0; i < 5; i++) {
@@ -374,7 +374,7 @@
           <strong class="jmc-item-count">${count}</strong>
         </span>
       `;
-      toggle.setAttribute('aria-label', `인벤토리 열기, 고래의 비늘 ${count}개`);
+      toggle.setAttribute('aria-label', `인벤토리 열기, 고래의 결정 ${count}개`);
       $('jmc-inventory-count').textContent =
         `보유 ${count}개 · 조합까지 ${Math.max(0, REQUIRED_COUNT-count)}개 필요`;
 
@@ -531,7 +531,7 @@ note.textContent = enabled
 
     function showGiftDialog(mode, message, coupon = null) {
       giftLayer.hidden = false;
-      giftTitle.textContent = mode === 'result' ? '🎉 선물상자 개봉 완료!' : '행운의 선물상자';
+      giftTitle.textContent = mode === 'result' ? '🎉 선물상자 개봉 완료!' : (mode === 'dud' ? '💨 꽝!' : '행운의 선물상자');
       giftMessage.textContent = message;
       giftPrize.replaceChildren();
       giftCancel.hidden = mode !== 'confirm';
@@ -572,7 +572,7 @@ note.textContent = enabled
     function openGiftBox(boxId) {
       if (!boxId || openingBoxId) return;
       selectedGiftBoxId = boxId;
-      showGiftDialog('confirm', '행운의 선물상자를 오픈하시겠습니까?\n승인하면 바로 개봉됩니다.');
+      showGiftDialog('confirm', '행운의 선물상자를 오픈하시겠습니까?');
     }
 
     giftConfirm.onclick = () => {
@@ -614,7 +614,7 @@ note.textContent = enabled
         const button = document.createElement('button');
 
         button.type = 'button';
-        button.title = '더블클릭해서 선물상자 열기';
+        button.title = '한 번 눌러 선물상자 열기';
         button.style.cssText = `
           display:flex;
           flex-direction:column;
@@ -828,11 +828,11 @@ note.textContent = enabled
         return;
       }
       if (count < REQUIRED_COUNT) {
-        alert(`고래의 비늘이 ${REQUIRED_COUNT - count}개 부족합니다.`);
+        alert(`고래의 결정이 ${REQUIRED_COUNT - count}개 부족합니다.`);
         return;
       }
       if (!confirm(
-        '🐋 고래의 비늘 5개를 사용해\n' +
+        '🐋 고래의 결정 5개를 사용해\n' +
         '행운의 선물상자 1개를 만들까요?'
       )) return;
 
@@ -891,6 +891,11 @@ note.textContent = enabled
         clearBoxRequestTimeout();
         openingBoxId = null;
         showGiftDialog('error', '현재 준비된 기프티콘이 없습니다.\n선물상자는 소모되지 않고 보관됩니다.');
+
+      } else if (m.type === 'inventory_box_dud') {
+        clearBoxRequestTimeout();
+        openingBoxId = null;
+        showGiftDialog('dud', '아쉽지만 이번에는 당첨되지 않았습니다.\n🐋 고래의 결정 2개가 지급되었습니다.');
 
       } else if (m.type === 'inventory_box_opened') {
         clearBoxRequestTimeout();
