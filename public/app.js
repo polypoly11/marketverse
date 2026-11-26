@@ -502,14 +502,14 @@ function removeCharacterHpBar(avatar){
 }
 
 // ====================================================
-// 캐릭터 머리 위 닉네임 (HP 바 위쪽)
+// 캐릭터 발 바로 아래 닉네임 (HP 바는 머리 위 유지)
 // ====================================================
 function setCharacterName(avatar, value) {
   if (!avatar) return;
   const name=String(value ?? '').trim().slice(0,16);
   const old=avatar.userData.nameTag;
   if(old?.name===name) {
-    old.sprite.position.y = avatar.userData.npcMode === 'npc' ? 2.65 : 3.55;
+    old.sprite.position.set(0,-.30,.20); // 발 아래 고정
     return;
   }
   if(old) {
@@ -541,8 +541,8 @@ function setCharacterName(avatar, value) {
   const sprite=new THREE.Sprite(new THREE.SpriteMaterial({
     map:texture,transparent:true,depthTest:false,depthWrite:false
   }));
-  sprite.position.set(0,avatar.userData.npcMode === 'npc' ? 2.65 : 3.55,0);
-  sprite.scale.set(2.75,.68,1);
+  sprite.position.set(0,-.30,.20); // 캐릭터 발 아래
+  sprite.scale.set(2.35,.50,1); // 시야를 덜 가리는 컴팩트 이름표
   sprite.renderOrder=95;
   avatar.add(sprite);
   avatar.userData.nameTag={name,sprite,texture};
@@ -1668,12 +1668,12 @@ function setNpcAppearance(avatar, mode, form) {
   }
   if(avatar.userData.hpBar?.sprite)
     avatar.userData.hpBar.sprite.visible=!isNpc;
-  // 머리 위 이름표에는 관전 상태를 분명히 표시
+  // 발 아래 이름표에는 관전 상태를 분명히 표시
   const label=avatar.userData.originalNpcName;
   if(label) setCharacterName(avatar,isNpc?`${label} · 관전중`:label);
-  // NPC가 작아진 만큼 닉네임도 내려오고 복귀 시 원래 높이로 복원
+  // NPC 모드와 일반 캐릭터 모두 이름표를 발 아래 같은 높이에 유지
   if(avatar.userData.nameTag?.sprite) {
-    avatar.userData.nameTag.sprite.position.y = isNpc ? 2.65 : 3.55;
+    avatar.userData.nameTag.sprite.position.set(0,-.30,.20);
   }
 }
 
