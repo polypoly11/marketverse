@@ -535,7 +535,7 @@ function addCharacterHpBar(avatar,hp=100,maxHp=100){
     })
   );
 
-  sprite.position.set(0,2.8,0);
+  sprite.position.set(0,3.43,0); // 이치고 머리카락 위로 HP바 이동
   sprite.scale.set(2.4,.75,1);
   sprite.renderOrder=90;
   avatar.add(sprite);
@@ -3429,7 +3429,7 @@ function showBubble(item){
 
   const sprite=new THREE.Sprite(material);
   // HP바 윗부분에 말풍선의 꼬리가 오도록 배치 (스프라이트 텍스처 아래쪽 여백 고려)
-  sprite.position.set(0,3.42,0);
+  sprite.position.set(0,4.08,0); // HP바 이동에 맞춰 말풍선도 함께 이동
   sprite.scale.set(3.8,1.58,1);
   sprite.renderOrder=100;
   avatar.add(sprite);
@@ -3446,7 +3446,7 @@ function tickBubbles(now){
     // 말풍선이 떠 있는 중에 변신해도 즉시 높이 갱신 (PC·모바일 공통)
     const avatar = id === myId ? myAvatar : others.get(id);
     if(avatar && bubble.sprite) {
-      bubble.sprite.position.y = 3.42;
+      bubble.sprite.position.y = 4.08;
     }
     if(now>=bubble.expires){
       removeBubble(id);
