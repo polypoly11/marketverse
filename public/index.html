@@ -888,8 +888,7 @@
   }
 </style>
 
-</head>
-</head>
+
 
 <!-- JMC 헤더 황금비율 디자인 최적화 -->
 <style>
@@ -1108,6 +1107,7 @@ html body.jmc-compact-header #jmc-header-help {
   }
 }
 </style>
+</head>
 
 <body>
 
@@ -2926,6 +2926,170 @@ transform: translate(-50%, -50%) !important;
     display: none !important;
   }
 </style>
+
+<!-- JMC iPhone Safari 모바일 배치 보정: 기존 PC 디자인 유지 -->
+<style id="jmc-ios-layout-fix-20261126">
+@media screen and (max-width: 980px) {
+  html, body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip !important;
+  }
+  body, main, main > .scene-wrap, main > aside {
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  main {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: none !important;
+  }
+  main > .scene-wrap {
+    order: 0 !important;
+    width: 100% !important;
+    flex: 0 0 auto !important;
+  }
+  main > aside {
+    order: 1 !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  /* 좁은 아이폰에서 헤더 메뉴가 화면 밖으로 밀리지 않도록 정렬 */
+  html body.jmc-compact-header header {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    padding: 9px 10px !important;
+    gap: 8px !important;
+  }
+  html body.jmc-compact-header header .logo {
+    width: 100% !important;
+    min-width: 0 !important;
+    font-size: 15px !important;
+  }
+  html body.jmc-compact-header header .top {
+    display: flex !important;
+    flex-flow: row wrap !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    gap: 6px !important;
+    white-space: normal !important;
+  }
+  html body.jmc-compact-header header .top > .live,
+  html body.jmc-compact-header header .top > span:not(.live) {
+    flex: 0 0 auto !important;
+    font-size: 11px !important;
+    white-space: nowrap !important;
+  }
+  html body.jmc-compact-header header #rename {
+    flex: 0 0 auto !important;
+    padding: 0 8px !important;
+    min-height: 32px !important;
+    font-size: 11px !important;
+  }
+  html body.jmc-compact-header #jmc-header-tools {
+    display: flex !important;
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    align-items: center !important;
+  }
+  html body.jmc-compact-header #jmc-header-tools-line {
+    display: flex !important;
+    flex-flow: row wrap !important;
+    justify-content: center !important;
+    width: 100% !important;
+    gap: 6px !important;
+  }
+
+  /* Safari 주소창 크기 변화에 대응 */
+  #scene {
+    position: relative !important;
+    display: block !important;
+    width: 100% !important;
+    height: 65vh !important;
+    height: 65svh !important;
+    min-height: 350px !important;
+    max-height: 650px !important;
+    overflow: hidden !important;
+  }
+  #scene > canvas {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+  /* 조작 버튼과 채팅을 서로 다른 영역에 배치 */
+  html body #scene #mobile-controls {
+    position: absolute !important;
+    left: 10px !important;
+    right: auto !important;
+    bottom: 65px !important;
+    z-index: 40 !important;
+    touch-action: none;
+  }
+  html body #scene #mobile-actions {
+    position: absolute !important;
+    left: auto !important;
+    right: 10px !important;
+    bottom: 65px !important;
+    z-index: 40 !important;
+    touch-action: none;
+  }
+  html body #scene #mobile-actions [data-action="sit"] {
+    display: none !important;
+  }
+  html body #scene > .jmc-scene-chat {
+    left: 8px !important;
+    right: 8px !important;
+    bottom: 8px !important;
+    width: calc(100% - 16px) !important;
+    max-width: calc(100% - 16px) !important;
+    z-index: 35 !important;
+  }
+  html body #scene:has(> .jmc-scene-chat:not(.jmc-chat-collapsed)) #mobile-controls,
+  html body #scene:has(> .jmc-scene-chat:not(.jmc-chat-collapsed)) #mobile-actions {
+    bottom: 170px !important;
+  }
+  html body #scene:has(> .jmc-scene-chat.jmc-chat-large) #mobile-controls,
+  html body #scene:has(> .jmc-scene-chat.jmc-chat-large) #mobile-actions {
+    display: none !important;
+  }
+
+  /* 인벤토리는 iPhone 화면 안에서 열리고 스크롤 가능 */
+  #jmc-inventory-panel:not([hidden]) {
+    position: fixed !important;
+    left: 8px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: min(350px, calc(100vw - 16px)) !important;
+    max-height: calc(100vh - 32px) !important;
+    max-height: calc(100dvh - 32px - env(safe-area-inset-bottom, 0px)) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    z-index: 9999 !important;
+  }
+  #jmc-inventory-panel[hidden] {
+    display: none !important;
+  }
+  #jmc-inventory-craft {
+    min-height: 48px !important;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+</style>
+
 </body>
 
 
