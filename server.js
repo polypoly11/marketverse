@@ -712,9 +712,9 @@ wss.on('connection', async (ws, req) => {
       return token ? hashInventoryToken(token) : null;
     })(),
 
-    x: 0,
-    y: 0,
-    z: -8,
+x: 0,
+y: 0,
+z: 5,
 
     direction: Math.PI,
     seated: false,
