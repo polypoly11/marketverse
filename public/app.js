@@ -837,6 +837,21 @@ jmcAccountButton.style.cssText = `
 `;
 $('rename').insertAdjacentElement('afterend',jmcAccountButton);
 
+// Google 로그인 상태에서는 설정창 밖에서도 로그아웃할 수 있게 표시.
+const jmcHeaderLogoutButton = document.createElement('button');
+jmcHeaderLogoutButton.type = 'button';
+jmcHeaderLogoutButton.id = 'jmc-header-google-logout';
+jmcHeaderLogoutButton.textContent = '로그아웃';
+jmcHeaderLogoutButton.hidden = true;
+jmcHeaderLogoutButton.style.cssText = `
+  margin-left:5px;padding:6px 9px;border:1px solid #8c9aaf;
+  border-radius:8px;background:#26364a;color:#fff;
+  font:700 11px Arial,sans-serif;cursor:pointer;
+  display:none;
+`;
+jmcAccountButton.insertAdjacentElement('afterend',jmcHeaderLogoutButton);
+
+
 // ====================================================
 // Google 계정별 고정 닉네임 / 대표 캐릭터 설정
 // ====================================================
@@ -1175,11 +1190,16 @@ if (jmcGoogleUser?.accountNickname) {
       ? `Google · ${jmcGoogleUser.name || '로그인'}`
       : '게스트 · 로그인';
 
+    jmcHeaderLogoutButton.hidden = !jmcGoogleUser;
+    jmcHeaderLogoutButton.style.display = jmcGoogleUser ? 'inline-block' : 'none';
+
   } catch(error) {
     jmcAuthNote.textContent =
       '계정 상태를 불러오지 못했습니다. 게스트로는 입장할 수 있습니다.';
 
     jmcGoogleButton.hidden = true;
+    jmcHeaderLogoutButton.hidden = true;
+    jmcHeaderLogoutButton.style.display = 'none';
 
     // 인증 확인 실패 시에도 게스트 설정창은 정상 표시
     if (!profile || reentryRequired) {
@@ -1225,6 +1245,11 @@ jmcGoogleButton.onclick = async () => {
     jmcAuthNote.textContent = error.message;
     jmcGoogleButton.disabled = false;
   }
+};
+
+jmcHeaderLogoutButton.onclick = () => {
+  if (!jmcGoogleUser || jmcGoogleButton.disabled) return;
+  jmcGoogleButton.click(); // 기존 로그아웃 API·오류 처리 재사용
 };
 
 jmcAccountButton.onclick = () => {
