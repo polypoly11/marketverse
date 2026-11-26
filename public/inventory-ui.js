@@ -534,7 +534,6 @@ note.textContent = enabled
       giftLayer.dataset.mode = mode;
       giftTitle.textContent = mode === 'result'
         ? '🎉 선물상자 개봉 완료!'
-        : mode === 'dud' ? '💨 꽝!'
         : mode === 'craft-result' ? '🎉 조합 성공!'
         : mode.startsWith('craft-') ? '고래의 결정 조합'
         : '행운의 선물상자';
@@ -892,11 +891,6 @@ note.textContent = enabled
         clearBoxRequestTimeout();
         openingBoxId = null;
         showGiftDialog('error', '현재 준비된 기프티콘이 없습니다.\n선물상자는 소모되지 않고 보관됩니다.');
-
-      } else if (m.type === 'inventory_box_dud') {
-        clearBoxRequestTimeout();
-        openingBoxId = null;
-        showGiftDialog('dud', '아쉽지만 이번에는 당첨되지 않았습니다.\n🐋 고래의 결정 2개가 지급되었습니다.');
 
       } else if (m.type === 'inventory_box_opened') {
         clearBoxRequestTimeout();
