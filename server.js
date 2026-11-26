@@ -1000,33 +1000,25 @@ if (m.type === 'pvp_profile_request') {
     // ====================================
 
     if (m.type === 'inventory_craft') {
-      if (!p.googleSub) {
+      // Google 로그인과 게스트 모두 조합 가능.
+      // 게스트는 기존에 발급된 인벤토리 식별값으로 소유권을 확인한다.
+      if (!p.ready || !p.inventoryHash) {
         send(ws, {
           type: 'inventory_notice',
-          message:
-            '행운의 선물 교환 신청은 Google 로그인 후 가능합니다.'
+          message: '인벤토리 정보를 확인할 수 없습니다. 새로고침 후 다시 입장해 주세요.'
         });
         return;
       }
 
       void (async () => {
         try {
+          // 조합은 DB에서 보유 비늘 5개를 잠그고 차감한다.
           await raid.inventory.craft(ws, p);
-
-          if (p.ready && ws.readyState === WebSocket.OPEN) {
-            await raid.inventory.sendSnapshot(ws, p);
-          }
-
         } catch (error) {
-          console.error(
-            '[JMC] 아이템 제작 오류:',
-            error
-          );
-
+          console.error('[JMC] 아이템 조합 오류:', error);
           send(ws, {
-            type: 'raid_notice',
-            message:
-              '아이템 제작에 실패했습니다. 다시 시도해 주세요.'
+            type: 'inventory_notice',
+            message: '고래 비늘 조합에 실패했습니다. 다시 시도해 주세요.'
           });
         }
       })();
@@ -1038,11 +1030,11 @@ if (m.type === 'pvp_profile_request') {
     // ====================================
 
     if (m.type === 'inventory_box_open') {
-      if (!p.ready || !p.googleSub) {
+      // 로그인 여부가 아닌 서버측 인벤토리 소유권을 확인한다.
+      if (!p.ready || !p.inventoryHash) {
         send(ws, {
           type: 'inventory_notice',
-          message:
-            '선물상자 개봉은 Google 로그인 후 가능합니다.'
+          message: '인벤토리 정보를 확인할 수 없습니다. 새로고침 후 다시 입장해 주세요.'
         });
         return;
       }
