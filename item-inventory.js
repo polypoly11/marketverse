@@ -3,12 +3,12 @@ import crypto from 'node:crypto';
 
 // ========================================
 // JMC 인베스트라운지 아이템 시스템
-// 고래의 비늘 / 행운의 선물상자 / 기프티콘
+// 고래의 결정 / 행운의 선물상자 / 기프티콘
 // ========================================
 
-const ITEM_NAME = '고래의 비늘';
+const ITEM_NAME = '고래의 결정';
 const CRAFT_REQUIRED = 5;
-const MAX_SCALES = 5;
+const MAX_SCALES = 5; // 레이드 신규 획득 상한. 꽝 반환 2개는 초과 보관 허용.
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -52,13 +52,24 @@ export async function createItemInventory(pool, send) {
       CREATE INDEX IF NOT EXISTS jmc_item_crafts_owner_idx
       ON jmc_item_crafts(owner_hash, created_at)
     `);
-        // 관리자 테스트용 비늘
+        // 관리자 테스트용 결정
     await pool.query(`
       CREATE TABLE IF NOT EXISTS jmc_item_bonus_scales (
         owner_hash TEXT PRIMARY KEY,
         quantity INTEGER NOT NULL DEFAULT 0
-          CHECK (quantity BETWEEN 0 AND 5)
+          CHECK (quantity >= 0)
       )
+    `);
+    // 기존 데이터베이스의 5개 상한은 꽝 반환 아이템에 적용하지 않는다.
+    // 이미 지급된 아이템 수량 및 기존 데이터는 유지한다.
+    await pool.query(`
+      ALTER TABLE jmc_item_bonus_scales
+      DROP CONSTRAINT IF EXISTS jmc_item_bonus_scales_quantity_check
+    `);
+    await pool.query(`
+      ALTER TABLE jmc_item_bonus_scales
+      ADD CONSTRAINT jmc_item_bonus_scales_quantity_check
+      CHECK (quantity >= 0)
     `);
   }
 
@@ -86,7 +97,7 @@ export async function createItemInventory(pool, send) {
       const [drops, crafts, coupons] =
         await Promise.all([
 
-          // 미사용 고래비늘 수량
+          // 미사용 고래결정 수량
           pool.query(`
             SELECT (
               (
@@ -182,7 +193,7 @@ export async function createItemInventory(pool, send) {
   }
 
   // ========================================
-  // 고래의 비늘 지급
+  // 고래의 결정 지급
   // 보스 처치 후 선착순 획득자에게 1개 지급
   // ========================================
 
@@ -201,7 +212,7 @@ export async function createItemInventory(pool, send) {
     }
 
     // ========================================
-    // 고래비늘 최대 보유량 5개
+    // 고래결정 최대 보유량 5개
     // ========================================
 
     // 같은 이용자가 여러 창에서 동시에
@@ -233,7 +244,7 @@ export async function createItemInventory(pool, send) {
 
     if (currentCount >= MAX_SCALES) {
       const error = new Error(
-        '고래의 비늘은 최대 5개까지 보유할 수 있습니다. 먼저 5개를 조합해 주세요.'
+        '고래의 결정은 최대 5개까지 보유할 수 있습니다. 먼저 5개를 조합해 주세요.'
       );
 
       error.code = 'WHALE_SCALE_FULL';
@@ -242,7 +253,7 @@ export async function createItemInventory(pool, send) {
     }
 
     // ========================================
-    // 보유량 확인 후 비늘 1개 지급
+    // 보유량 확인 후 결정 1개 지급
     // ========================================
 
     await db.query(`
@@ -259,7 +270,7 @@ export async function createItemInventory(pool, send) {
     ]);
 
     console.log(
-      '[JMC inventory] 고래의 비늘 지급',
+      '[JMC inventory] 고래의 결정 지급',
       'runId:', runId,
       'player:', player.name,
       'count:', currentCount + 1
@@ -267,7 +278,7 @@ export async function createItemInventory(pool, send) {
   }
 
   // ========================================
-  // 고래의 비늘 5개 조합
+  // 고래의 결정 5개 조합
   // ========================================
 
   async function craft(ws, player) {
@@ -280,17 +291,7 @@ export async function createItemInventory(pool, send) {
       send(ws, {
         type: 'inventory_notice',
         message:
-          '고래의 비늘 조합은 PostgreSQL 연결 및 정상 입장 후 이용할 수 있습니다.'
-      });
-
-      return;
-    }
-
-    if (!player.googleSub) {
-      send(ws, {
-        type: 'inventory_notice',
-        message:
-          '행운의 선물상자 조합은 Google 로그인 후 가능합니다.'
+          '고래의 결정 조합은 PostgreSQL 연결 및 정상 입장 후 이용할 수 있습니다.'
       });
 
       return;
@@ -311,7 +312,7 @@ export async function createItemInventory(pool, send) {
         [player.inventoryHash]
       );
 
-      // 사용하지 않은 비늘 5개 조회
+      // 사용하지 않은 결정 5개 조회
       const available = await db.query(`
         SELECT run_id
         FROM jmc_item_drops
@@ -354,7 +355,7 @@ export async function createItemInventory(pool, send) {
       claimId = crypto.randomUUID();
 
       // ========================================
-      // 비늘 5개로 미개봉 선물상자 생성
+      // 결정 5개로 미개봉 선물상자 생성
       // ========================================
 
       await db.query(`
@@ -372,7 +373,7 @@ export async function createItemInventory(pool, send) {
       ]);
 
       // ========================================
-      // 비늘 5개 사용 처리
+      // 결정 5개 사용 처리
       // ========================================
 
       const used = await db.query(`
@@ -396,7 +397,7 @@ export async function createItemInventory(pool, send) {
         requiredBonus < 0
       ) {
         throw new Error(
-          '고래의 비늘 보유 수량이 변경됐습니다.'
+          '고래의 결정 보유 수량이 변경됐습니다.'
         );
       }
 
@@ -414,7 +415,7 @@ export async function createItemInventory(pool, send) {
 
         if (consumed.rowCount !== 1) {
           throw new Error(
-            '테스트 비늘 사용에 실패했습니다.'
+            '테스트 결정 사용에 실패했습니다.'
           );
         }
       }
@@ -463,7 +464,7 @@ export async function createItemInventory(pool, send) {
       rewardType: 'gift_box'
     });
 
-    // 새 선물상자와 남은 비늘 수량 전송
+    // 새 선물상자와 남은 결정 수량 전송
     await sendSnapshot(ws, player);
   }
 
@@ -472,229 +473,152 @@ export async function createItemInventory(pool, send) {
   // ========================================
 
   async function openBox(ws, player, boxId) {
-
-    if (
-      !pool ||
-      !player.ready ||
-      !player.googleSub ||
-      !player.inventoryHash
-    ) {
+    if (!pool || !player.ready || !player.inventoryHash) {
       send(ws, {
         type: 'inventory_notice',
-        message:
-          '선물상자는 Google 로그인 후 열 수 있습니다.'
+        message: '인벤토리 정보를 확인할 수 없습니다. 새로고침 후 다시 입장해 주세요.'
       });
-
       return;
     }
 
-    if (
-      typeof boxId !== 'string' ||
-      !UUID_PATTERN.test(boxId)
-    ) {
+    if (typeof boxId !== 'string' || !UUID_PATTERN.test(boxId)) {
       send(ws, {
         type: 'inventory_notice',
-        message:
-          '올바르지 않은 선물상자입니다.'
+        message: '올바르지 않은 선물상자입니다.'
       });
-
       return;
     }
 
     let db;
     let committed = false;
     let noStock = false;
+    let isDud = false;
     let awarded = null;
 
     try {
       db = await pool.connect();
-
       await db.query('BEGIN');
 
-      // ========================================
-      // 선물상자 소유권 및 미개봉 상태 확인
-      // ========================================
+      // 조합·보스 획득과 충돌하지 않도록 같은 소유자 단위로 잠금.
+      await db.query(
+        'SELECT pg_advisory_xact_lock(hashtext($1))',
+        [player.inventoryHash]
+      );
 
-      // FOR UPDATE로 동일 상자의 중복 개봉 차단
+      // 선물상자의 소유권과 미개봉 상태를 DB에서 검증.
+      // 중복 개봉은 행 잠금 및 상태 조건으로 차단.
       const box = await db.query(`
-        SELECT id
-        FROM jmc_item_crafts
-        WHERE id=$1
-          AND owner_hash=$2
-          AND status='box'
+        SELECT id FROM jmc_item_crafts
+        WHERE id=$1 AND owner_hash=$2 AND status='box'
         FOR UPDATE
-      `, [
-        boxId,
-        player.inventoryHash
-      ]);
+      `, [boxId, player.inventoryHash]);
 
       if (box.rowCount !== 1) {
-        const error = new Error(
-          '이미 개봉했거나 소유하지 않은 선물상자입니다.'
-        );
-
+        const error = new Error('이미 개봉했거나 소유하지 않은 선물상자입니다.');
         error.code = 'GIFT_BOX_NOT_FOUND';
-
         throw error;
       }
 
-      // ========================================
-      // 실제 기프티콘 재고 확인
-      // ========================================
-
-      // 유효기간이 지나지 않은
-      // 미사용 쿠폰만 무작위 선택
-      //
-      // SKIP LOCKED:
-      // 다른 이용자에게 지급 중인 쿠폰은 제외
-
+      // 재고가 없으면 기존 규칙대로 상자를 보존한다.
+      // 무작위 기프티콘 1개를 잠가 다른 이용자와의 중복 지급을 방지.
       const stock = await db.query(`
-        SELECT
-          id,
-          brand,
-          title,
-          coupon_code,
-          image_data,
-          expires_at
+        SELECT id, brand, title, coupon_code, image_data, expires_at
         FROM jmc_gift_coupons
         WHERE status='unused'
-          AND (
-            expires_at IS NULL
-            OR expires_at >= CURRENT_DATE
-          )
+          AND (expires_at IS NULL OR expires_at >= CURRENT_DATE)
         ORDER BY RANDOM()
         LIMIT 1
         FOR UPDATE SKIP LOCKED
       `);
 
-      // ========================================
-      // 재고 없음: 선물상자 보존
-      // ========================================
-
       if (stock.rowCount === 0) {
         noStock = true;
-
         await db.query('ROLLBACK');
-
       } else {
+        // 서버 보안 난수: 0=꽝, 1=기프티콘. 각 50% 확률.
+        isDud = crypto.randomInt(2) === 0;
 
-        awarded = stock.rows[0];
+        if (isDud) {
+          // 꽝: 같은 트랜잭션에서 결정 2개 지급 + 선물상자 1개 소모.
+          // 기존 관리자 보너스 수량을 공유하지만, 이 지급은 서버만 결정.
+          await db.query(`
+            INSERT INTO jmc_item_bonus_scales(owner_hash, quantity)
+            VALUES($1, 2)
+            ON CONFLICT(owner_hash)
+            DO UPDATE SET quantity=jmc_item_bonus_scales.quantity+2
+          `, [player.inventoryHash]);
+        } else {
+          awarded = stock.rows[0];
+          const assigned = await db.query(`
+            UPDATE jmc_gift_coupons
+            SET status='assigned', craft_id=$1,
+                assigned_owner_hash=$2, assigned_at=NOW()
+            WHERE id=$3 AND status='unused'
+            RETURNING id
+          `, [boxId, player.inventoryHash, awarded.id]);
 
-        // ========================================
-        // 쿠폰 1개 지급 확정
-        // ========================================
-
-        const assigned = await db.query(`
-          UPDATE jmc_gift_coupons
-          SET
-            status='assigned',
-            craft_id=$1,
-            assigned_owner_hash=$2,
-            assigned_at=NOW()
-          WHERE id=$3
-            AND status='unused'
-          RETURNING id
-        `, [
-          boxId,
-          player.inventoryHash,
-          awarded.id
-        ]);
-
-        if (assigned.rowCount !== 1) {
-          throw new Error(
-            '쿠폰 지급 중 재고가 변경됐습니다.'
-          );
+          if (assigned.rowCount !== 1) {
+            throw new Error('쿠폰 지급 중 재고가 변경됐습니다.');
+          }
         }
-
-        // ========================================
-        // 개봉한 선물상자 사용 처리
-        // ========================================
 
         const opened = await db.query(`
           UPDATE jmc_item_crafts
-          SET status='opened'
-          WHERE id=$1
-            AND owner_hash=$2
-            AND status='box'
+          SET status=$3
+          WHERE id=$1 AND owner_hash=$2 AND status='box'
           RETURNING id
-        `, [
-          boxId,
-          player.inventoryHash
-        ]);
+        `, [boxId, player.inventoryHash, isDud ? 'dud' : 'opened']);
 
         if (opened.rowCount !== 1) {
-          throw new Error(
-            '선물상자 상태를 변경하지 못했습니다.'
-          );
+          throw new Error('선물상자 상태를 변경하지 못했습니다.');
         }
 
-        // 쿠폰 지급과 상자 차감 동시 확정
         await db.query('COMMIT');
-
         committed = true;
       }
-
     } catch (error) {
-
       if (db && !committed) {
         try {
           await db.query('ROLLBACK');
         } catch (rollbackError) {
-          console.error(
-            '[JMC GIFT BOX] Rollback:',
-            rollbackError
-          );
+          console.error('[JMC GIFT BOX] Rollback:', rollbackError);
         }
       }
 
-      console.error(
-        '[JMC GIFT BOX] Open:',
-        error
-      );
-
+      console.error('[JMC GIFT BOX] Open:', error);
       send(ws, {
         type: 'inventory_notice',
-        message:
-          error.code === 'GIFT_BOX_NOT_FOUND'
-            ? '이미 개봉했거나 소유하지 않은 선물상자입니다.'
-            : '선물상자를 열지 못했습니다. 잠시 후 다시 시도해 주세요.'
+        message: error.code === 'GIFT_BOX_NOT_FOUND'
+          ? '이미 개봉했거나 소유하지 않은 선물상자입니다.'
+          : '선물상자를 열지 못했습니다. 잠시 후 다시 시도해 주세요.'
       });
-
       await sendSnapshot(ws, player);
-
       return;
-
     } finally {
       db?.release();
     }
 
-    // ========================================
-    // 기프티콘 재고가 없는 경우
-    // ========================================
-
     if (noStock) {
       send(ws, {
         type: 'inventory_box_empty',
-        message:
-          '현재 준비된 기프티콘이 없습니다. 기프티콘이 충전되면 다시 열어주세요. 선물상자는 소모되지 않습니다.'
+        message: '현재 준비된 기프티콘이 없습니다. 선물상자는 소모되지 않습니다.'
       });
-
       return;
     }
 
-    // ========================================
-    // 기프티콘 지급 성공
-    // ========================================
+    if (!committed) return;
 
-    if (committed && awarded) {
-
-      console.log(
-        '[JMC GIFT BOX] 쿠폰 지급 성공',
-        'boxId:', boxId,
-        'couponId:', awarded.id,
-        'player:', player.name
-      );
-
+    if (isDud) {
+      console.log('[JMC GIFT BOX] 꽝 / 결정 2개 지급', 'boxId:', boxId, 'player:', player.name);
+      send(ws, {
+        type: 'inventory_box_dud',
+        itemName: ITEM_NAME,
+        quantity: 2,
+        boxId
+      });
+    } else if (awarded) {
+      console.log('[JMC GIFT BOX] 쿠폰 지급 성공', 'boxId:', boxId,
+        'couponId:', awarded.id, 'player:', player.name);
       send(ws, {
         type: 'inventory_box_opened',
         coupon: {
@@ -706,11 +630,10 @@ export async function createItemInventory(pool, send) {
           expires_at: awarded.expires_at
         }
       });
-
-      // 개봉한 상자는 목록에서 제거되고
-      // 지급된 쿠폰은 내 기프티콘에 표시
-      await sendSnapshot(ws, player);
     }
+
+    // 상자 소모, 쿠폰 및 결정 반환 수량을 즉시 동기화.
+    await sendSnapshot(ws, player);
   }
 
   // ========================================
@@ -781,7 +704,7 @@ export async function createItemInventory(pool, send) {
     }
   }
   // ========================================
-  // 관리자 테스트용 고래비늘 5개 채우기
+  // 관리자 테스트용 고래결정 5개 채우기
   // ========================================
 
   async function adminRefill(ownerHash) {
@@ -796,7 +719,7 @@ export async function createItemInventory(pool, send) {
     try {
       await db.query('BEGIN');
 
-      // 일반 비늘 지급·조합과 동시 실행 방지
+      // 일반 결정 지급·조합과 동시 실행 방지
       await db.query(
         'SELECT pg_advisory_xact_lock(hashtext($1))',
         [ownerHash]
@@ -812,8 +735,8 @@ export async function createItemInventory(pool, send) {
       const actualCount =
         Number(actual.rows[0]?.count) || 0;
 
-      // 실제 비늘을 유지하고 부족한 수량만
-      // 관리자 테스트 비늘로 채움
+      // 실제 결정을 유지하고 부족한 수량만
+      // 관리자 테스트 결정로 채움
       const bonusQuantity = Math.max(
         0,
         MAX_SCALES - actualCount
@@ -858,16 +781,16 @@ export async function createItemInventory(pool, send) {
 
     sendSnapshot,
 
-    // 고래의 비늘
+    // 고래의 결정
     grant,
 
-    // 비늘 5개 조합
+    // 결정 5개 조합
     craft,
 
     // 선물상자 개봉
     openBox,
 
-    // 관리자 테스트 비늘 충전
+    // 관리자 테스트 결정 충전
     adminRefill,
 
     // 이전 교환 신청 관리
