@@ -106,7 +106,8 @@ const ANIMALS = [
   'tiger',
   'koala',
   'raccoon',
-  'deer'
+  'deer',
+  'ichigo'
 ];
 
 const clients = new Map();
