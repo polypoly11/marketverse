@@ -3337,7 +3337,7 @@ function showBubble(item){
   });
 
   const sprite=new THREE.Sprite(material);
-  sprite.position.set(0,avatar.userData.npcMode === 'npc' ? 3.6 : 4.7,0);
+  sprite.position.set(0,avatar.userData.npcMode === 'npc' ? 3.25 : 4.0,0);
   sprite.scale.set(3.8,1.58,1);
   sprite.renderOrder=100;
   avatar.add(sprite);
@@ -3354,7 +3354,7 @@ function tickBubbles(now){
     // 말풍선이 떠 있는 중에 변신해도 즉시 높이 갱신 (PC·모바일 공통)
     const avatar = id === myId ? myAvatar : others.get(id);
     if(avatar && bubble.sprite) {
-      bubble.sprite.position.y = avatar.userData.npcMode === 'npc' ? 3.6 : 4.7;
+      bubble.sprite.position.y = avatar.userData.npcMode === 'npc' ? 3.25 : 4.0;
     }
     if(now>=bubble.expires){
       removeBubble(id);
