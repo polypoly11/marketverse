@@ -3025,12 +3025,12 @@ function resetToBoard(){
   yaw=Math.PI;
 
   if(myAvatar){
-    myAvatar.position.set(0,0,-8);
+    myAvatar.position.set(0, 0, 5);
     myAvatar.rotation.y=Math.PI;
     myAvatar.userData.targetDirection=Math.PI;
   }
 
-  const p=myAvatar?.position||new THREE.Vector3(0,0,-8);
+  const p=myAvatar?.position||new THREE.Vector3(0, 0, 5)
 
   camera.position.copy(cameraPositionFor(p));
   camera.lookAt(cameraLookAtFor(p));
