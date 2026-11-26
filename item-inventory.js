@@ -8,7 +8,7 @@ import crypto from 'node:crypto';
 
 const ITEM_NAME = '고래의 결정';
 const CRAFT_REQUIRED = 5;
-const MAX_SCALES = 5; // 레이드 신규 획득 상한. 꽝 반환 2개는 초과 보관 허용.
+const MAX_SCALES = 5; // 레이드 신규 획득 상한.
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -60,7 +60,7 @@ export async function createItemInventory(pool, send) {
           CHECK (quantity >= 0)
       )
     `);
-    // 기존 데이터베이스의 5개 상한은 꽝 반환 아이템에 적용하지 않는다.
+    // 기존 보너스 수량은 조합 및 관리자 충전에 사용할 수 있다.
     // 이미 지급된 아이템 수량 및 기존 데이터는 유지한다.
     await pool.query(`
       ALTER TABLE jmc_item_bonus_scales
@@ -492,7 +492,6 @@ export async function createItemInventory(pool, send) {
     let db;
     let committed = false;
     let noStock = false;
-    let isDud = false;
     let awarded = null;
 
     try {
@@ -535,31 +534,18 @@ export async function createItemInventory(pool, send) {
         noStock = true;
         await db.query('ROLLBACK');
       } else {
-        // 서버 보안 난수: 0=꽝, 1=기프티콘. 각 50% 확률.
-        isDud = crypto.randomInt(2) === 0;
+        // 재고가 있으면 무작위 기프티콘 1개를 반드시 지급한다.
+        awarded = stock.rows[0];
+        const assigned = await db.query(`
+          UPDATE jmc_gift_coupons
+          SET status='assigned', craft_id=$1,
+              assigned_owner_hash=$2, assigned_at=NOW()
+          WHERE id=$3 AND status='unused'
+          RETURNING id
+        `, [boxId, player.inventoryHash, awarded.id]);
 
-        if (isDud) {
-          // 꽝: 같은 트랜잭션에서 결정 2개 지급 + 선물상자 1개 소모.
-          // 기존 관리자 보너스 수량을 공유하지만, 이 지급은 서버만 결정.
-          await db.query(`
-            INSERT INTO jmc_item_bonus_scales(owner_hash, quantity)
-            VALUES($1, 2)
-            ON CONFLICT(owner_hash)
-            DO UPDATE SET quantity=jmc_item_bonus_scales.quantity+2
-          `, [player.inventoryHash]);
-        } else {
-          awarded = stock.rows[0];
-          const assigned = await db.query(`
-            UPDATE jmc_gift_coupons
-            SET status='assigned', craft_id=$1,
-                assigned_owner_hash=$2, assigned_at=NOW()
-            WHERE id=$3 AND status='unused'
-            RETURNING id
-          `, [boxId, player.inventoryHash, awarded.id]);
-
-          if (assigned.rowCount !== 1) {
-            throw new Error('쿠폰 지급 중 재고가 변경됐습니다.');
-          }
+        if (assigned.rowCount !== 1) {
+          throw new Error('쿠폰 지급 중 재고가 변경됐습니다.');
         }
 
         const opened = await db.query(`
@@ -567,7 +553,7 @@ export async function createItemInventory(pool, send) {
           SET status=$3
           WHERE id=$1 AND owner_hash=$2 AND status='box'
           RETURNING id
-        `, [boxId, player.inventoryHash, isDud ? 'dud' : 'opened']);
+        `, [boxId, player.inventoryHash, 'opened']);
 
         if (opened.rowCount !== 1) {
           throw new Error('선물상자 상태를 변경하지 못했습니다.');
@@ -608,15 +594,7 @@ export async function createItemInventory(pool, send) {
 
     if (!committed) return;
 
-    if (isDud) {
-      console.log('[JMC GIFT BOX] 꽝 / 결정 2개 지급', 'boxId:', boxId, 'player:', player.name);
-      send(ws, {
-        type: 'inventory_box_dud',
-        itemName: ITEM_NAME,
-        quantity: 2,
-        boxId
-      });
-    } else if (awarded) {
+    if (awarded) {
       console.log('[JMC GIFT BOX] 쿠폰 지급 성공', 'boxId:', boxId,
         'couponId:', awarded.id, 'player:', player.name);
       send(ws, {
@@ -632,7 +610,7 @@ export async function createItemInventory(pool, send) {
       });
     }
 
-    // 상자 소모, 쿠폰 및 결정 반환 수량을 즉시 동기화.
+    // 상자 소모 및 지급된 쿠폰 목록을 즉시 동기화.
     await sendSnapshot(ws, player);
   }
 
