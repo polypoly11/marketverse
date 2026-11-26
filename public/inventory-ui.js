@@ -161,6 +161,27 @@
     };
 
     let openingBoxId = null;
+    let craftPending = false;
+    let craftTimeoutId = null;
+
+    function finishCraftRequest() {
+      if (craftTimeoutId !== null) {
+        clearTimeout(craftTimeoutId);
+        craftTimeoutId = null;
+      }
+      craftPending = false;
+      craftButton.textContent = '5개 조합하기';
+      renderCraftButton();
+    }
+
+    function renderCraftButton() {
+      const count = Math.max(0, Math.floor(Number(state.count) || 0));
+      const available = state.enabled === true && count >= REQUIRED_COUNT;
+      craftButton.disabled = craftPending || !available;
+      craftButton.style.opacity = craftButton.disabled ? '.45' : '1';
+      craftButton.style.cursor = craftButton.disabled ? 'not-allowed' : 'pointer';
+      craftButton.textContent = craftPending ? '조합 처리 중...' : '5개 조합하기';
+    }
 
     function isMobile() {
       return window.matchMedia('(max-width:980px), (pointer:coarse)').matches;
@@ -185,7 +206,20 @@
       toggle.style.minHeight = `${buttonHeight}px`;
       toggle.style.padding = mobile ? '3px 2px' : '5px 2px';
 
-      // 인벤토리 패널은 화면 안에 들어오도록 위치를 계산합니다.
+      // 아이폰 Safari 주소창/노치 변화에도 패널이 화면 안에 머물도록 처리.
+      if (mobile) {
+        const viewport = window.visualViewport;
+        const vw = viewport?.width || window.innerWidth;
+        const vh = viewport?.height || window.innerHeight;
+        panel.style.width = `${Math.max(240, Math.min(350, vw - 16))}px`;
+        panel.style.left = `${Math.max(8, (vw - Math.min(350, vw - 16)) / 2)}px`;
+        panel.style.top = `${Math.max(8, (vh - Math.min(vh - 32, 580)) / 2)}px`;
+        panel.style.maxHeight = `${Math.max(180, vh - 32)}px`;
+        panel.style.overflowY = 'auto';
+        return;
+      }
+
+      // 데스크톱 패널은 기존 위치 계산 유지.
       const panelWidth = Math.min(350, window.innerWidth - 20);
       const belowTop = top + buttonHeight + gap;
       const roomBelow = window.innerHeight - belowTop;
@@ -368,9 +402,7 @@
         slots.append(el);
       }
 
-      craftButton.disabled = !enabled || count < REQUIRED_COUNT;
-      craftButton.style.opacity = craftButton.disabled ? '.45' : '1';
-      craftButton.style.cursor = craftButton.disabled ? 'not-allowed' : 'pointer';
+      renderCraftButton();
 note.textContent = enabled
   ? `${ITEM_NAME} ${REQUIRED_COUNT}개를 조합하면 행운의 선물상자 1개가 생성됩니다.`
   : '정식 아이템 보관을 사용하려면 서버에 PostgreSQL 연결이 필요합니다.';
@@ -693,20 +725,33 @@ note.textContent = enabled
       }
     }
     craftButton.onclick = () => {
-      if (craftButton.disabled) return;
+      if (craftPending) return;
 
+      const count = Math.max(0, Math.floor(Number(state.count) || 0));
+      if (!state.enabled) {
+        alert('인벤토리에 연결되지 않았습니다. 서버 연결과 로그인 상태를 확인해 주세요.');
+        return;
+      }
+      if (count < REQUIRED_COUNT) {
+        alert(`고래의 비늘이 ${REQUIRED_COUNT - count}개 부족합니다.`);
+        return;
+      }
       if (!confirm(
         '🐋 고래의 비늘 5개를 사용해\n' +
         '행운의 선물상자 1개를 만들까요?'
-      )) {
-        return;
-      }
+      )) return;
 
-      craftButton.disabled = true;
+      craftPending = true;
+      renderCraftButton();
 
-      window.dispatchEvent(
-        new Event('jmc-inventory-craft')
-      );
+      // 응답이 유실되어도 버튼이 영구적으로 잠기지 않도록 복구.
+      craftTimeoutId = setTimeout(() => {
+        if (!craftPending) return;
+        finishCraftRequest();
+        alert('조합 결과를 확인하지 못했습니다. 인벤토리를 다시 확인한 후 재시도해 주세요.');
+      }, 15000);
+
+      window.dispatchEvent(new Event('jmc-inventory-craft'));
     };
 
     window.addEventListener('jmc-inventory', e => {
@@ -730,9 +775,14 @@ note.textContent = enabled
             : []
         };
 
+        // 서버 수량이 감소했거나 인벤토리가 비활성화되면 진행 상태 복구.
+        if (craftPending && (!state.enabled || state.count < REQUIRED_COUNT)) {
+          finishCraftRequest();
+        }
         render();
 
       } else if (m.type === 'inventory_crafted') {
+        finishCraftRequest();
         panel.hidden = false;
         refreshInventoryPosition();
 
@@ -770,6 +820,7 @@ note.textContent = enabled
 
       } else if (m.type === 'inventory_notice') {
         openingBoxId = null;
+        if (craftPending) finishCraftRequest();
 
         alert(
           m.message || '인벤토리 오류'
