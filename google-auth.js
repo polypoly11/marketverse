@@ -10,7 +10,7 @@ const pending = new Map();
 
 const PROFILE_ANIMALS = new Set([
   'seal','cat','dog','rabbit','fox','panda','bear','penguin',
-  'frog','hamster','lion','tiger','koala','raccoon','deer'
+  'frog','hamster','lion','tiger','koala','raccoon','deer','ichigo'
 ]);
 
 function normalizeNickname(value) {
