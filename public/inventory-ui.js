@@ -75,8 +75,8 @@
       </strong>
 
       <p style="font-size:12px;color:#b5c8df">
-        선물상자를 더블클릭하면 기프티콘을 받을 수 있습니다.
-        모바일에서는 두 번 탭하세요.
+        선물상자를 한 번 누르면 개봉 확인창이 나타납니다.
+        승인하면 즉시 개봉하고 기프티콘을 확인할 수 있습니다.
       </p>
 
       <div id="jmc-gift-boxes"
@@ -454,28 +454,141 @@ note.textContent = enabled
     // 행운의 선물상자 / 기프티콘 보관함
     // ========================================
 
+    // 선물상자는 게임 화면 안의 전용 레이어에서 확인하고 개봉한다.
+    // 서버의 추첨·재고·소유권 검증은 기존 WebSocket 요청을 그대로 사용한다.
+    let boxRequestTimeout = null;
+    const gameScene = document.getElementById('scene');
+    const giftLayer = document.createElement('div');
+    giftLayer.id = 'jmc-gift-open-layer';
+    giftLayer.hidden = true;
+    giftLayer.setAttribute('role', 'dialog');
+    giftLayer.setAttribute('aria-modal', 'true');
+    giftLayer.setAttribute('aria-label', '행운의 선물상자 개봉');
+    giftLayer.innerHTML = `
+      <div class="jmc-gift-dialog">
+        <div class="jmc-gift-emoji" aria-hidden="true">🎁</div>
+        <h2 id="jmc-gift-title">행운의 선물상자</h2>
+        <p id="jmc-gift-message">선물상자를 오픈하시겠습니까?</p>
+        <div id="jmc-gift-prize"></div>
+        <div class="jmc-gift-actions">
+          <button type="button" id="jmc-gift-cancel">취소</button>
+          <button type="button" id="jmc-gift-confirm">오픈하기</button>
+          <button type="button" id="jmc-gift-done" hidden>확인</button>
+        </div>
+      </div>`;
+    (gameScene || document.body).appendChild(giftLayer);
+
+    const giftStyle = document.createElement('style');
+    giftStyle.id = 'jmc-gift-open-style';
+    giftStyle.textContent = `
+      #jmc-gift-open-layer[hidden], #jmc-gift-open-layer [hidden] { display:none !important; }
+      #jmc-gift-open-layer {
+        position:${gameScene ? 'absolute' : 'fixed'};
+        inset:0; z-index:10050;
+        display:flex; align-items:center; justify-content:center;
+        box-sizing:border-box; padding:14px;
+        background:rgba(2,9,20,.84); backdrop-filter:blur(7px);
+        -webkit-backdrop-filter:blur(7px);
+        overflow-y:auto; overscroll-behavior:contain;
+        touch-action:pan-y;
+      }
+      #jmc-gift-open-layer .jmc-gift-dialog {
+        width:min(370px,100%); max-height:100%; overflow-y:auto;
+        box-sizing:border-box; padding:22px 16px;
+        border:1px solid #d9b977; border-radius:18px;
+        background:linear-gradient(165deg,#172c45,#0a1625);
+        color:#f7f1e6; text-align:center;
+        box-shadow:0 12px 48px #000b, 0 0 32px #d9b97722;
+        -webkit-overflow-scrolling:touch;
+      }
+      #jmc-gift-open-layer .jmc-gift-emoji {font-size:57px;line-height:1.3;margin-bottom:6px;}
+      #jmc-gift-open-layer h2 {margin:8px 0 12px;font-size:20px;color:#f5d79b;}
+      #jmc-gift-open-layer p {margin:10px 0 16px;font-size:14px;line-height:1.7;white-space:pre-line;overflow-wrap:anywhere;}
+      #jmc-gift-prize {font-size:15px;color:#fff;overflow-wrap:anywhere;}
+      #jmc-gift-prize img {display:block;max-width:100%;max-height:180px;object-fit:contain;margin:12px auto 6px;border-radius:8px;background:#fff;}
+      #jmc-gift-open-layer .jmc-gift-actions {display:flex;gap:9px;justify-content:center;margin-top:12px;}
+      #jmc-gift-open-layer button {flex:1;max-width:165px;min-height:45px;border:1px solid #c9ad7d;border-radius:10px;background:#20344b;color:#f5e5cb;font-size:14px;font-weight:800;cursor:pointer;touch-action:manipulation;}
+      #jmc-gift-confirm, #jmc-gift-done {background:#e4c588 !important;color:#162638 !important;}
+      #jmc-gift-open-layer button:disabled {opacity:.55;cursor:wait;}
+      @media (max-width:600px) {#jmc-gift-open-layer .jmc-gift-dialog {padding:17px 12px;} #jmc-gift-open-layer .jmc-gift-emoji {font-size:46px;} #jmc-gift-open-layer h2 {font-size:17px;}}
+    `;
+    document.head.appendChild(giftStyle);
+
+    const giftTitle = $('jmc-gift-title');
+    const giftMessage = $('jmc-gift-message');
+    const giftPrize = $('jmc-gift-prize');
+    const giftCancel = $('jmc-gift-cancel');
+    const giftConfirm = $('jmc-gift-confirm');
+    const giftDone = $('jmc-gift-done');
+    let selectedGiftBoxId = null;
+
+    function clearBoxRequestTimeout() {
+      if (boxRequestTimeout !== null) {
+        clearTimeout(boxRequestTimeout);
+        boxRequestTimeout = null;
+      }
+    }
+
+    function showGiftDialog(mode, message, coupon = null) {
+      giftLayer.hidden = false;
+      giftTitle.textContent = mode === 'result' ? '🎉 선물상자 개봉 완료!' : '행운의 선물상자';
+      giftMessage.textContent = message;
+      giftPrize.replaceChildren();
+      giftCancel.hidden = mode !== 'confirm';
+      giftConfirm.hidden = mode !== 'confirm' && mode !== 'loading';
+      giftConfirm.disabled = mode === 'loading';
+      giftConfirm.textContent = mode === 'loading' ? '개봉 처리 중...' : '오픈하기';
+      giftDone.hidden = mode === 'confirm' || mode === 'loading';
+      if (coupon && mode === 'result') {
+        const label = document.createElement('strong');
+        label.textContent = `${coupon.brand || ''} ${coupon.title || ''}`.trim() || '기프티콘 당첨';
+        giftPrize.appendChild(label);
+        if (typeof coupon.image_data === 'string' &&
+            /^data:image\/(?:png|jpeg|webp);base64,/.test(coupon.image_data)) {
+          const image = document.createElement('img');
+          image.src = coupon.image_data;
+          image.alt = '당첨 기프티콘 바코드';
+          giftPrize.appendChild(image);
+        }
+      }
+      if (gameScene) {
+        // 인벤토리는 화면을 가릴 수 있으므로 닫고 게임 화면에서 확인한다.
+        panel.hidden = true;
+        gameScene.scrollIntoView({block:'center',behavior:'auto'});
+      }
+    }
+
+    function closeGiftDialog() {
+      if (openingBoxId) return; // 서버 개봉 처리 중에는 중복 지급 방지
+      giftLayer.hidden = true;
+      selectedGiftBoxId = null;
+      panel.hidden = false;
+      refreshInventoryPosition();
+    }
+
+    giftCancel.onclick = closeGiftDialog;
+    giftDone.onclick = closeGiftDialog;
+
     function openGiftBox(boxId) {
       if (!boxId || openingBoxId) return;
-
-      const confirmed = confirm(
-        '🎁 행운의 선물상자\n\n' +
-        '선물상자를 열어 기프티콘을 확인할까요?\n\n' +
-        '기프티콘 재고가 없으면 상자는 소모되지 않습니다.'
-      );
-
-      if (!confirmed) return;
-
-      openingBoxId = boxId;
-
-      window.dispatchEvent(
-        new CustomEvent(
-          'jmc-inventory-box-open',
-          {
-            detail: { boxId }
-          }
-        )
-      );
+      selectedGiftBoxId = boxId;
+      showGiftDialog('confirm', '행운의 선물상자를 오픈하시겠습니까?\n승인하면 바로 개봉됩니다.');
     }
+
+    giftConfirm.onclick = () => {
+      if (!selectedGiftBoxId || openingBoxId) return;
+      const boxId = selectedGiftBoxId;
+      openingBoxId = boxId;
+      showGiftDialog('loading', '기프티콘 지급 결과를 확인하고 있습니다.');
+      // 서버 응답이 없으면 오류 안내. 중복 개봉을 자동 재요청하지 않는다.
+      clearBoxRequestTimeout();
+      boxRequestTimeout = setTimeout(() => {
+        if (!openingBoxId) return;
+        openingBoxId = null;
+        showGiftDialog('error', '서버 응답을 확인하지 못했습니다.\n인벤토리를 다시 확인한 후 재시도해 주세요.');
+      }, 20000);
+      window.dispatchEvent(new CustomEvent('jmc-inventory-box-open', {detail:{boxId}}));
+    };
 
     function renderGiftBoxes() {
       const container = $('jmc-gift-boxes');
@@ -529,28 +642,10 @@ note.textContent = enabled
 
         button.append(icon, label);
 
-        // PC 더블클릭
-        button.ondblclick = e => {
-          e.preventDefault();
-          openGiftBox(box.id);
-        };
-
-        // 모바일 연속 두 번 탭
-        let lastTapAt = 0;
-
-        button.addEventListener('pointerup', e => {
-          if (e.pointerType !== 'touch') return;
-
-          const now = performance.now();
-
-          if (now - lastTapAt < 450) {
-            lastTapAt = 0;
-            e.preventDefault();
-            openGiftBox(box.id);
-          } else {
-            lastTapAt = now;
-          }
-        });
+        // PC 클릭과 iPhone 탭 모두 한 번으로 개봉 확인창 표시
+        button.setAttribute('aria-label', '행운의 선물상자 개봉 확인');
+        button.title = '한 번 눌러 선물상자 개봉';
+        button.addEventListener('click', () => openGiftBox(box.id));
 
         container.append(button);
       }
@@ -789,42 +884,31 @@ note.textContent = enabled
         alert(
           '🎉 조합 성공!\n\n' +
           '행운의 선물상자 1개를 획득했습니다.\n' +
-          '인벤토리에서 상자를 더블클릭해 열어보세요.'
+          '인벤토리에서 상자를 한 번 눌러 열어보세요.'
         );
 
       } else if (m.type === 'inventory_box_empty') {
+        clearBoxRequestTimeout();
         openingBoxId = null;
-
-        alert(
-          '🎁 행운의 선물상자\n\n' +
-          '현재 준비된 기프티콘이 없습니다.\n\n' +
-          '기프티콘이 충전되면 다시 열어주세요.\n' +
-          '선물상자는 소모되지 않고 보관됩니다.'
-        );
+        showGiftDialog('error', '현재 준비된 기프티콘이 없습니다.\n선물상자는 소모되지 않고 보관됩니다.');
 
       } else if (m.type === 'inventory_box_opened') {
+        clearBoxRequestTimeout();
         openingBoxId = null;
-
-        panel.hidden = false;
-        refreshInventoryPosition();
-
         const coupon = m.coupon || {};
-
-        alert(
-          '🎉 축하합니다!\n\n' +
-          '행운의 선물상자를 열었습니다.\n\n' +
-          `당첨 상품: ${coupon.brand || ''} ` +
-          `${coupon.title || ''}\n\n` +
-          '지급된 쿠폰은 내 기프티콘에서 확인하세요.'
-        );
+        showGiftDialog('result', '축하합니다! 당첨된 기프티콘은 내 기프티콘에 보관됩니다.', coupon);
 
       } else if (m.type === 'inventory_notice') {
+        const wasOpeningBox = !!openingBoxId;
+        clearBoxRequestTimeout();
         openingBoxId = null;
         if (craftPending) finishCraftRequest();
 
-        alert(
-          m.message || '인벤토리 오류'
-        );
+        if (wasOpeningBox) {
+          showGiftDialog('error', m.message || '선물상자를 개봉하지 못했습니다.');
+        } else {
+          alert(m.message || '인벤토리 오류');
+        }
 
         render();
       }
