@@ -463,7 +463,7 @@ note.textContent = enabled
     giftLayer.hidden = true;
     giftLayer.setAttribute('role', 'dialog');
     giftLayer.setAttribute('aria-modal', 'true');
-    giftLayer.setAttribute('aria-label', '행운의 선물상자 개봉');
+    giftLayer.setAttribute('aria-label', '아이템 조합 및 선물상자 개봉');
     giftLayer.innerHTML = `
       <div class="jmc-gift-dialog">
         <div class="jmc-gift-emoji" aria-hidden="true">🎁</div>
@@ -531,14 +531,25 @@ note.textContent = enabled
 
     function showGiftDialog(mode, message, coupon = null) {
       giftLayer.hidden = false;
-      giftTitle.textContent = mode === 'result' ? '🎉 선물상자 개봉 완료!' : (mode === 'dud' ? '💨 꽝!' : '행운의 선물상자');
+      giftLayer.dataset.mode = mode;
+      giftTitle.textContent = mode === 'result'
+        ? '🎉 선물상자 개봉 완료!'
+        : mode === 'dud' ? '💨 꽝!'
+        : mode === 'craft-result' ? '🎉 조합 성공!'
+        : mode.startsWith('craft-') ? '고래의 결정 조합'
+        : '행운의 선물상자';
+      giftLayer.querySelector('.jmc-gift-emoji').textContent = mode.startsWith('craft-') ? '💎' : '🎁';
       giftMessage.textContent = message;
       giftPrize.replaceChildren();
-      giftCancel.hidden = mode !== 'confirm';
-      giftConfirm.hidden = mode !== 'confirm' && mode !== 'loading';
-      giftConfirm.disabled = mode === 'loading';
-      giftConfirm.textContent = mode === 'loading' ? '개봉 처리 중...' : '오픈하기';
-      giftDone.hidden = mode === 'confirm' || mode === 'loading';
+      const isConfirm = mode === 'confirm' || mode === 'craft-confirm';
+      const isLoading = mode === 'loading' || mode === 'craft-loading';
+      giftCancel.hidden = !isConfirm;
+      giftConfirm.hidden = !isConfirm && !isLoading;
+      giftConfirm.disabled = isLoading;
+      giftConfirm.textContent = mode === 'craft-confirm' ? '조합하기'
+        : mode === 'craft-loading' ? '조합 처리 중...'
+        : mode === 'loading' ? '개봉 처리 중...' : '오픈하기';
+      giftDone.hidden = isConfirm || isLoading;
       if (coupon && mode === 'result') {
         const label = document.createElement('strong');
         label.textContent = `${coupon.brand || ''} ${coupon.title || ''}`.trim() || '기프티콘 당첨';
@@ -559,7 +570,7 @@ note.textContent = enabled
     }
 
     function closeGiftDialog() {
-      if (openingBoxId) return; // 서버 개봉 처리 중에는 중복 지급 방지
+      if (openingBoxId || craftPending) return; // 서버 처리 중 중복 요청 방지
       giftLayer.hidden = true;
       selectedGiftBoxId = null;
       panel.hidden = false;
@@ -576,6 +587,22 @@ note.textContent = enabled
     }
 
     giftConfirm.onclick = () => {
+      if (giftLayer.dataset.mode === 'craft-confirm') {
+        if (craftPending || openingBoxId || !state.enabled || state.count < REQUIRED_COUNT) {
+          showGiftDialog('error', '조합 가능한 고래의 결정 수량을 확인해 주세요.');
+          return;
+        }
+        craftPending = true;
+        renderCraftButton();
+        showGiftDialog('craft-loading', '고래의 결정 5개를 조합하고 있습니다.');
+        craftTimeoutId = setTimeout(() => {
+          if (!craftPending) return;
+          finishCraftRequest();
+          showGiftDialog('error', '조합 결과를 확인하지 못했습니다.\n인벤토리를 확인한 후 다시 시도해 주세요.');
+        }, 15000);
+        window.dispatchEvent(new Event('jmc-inventory-craft'));
+        return;
+      }
       if (!selectedGiftBoxId || openingBoxId) return;
       const boxId = selectedGiftBoxId;
       openingBoxId = boxId;
@@ -791,10 +818,7 @@ note.textContent = enabled
                 error
               );
 
-              alert(
-                '이미지를 저장하지 못했습니다.\n' +
-                '바코드 이미지를 길게 눌러 저장해 주세요.'
-              );
+              showGiftDialog('error', '이미지를 저장하지 못했습니다.\n바코드 이미지를 길게 눌러 저장해 주세요.');
             }
           };
 
@@ -820,33 +844,17 @@ note.textContent = enabled
       }
     }
     craftButton.onclick = () => {
-      if (craftPending) return;
-
+      if (craftPending || openingBoxId) return;
       const count = Math.max(0, Math.floor(Number(state.count) || 0));
       if (!state.enabled) {
-        alert('인벤토리에 연결되지 않았습니다. 서버 연결과 로그인 상태를 확인해 주세요.');
+        showGiftDialog('error', '인벤토리에 연결되지 않았습니다. 서버 연결 상태를 확인해 주세요.');
         return;
       }
       if (count < REQUIRED_COUNT) {
-        alert(`고래의 결정이 ${REQUIRED_COUNT - count}개 부족합니다.`);
+        showGiftDialog('error', `고래의 결정이 ${REQUIRED_COUNT - count}개 부족합니다.`);
         return;
       }
-      if (!confirm(
-        '🐋 고래의 결정 5개를 사용해\n' +
-        '행운의 선물상자 1개를 만들까요?'
-      )) return;
-
-      craftPending = true;
-      renderCraftButton();
-
-      // 응답이 유실되어도 버튼이 영구적으로 잠기지 않도록 복구.
-      craftTimeoutId = setTimeout(() => {
-        if (!craftPending) return;
-        finishCraftRequest();
-        alert('조합 결과를 확인하지 못했습니다. 인벤토리를 다시 확인한 후 재시도해 주세요.');
-      }, 15000);
-
-      window.dispatchEvent(new Event('jmc-inventory-craft'));
+      showGiftDialog('craft-confirm', '고래의 결정 5개를 사용해\n행운의 선물상자 1개를 만들까요?');
     };
 
     window.addEventListener('jmc-inventory', e => {
@@ -878,14 +886,7 @@ note.textContent = enabled
 
       } else if (m.type === 'inventory_crafted') {
         finishCraftRequest();
-        panel.hidden = false;
-        refreshInventoryPosition();
-
-        alert(
-          '🎉 조합 성공!\n\n' +
-          '행운의 선물상자 1개를 획득했습니다.\n' +
-          '인벤토리에서 상자를 한 번 눌러 열어보세요.'
-        );
+        showGiftDialog('craft-result', '행운의 선물상자 1개를 획득했습니다.\n인벤토리에서 상자를 한 번 눌러 열어보세요.');
 
       } else if (m.type === 'inventory_box_empty') {
         clearBoxRequestTimeout();
@@ -912,7 +913,7 @@ note.textContent = enabled
         if (wasOpeningBox) {
           showGiftDialog('error', m.message || '선물상자를 개봉하지 못했습니다.');
         } else {
-          alert(m.message || '인벤토리 오류');
+          showGiftDialog('error', m.message || '인벤토리 오류');
         }
 
         render();
