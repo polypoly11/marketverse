@@ -119,55 +119,146 @@ function makeAnimal(id){
     return m;
   }
 
-  // 이치고: 추가 모델 파일이 없어도 보이는 Three.js 기본 형상 아바타
+  // 이치고 개선형: 별도 모델 없이도 더 정교한 실루엣을 갖는 경량 3D 아바타
   if(id==='ichigo'){
-    const skin=mat(0xf2bd96), black=mat(0x17191e), orange=mat(0xf67627);
-    const cloth=mat(0x161922), silver=mat(0xd8e9f2,.33);
-    const bladeMat=new THREE.MeshStandardMaterial({color:0xd5e8f7,metalness:.8,roughness:.25,emissive:0x142b49});
-    orb(bodyGroup,0,1.14,0,.43,.63,.28,cloth);
-    // 흰색 하오리 안쪽 옷깃
-    for(const x of [-.18,.18]){
-      const collar=orb(bodyGroup,x,1.56,.27,.11,.34,.055,white);
-      collar.rotation.z=x>0?.42:-.42;
+    const skin=mat(0xf0b994,.78);
+    const skinShade=mat(0xd68f71,.85);
+    const hair=mat(0xe96919,.8);
+    const hairLight=mat(0xff9130,.73);
+    const hairDark=mat(0xa94816,.92);
+    const robe=mat(0x141820,.86);
+    const robeLight=mat(0x262b36,.85);
+    const innerDark=mat(0x080b12,.93);
+    const clothWhite=mat(0xe6e7e7,.8);
+    const eyeWhite=mat(0xf1f0e8,.75);
+    const eyeDark=mat(0x27221f,.55);
+    const steel=new THREE.MeshStandardMaterial({
+      color:0xbacbd3,metalness:.8,roughness:.27
+    });
+    const edgeSteel=new THREE.MeshStandardMaterial({
+      color:0xe2edf0,metalness:.65,roughness:.19
+    });
+
+    const box=(parent,w,h,d,material,x,y,z)=>{
+      const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),material);
+      mesh.position.set(x,y,z);
+      parent.add(mesh);
+      return mesh;
+    };
+    const tapered=(parent,rTop,rBottom,h,material,x,y,z,segments=8)=>{
+      const mesh=new THREE.Mesh(
+        new THREE.CylinderGeometry(rTop,rBottom,h,segments),material
+      );
+      mesh.position.set(x,y,z);
+      parent.add(mesh);
+      return mesh;
+    };
+    const spike=(parent,from,to,radius,material)=>{
+      const a=new THREE.Vector3(...from),b=new THREE.Vector3(...to);
+      const direction=b.clone().sub(a);
+      const mesh=new THREE.Mesh(
+        new THREE.ConeGeometry(radius,direction.length(),5),material
+      );
+      mesh.position.copy(a).add(b).multiplyScalar(.5);
+      mesh.quaternion.setFromUnitVectors(
+        new THREE.Vector3(0,1,0),direction.normalize()
+      );
+      parent.add(mesh);
+      return mesh;
+    };
+
+    // 하카마와 상의: 허리에서 퍼지는 옷자락, 겹쳐진 옷깃
+    const lowerRobe=tapered(bodyGroup,.37,.63,.83,robe,0,.61,0,8);
+    lowerRobe.rotation.y=Math.PI/8;
+    const leftFold=box(bodyGroup,.25,.73,.04,robeLight,-.19,.59,.42);
+    leftFold.rotation.z=-.09;
+    const rightFold=box(bodyGroup,.25,.73,.04,robeLight,.19,.59,.42);
+    rightFold.rotation.z=.09;
+    orb(bodyGroup,0,1.30,0,.43,.55,.29,robe);
+    box(bodyGroup,.13,.59,.055,clothWhite,-.13,1.49,.292).rotation.z=-.43;
+    box(bodyGroup,.13,.59,.055,clothWhite,.13,1.49,.298).rotation.z=.43;
+    box(bodyGroup,.17,.51,.065,innerDark,0,1.25,.32);
+    box(bodyGroup,.88,.13,.64,clothWhite,0,.91,.01);
+    box(bodyGroup,.21,.14,.68,robeLight,.13,.91,.025);
+
+    // 손과 사신복 소매
+    for(const side of [-1,1]){
+      const sleeve=orb(bodyGroup,side*.54,1.35,.01,.25,.36,.27,robe);
+      sleeve.rotation.z=side*.21;
+      const cuff=orb(bodyGroup,side*.63,1.09,.03,.23,.18,.23,robeLight);
+      cuff.rotation.z=side*.16;
+      orb(bodyGroup,side*.66,.95,.13,.105,.14,.1,skin);
+      orb(bodyGroup,side*.235,.23,.10,.19,.26,.21,innerDark);
+      box(bodyGroup,.38,.13,.46,robeLight,side*.235,.095,.15);
     }
-    orb(bodyGroup,0,1.95,.02,.43,.46,.40,skin);
-    orb(bodyGroup,0,2.26,-.07,.48,.24,.4,orange);
-    for(let i=0;i<12;i++){
-      const x=((i%6)-2.5)*.17;
-      const z=i<6?.20:-.26;
-      const spike=cone(bodyGroup,x,2.48+(i%3)*.06,z,.16,.56,orange,(i%2?-.34:.34));
-      spike.rotation.x=i<6?-.15:.2;
+
+    // 목과 얼굴: 구형 대신 턱선이 있는 머리형
+    tapered(bodyGroup,.14,.13,.22,skin,0,1.86,.015);
+    orb(bodyGroup,0,2.16,.015,.405,.47,.335,skin);
+    const jaw=new THREE.Mesh(new THREE.ConeGeometry(.29,.29,5),skin);
+    jaw.position.set(0,1.84,.13);
+    jaw.rotation.y=Math.PI/5;
+    bodyGroup.add(jaw);
+    // 작은 코, 눈 흰자, 동공과 날카로운 눈썹
+    orb(bodyGroup,0,2.07,.337,.06,.085,.046,skinShade);
+    for(const side of [-1,1]){
+      const eye=orb(bodyGroup,side*.175,2.18,.312,.133,.069,.031,eyeWhite);
+      eye.rotation.z=-side*.12;
+      orb(bodyGroup,side*.177,2.177,.346,.057,.064,.019,eyeDark);
+      const eyebrow=box(bodyGroup,.24,.042,.035,hairDark,side*.182,2.315,.325);
+      eyebrow.rotation.z=-side*.17;
     }
-    for(const x of [-.18,.18]){
-      orb(bodyGroup,x,2.04,.4,.075,.055,.035,black);
-      orb(bodyGroup,x,2.12,.4,.12,.025,.03,orange);
-    }
-    // 검은 사신복 소매와 다리
-    for(const x of [-.51,.51]){
-      const sleeve=orb(bodyGroup,x,1.29,.03,.24,.5,.25,cloth);
-      sleeve.rotation.z=x>0?-.23:.23;
-    }
-    for(const x of [-.22,.22]){
-      orb(bodyGroup,x,.47,0,.20,.48,.22,cloth);
-      orb(bodyGroup,x,.16,.13,.24,.13,.29,black);
-    }
-    const belt=orb(bodyGroup,0,.82,.05,.49,.10,.32,white);
-    belt.rotation.z=.02;
-    // 오른손에 든 참백도: 어두운 손잡이와 은빛 장검
+    box(bodyGroup,.15,.018,.012,skinShade,0,1.96,.351);
+
+    // 다층 헤어: 앞머리·관자놀이·뒷머리를 분리한 방향성 있는 뾰족 머리카락
+    orb(bodyGroup,0,2.50,-.055,.415,.27,.35,hairDark);
+    const tufts=[
+      [[-.34,2.54,.02],[-.53,2.84,.19],.19],
+      [[-.20,2.57,.10],[-.30,2.95,.25],.19],
+      [[.02,2.59,.10],[.08,3.02,.18],.19],
+      [[.23,2.57,.04],[.45,2.95,.15],.18],
+      [[.37,2.48,-.04],[.59,2.74,-.11],.17],
+      [[-.33,2.48,-.14],[-.59,2.72,-.23],.17],
+      [[-.13,2.61,-.23],[-.28,2.96,-.34],.17],
+      [[.12,2.61,-.24],[.25,2.96,-.37],.18],
+      [[0,2.62,-.25],[.02,3.00,-.38],.17]
+    ];
+    tufts.forEach(([a,b,r],i)=>spike(bodyGroup,a,b,r,i%3===0?hairLight:hair));
+    const bangs=[
+      [[-.31,2.54,.26],[-.34,2.24,.37],.13],
+      [[-.17,2.61,.32],[-.12,2.29,.40],.13],
+      [[.07,2.62,.32],[.16,2.31,.39],.13],
+      [[.27,2.55,.29],[.32,2.29,.36],.125]
+    ];
+    bangs.forEach(([a,b,r],i)=>{
+      spike(bodyGroup,a,b,r,i%2?hair:hairLight);
+    });
+
+    // 참월: 평평한 박스 대신 비스듬한 날과 날끝을 가진 검 실루엣
     const sword=new THREE.Group();
-    sword.position.set(.7,.97,.12);
-    const grip=new THREE.Mesh(new THREE.CylinderGeometry(.055,.07,.52,8),black);
-    grip.position.y=.13;
-    const guard=new THREE.Mesh(new THREE.BoxGeometry(.42,.065,.11),silver);
-    guard.position.y=.42;
-    const blade=new THREE.Mesh(new THREE.BoxGeometry(.14,1.45,.045),bladeMat);
-    blade.position.y=1.17;
-    const tip=new THREE.Mesh(new THREE.ConeGeometry(.10,.28,4),bladeMat);
-    tip.position.y=2.01;
-    tip.rotation.y=Math.PI/4;
-    sword.add(grip,guard,blade,tip);
-    sword.rotation.z=-.32;
-    sword.rotation.x=.14;
+    sword.position.set(.70,1.03,.19);
+    const grip=tapered(sword,.057,.067,.48,innerDark,0,.15,0,10);
+    const guard=box(sword,.34,.065,.12,steel,0,.42,0);
+    guard.rotation.z=-.13;
+    const bladeShape=new THREE.Shape();
+    bladeShape.moveTo(-.105,.45);
+    bladeShape.lineTo(.12,.46);
+    bladeShape.lineTo(.17,1.63);
+    bladeShape.lineTo(.04,1.88);
+    bladeShape.lineTo(-.13,1.65);
+    bladeShape.closePath();
+    const blade=new THREE.Mesh(
+      new THREE.ExtrudeGeometry(bladeShape,{
+        depth:.045,bevelEnabled:true,bevelThickness:.008,
+        bevelSize:.013,bevelSegments:1,steps:1
+      }),steel
+    );
+    sword.add(blade);
+    const glint=box(sword,.025,1.1,.012,edgeSteel,-.097,1.08,.067);
+    glint.rotation.z=-.016;
+    sword.rotation.z=-.28;
+    sword.rotation.x=.11;
+    sword.add(grip,guard,glint);
     bodyGroup.add(sword);
     root.userData.ichigoSword=sword;
   } else {
