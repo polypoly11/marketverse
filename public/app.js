@@ -4249,31 +4249,38 @@ function spawnRemoteMagic(m){
   if(m.animal==='ichigo'){
     const projectile=new THREE.Group();
     const crescent=new THREE.Shape();
-    const outer=1.03, inner=.57;
-    const start=-Math.PI*.69, end=Math.PI*.69;
-    for(let i=0;i<=24;i++){
-      const t=start+(end-start)*i/24;
-      const x=Math.sin(t)*outer, y=Math.cos(t)*outer;
-      if(i===0)crescent.moveTo(x,y);else crescent.lineTo(x,y);
+    // 기존 0.46 두께에서 0.16으로 축소: 날카롭고 얇은 칼날형 월아천충
+    const outer=1.02, inner=.86;
+    const start=-Math.PI*.64, end=Math.PI*.64;
+    for(let i=0;i<=32;i++){
+      const t=start+(end-start)*i/32;
+      const px=Math.sin(t)*outer, py=Math.cos(t)*outer;
+      if(i===0)crescent.moveTo(px,py);else crescent.lineTo(px,py);
     }
-    for(let i=24;i>=0;i--){
-      const t=start+(end-start)*i/24;
+    for(let i=32;i>=0;i--){
+      const t=start+(end-start)*i/32;
       crescent.lineTo(Math.sin(t)*inner,Math.cos(t)*inner);
     }
     crescent.closePath();
     const core=new THREE.Mesh(
       new THREE.ShapeGeometry(crescent),
-      new THREE.MeshBasicMaterial({color:0xb7f8ff,side:THREE.DoubleSide,
-        transparent:true,opacity:.96,depthWrite:false,blending:THREE.AdditiveBlending})
+      new THREE.MeshBasicMaterial({color:0xeaffff,side:THREE.DoubleSide,
+        transparent:true,opacity:.98,depthWrite:false,blending:THREE.AdditiveBlending})
     );
     const aura=new THREE.Mesh(
       new THREE.ShapeGeometry(crescent),
-      new THREE.MeshBasicMaterial({color:0x168dff,side:THREE.DoubleSide,
-        transparent:true,opacity:.46,depthWrite:false,blending:THREE.AdditiveBlending})
+      new THREE.MeshBasicMaterial({color:0x1a8fff,side:THREE.DoubleSide,
+        transparent:true,opacity:.30,depthWrite:false,blending:THREE.AdditiveBlending})
     );
-    aura.scale.set(1.3,1.3,1);
-    aura.position.z=-.025;
-    projectile.add(core,aura);
+    aura.scale.set(1.1,1.08,1);
+    aura.position.z=-.02;
+    // 가느다란 밝은 윤곽선으로 검날 느낌 강조
+    const edge=new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints(crescent.getPoints(50)),
+      new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.75})
+    );
+    edge.position.z=.012;
+    projectile.add(core,aura,edge);
     projectile.position.set(x,y+1.15,z);
     projectile.position.addScaledVector(direction,.85);
     projectile.rotation.y=facing;
