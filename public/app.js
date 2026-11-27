@@ -117,9 +117,6 @@ function attachMajinBuuGLB(avatar){
     const scale=Math.min(100,Math.max(.001,2.85/size.y));
     model.scale.multiplyScalar(scale);
     model.updateMatrixWorld(true);
-    const scaledBounds=new THREE.Box3().setFromObject(model);
-    const center=new THREE.Vector3();
-    scaledBounds.getCenter(center);
     model.position.x-=center.x;
     model.position.z-=center.z;
     model.position.y-=scaledBounds.min.y;
@@ -223,10 +220,14 @@ function attachIchigoGLB(avatar){
     // root의 CHARACTER_SCALE(0.7)은 그대로 두고 모델 높이를 일치시킴.
     model.scale.multiplyScalar(Math.min(100,Math.max(.001,2.95/size.y)));
     model.updateMatrixWorld(true);
-    const scaledBounds=new THREE.Box3().setFromObject(model);
-    const center=new THREE.Vector3();
-    scaledBounds.getCenter(center);
-    model.position.set(-center.x,-scaledBounds.min.y,-center.z);
+    // 이치고 GLB의 원본 메타리그가 84도 정도 회전되어 있으므로 정면을 보정.
+    // 회전 후 바운딩 박스를 새로 계산하여 중심과 발높이를 맞춘다.
+    model.rotation.y = -Math.PI / 2;
+    model.updateMatrixWorld(true);
+    const facingBounds = new THREE.Box3().setFromObject(model);
+    const facingCenter = new THREE.Vector3();
+    facingBounds.getCenter(facingCenter);
+    model.position.set(-facingCenter.x, -facingBounds.min.y, -facingCenter.z);
     model.traverse(node=>{
       if(node.isMesh || node.isSkinnedMesh)node.frustumCulled=false;
     });
