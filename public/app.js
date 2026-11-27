@@ -1205,7 +1205,7 @@ function selectAnimal(id){
   if(!buuStatus){
     buuStatus=document.createElement('div');
     buuStatus.id='jmc-buu-model-status';
-buuStatus.style.cssText='display:none !important;';
+    buuStatus.style.cssText='display:none !important;';
     $('selected-animal-name').insertAdjacentElement('afterend',buuStatus);
   }
   if(id==='majinbuu' || id==='ichigo'){
@@ -4089,6 +4089,25 @@ const joystickThumb=controls.querySelector(
   '.jmc-joystick-thumb'
 );
 
+// 모바일 조이스틱이 활성화된 동안 브라우저의 화면 이동·확대 제스처 차단.
+// 문서 전체가 아니라 조이스틱에서 시작된 손가락만 추적한다.
+const joystickTouchIds=new Set();
+controls.addEventListener('touchstart',e=>{
+  if(!isMobileDevice)return;
+  for(const touch of e.changedTouches) joystickTouchIds.add(touch.identifier);
+  if(e.cancelable)e.preventDefault();
+},{capture:true,passive:false});
+controls.addEventListener('touchmove',e=>{
+  if(!isMobileDevice||!joystickTouchIds.size)return;
+  if(e.cancelable)e.preventDefault();
+},{capture:true,passive:false});
+const finishJoystickTouches=e=>{
+  for(const touch of e.changedTouches)joystickTouchIds.delete(touch.identifier);
+};
+controls.addEventListener('touchend',finishJoystickTouches,{capture:true,passive:true});
+controls.addEventListener('touchcancel',finishJoystickTouches,{capture:true,passive:true});
+
+
 const joystickStyle=document.createElement('style');
 
 joystickStyle.textContent=`
@@ -4225,6 +4244,8 @@ function resetMobileJoystick(){
   mobileJoystick.x=0;
   mobileJoystick.y=0;
   mobileJoystick.pointerId=null;
+  joystickTouchIds.clear();
+  document.documentElement.classList.remove('jmc-joystick-active');
 
   joystickThumb.style.transform=
     'translate(-50%,-50%)';
@@ -4238,6 +4259,7 @@ controls.addEventListener('pointerdown',e=>{
   e.stopPropagation();
 
   mobileJoystick.pointerId=e.pointerId;
+  document.documentElement.classList.add('jmc-joystick-active');
   controls.setPointerCapture(e.pointerId);
   updateMobileJoystick(e);
 });
@@ -4253,6 +4275,7 @@ controls.addEventListener('pointermove',e=>{
 function finishMobileJoystick(e){
   if(e.pointerId!==mobileJoystick.pointerId)return;
   resetMobileJoystick();
+  requestAnimationFrame(resizeScene);
 }
 
 controls.addEventListener('pointerup',finishMobileJoystick);
@@ -4468,6 +4491,8 @@ function animate(now){
 }
 
 function resizeScene(){
+  // 모바일 조이스틱 조작 중 주소창 움직임에 따른 WebGL 화면 재조정 방지
+  if(isMobileDevice && mobileJoystick.pointerId!==null)return;
   const w=Math.max(1,sceneEl.clientWidth);
   const h=Math.max(1,sceneEl.clientHeight);
 
