@@ -3167,6 +3167,21 @@ transform: translate(-50%, -50%) !important;
     appearance: none;
   }
 }
+  /* 조이스틱 전용: iOS Safari 확대 / 선택 / 오버스크롤 억제 */
+  @media (max-width: 980px), (pointer: coarse) {
+    html body #scene #mobile-controls.jmc-joystick,
+    html body #scene #mobile-controls.jmc-joystick::before,
+    html body #scene #mobile-controls.jmc-joystick .jmc-joystick-thumb {
+      touch-action: none !important;
+      overscroll-behavior: none !important;
+      -webkit-user-select: none !important;
+      user-select: none !important;
+      -webkit-touch-callout: none !important;
+    }
+    html body #scene {
+      overscroll-behavior: contain !important;
+    }
+  }
 </style>
 <script id="jmc-mobile-touch-gesture-guard">
 (function () {
@@ -3208,10 +3223,19 @@ transform: translate(-50%, -50%) !important;
     if (isGameControl(event.target)) event.preventDefault();
   }, {capture:true});
 
-  document.addEventListener('gesturestart', event => {
+  // iOS Safari: gesturestart 이후 gesturechange 단계에서 재확대되는 현상 방지
+  const blockGameGesture = event => {
     if (isGameControl(event.target) || activeTouches.size) {
       if (event.cancelable) event.preventDefault();
     }
+  };
+  document.addEventListener('gesturestart', blockGameGesture, {capture:true, passive:false});
+  document.addEventListener('gesturechange', blockGameGesture, {capture:true, passive:false});
+  document.addEventListener('gestureend', blockGameGesture, {capture:true, passive:false});
+
+  // 조이스틱을 움직이는 도중 발생한 트랙패드형 확대 휠도 차단.
+  document.addEventListener('wheel', event => {
+    if (activeTouches.size && event.ctrlKey && event.cancelable) event.preventDefault();
   }, {capture:true, passive:false});
 
   window.addEventListener('blur', () => activeTouches.clear());
