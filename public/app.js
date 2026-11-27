@@ -1,5 +1,7 @@
 import {installMissileClient} from './missile-client.js';
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js';
+import {GLTFLoader} from 'https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/loaders/GLTFLoader.js';
+import {clone as cloneSkinnedModel} from 'https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/utils/SkeletonUtils.js';
 import {createBossClient} from './boss-client.js?v=20261120-whale-scale-99';
 const $ = id => document.getElementById(id);
 
@@ -73,6 +75,115 @@ const CAMERA_FOLLOW_SPEED = 9;
 const BOARD_Z = -18.65;
 const BOARD_WIDTH = 23;
 const sphere = new THREE.SphereGeometry(1,20,14);
+
+// 마인부우 GLB 연결: public/models/majinbuu.glb 를 올리면 자동 적용.
+// 모델을 구하지 못하면 아래 makeAnimal의 기존 도형 캐릭터가 유지된다.
+const MAJINBUU_GLB_URL='/models/majinbuu.glb?v=jmc-buu-glb-20261128';
+const majinBuuGLB={promise:null,asset:null,failed:false};
+function loadMajinBuuGLB(){
+  if(!majinBuuGLB.promise){
+    const loader=new GLTFLoader();
+    majinBuuGLB.promise=loader.loadAsync(MAJINBUU_GLB_URL)
+      .then(gltf=>{
+        if(!gltf?.scene)throw Error('GLB에 scene이 없습니다.');
+        majinBuuGLB.asset=gltf;
+        return gltf;
+      }).catch(error=>{
+        if(!majinBuuGLB.failed){
+          console.warn('[JMC] 마인부우 GLB 로드 실패:',MAJINBUU_GLB_URL,error);
+          majinBuuGLB.failed=true;
+        }
+        return null;
+      });
+  }
+  return majinBuuGLB.promise;
+}
+function attachMajinBuuGLB(avatar){
+  if(!avatar || avatar.userData.animal!=='majinbuu')return;
+  const body=avatar.userData.bodyGroup;
+  if(!body || avatar.userData.majinBuuGLBRequested)return;
+  avatar.userData.majinBuuGLBRequested=true;
+  // 기존 도형으로 만든 폴백 모델: 파일 로드 성공 전까지 계속 표시.
+  const fallback=body.children.slice();
+  void loadMajinBuuGLB().then(gltf=>{
+    if(!gltf || !body || avatar.userData.majinBuuModel)return;
+    const model=cloneSkinnedModel(gltf.scene);
+    model.updateMatrixWorld(true);
+    const bounds=new THREE.Box3().setFromObject(model);
+    const size=new THREE.Vector3();
+    bounds.getSize(size);
+    if(!Number.isFinite(size.y)||size.y<=.001)return;
+    // bodyGroup의 좌표계로 높이 약 2.85를 맞춘다. root의 CHARACTER_SCALE은 기존 유지.
+    const scale=Math.min(100,Math.max(.001,2.85/size.y));
+    model.scale.multiplyScalar(scale);
+    model.updateMatrixWorld(true);
+    const scaledBounds=new THREE.Box3().setFromObject(model);
+    const center=new THREE.Vector3();
+    scaledBounds.getCenter(center);
+    model.position.x-=center.x;
+    model.position.z-=center.z;
+    model.position.y-=scaledBounds.min.y;
+    // 모델이 뒤를 보고 있으면 아래 모델 회전 값을 Math.PI로 바꿔 조정할 수 있다.
+    model.traverse(node=>{
+      if(node.isMesh || node.isSkinnedMesh){
+        node.frustumCulled=false;
+      }
+    });
+    body.add(model);
+    fallback.forEach(child=>child.visible=false);
+    avatar.userData.majinBuuModel=model;
+    avatar.userData.majinBuuFallback=fallback;
+    avatar.userData.majinBuuMixer=null;
+    const clips=gltf.animations||[];
+    if(clips.length){
+      const mixer=new THREE.AnimationMixer(model);
+      const actions={};
+      for(const clip of clips){
+        const name=clip.name.toLowerCase();
+        const key=/attack|punch|blast|shoot|spell|cast|fire|skill|action/i.test(name)?'attack':
+          /walk|run|move|locomotion/i.test(name)?'walk':
+          /idle|stand|breath|rest/i.test(name)?'idle':null;
+        if(key && !actions[key])actions[key]=mixer.clipAction(clip);
+      }
+      if(!actions.idle && clips.length)actions.idle=mixer.clipAction(clips[0]);
+      if(actions.attack){
+        actions.attack.setLoop(THREE.LoopOnce,1);
+        actions.attack.clampWhenFinished=true;
+      }
+      avatar.userData.majinBuuMixer=mixer;
+      avatar.userData.majinBuuActions=actions;
+      avatar.userData.majinBuuCurrent=null;
+      playMajinBuuAnimation(avatar,'idle');
+      console.info('[JMC] 마인부우 GLB 애니메이션:',clips.map(c=>c.name));
+    }else{
+      console.info('[JMC] 마인부우 GLB 로드됨 (애니메이션 없음)');
+    }
+  });
+}
+function playMajinBuuAnimation(avatar,requested){
+  const actions=avatar?.userData?.majinBuuActions;
+  if(!actions)return;
+  const now=performance.now();
+  if(requested!=='attack' && now<(avatar.userData.majinBuuAttackUntil||0))return;
+  const key=actions[requested]?requested:(actions.idle?'idle':null);
+  if(!key)return;
+  if(avatar.userData.majinBuuCurrent===key && key!=='attack')return;
+  const prev=actions[avatar.userData.majinBuuCurrent];
+  const next=actions[key];
+  if(prev && prev!==next)prev.fadeOut(.12);
+  next.reset().setEffectiveWeight(1).fadeIn(.12).play();
+  avatar.userData.majinBuuCurrent=key;
+  if(key==='attack'){
+    avatar.userData.majinBuuAttackUntil=now+Math.min(850,Math.max(200,next.getClip().duration*1000));
+  }
+}
+function updateMajinBuuAnimation(avatar,dt,now,walking=false){
+  const mixer=avatar?.userData?.majinBuuMixer;
+  if(!mixer || avatar.userData.npcMode==='npc')return;
+  mixer.update(dt);
+  if(now<(avatar.userData.majinBuuAttackUntil||0))return;
+  playMajinBuuAnimation(avatar,walking?'walk':'idle');
+}
 
 function makeAnimal(id){
   const a = animal(id);
@@ -611,6 +722,7 @@ function makeAnimal(id){
   root.userData.bodyGroup = bodyGroup;
   root.userData.targetDirection = Math.PI;
   root.userData.animal = id;
+  if(id==='majinbuu')attachMajinBuuGLB(root);
   root.userData.walk = 0;
   root.userData.seated = false;
 root.userData.jumpHeight = 0;
@@ -860,6 +972,31 @@ function selectAnimal(id){
 
   $('selected-animal-name').textContent =
     animal(id).name;
+
+  // GLB 로딩 실패가 기존 도형 캐릭터에 가려지지 않도록 미리보기에서 안내.
+  let buuStatus=document.getElementById('jmc-buu-model-status');
+  if(!buuStatus){
+    buuStatus=document.createElement('div');
+    buuStatus.id='jmc-buu-model-status';
+    buuStatus.style.cssText='margin:6px auto 12px;text-align:center;font:600 12px Arial,sans-serif;color:#a9c5da;';
+    $('selected-animal-name').insertAdjacentElement('afterend',buuStatus);
+  }
+  if(id==='majinbuu'){
+    buuStatus.hidden=false;
+    buuStatus.textContent='구매한 3D 모델 불러오는 중…';
+    void loadMajinBuuGLB().then(gltf=>{
+      if(selectedAnimal!=='majinbuu')return;
+      if(gltf){
+        buuStatus.textContent='✓ 구매한 3D 모델 로딩 성공';
+        buuStatus.style.color='#83e4b6';
+      }else{
+        buuStatus.textContent='⚠ GLB 모델 로딩 실패: /models/majinbuu.glb 경로와 배포를 확인하세요';
+        buuStatus.style.color='#ffb2a0';
+      }
+    });
+  }else{
+    buuStatus.hidden=true;
+  }
 
   document.querySelectorAll('.animal-option')
     .forEach(b=>{
@@ -3948,6 +4085,7 @@ function animate(now){
     previewModel.rotation.y=previewAngle;
     previewModel.userData.bodyGroup.position.y=
       Math.sin(now*.002)*.025;
+    updateMajinBuuAnimation(previewModel,dt,now,false);
   }
 
   if(!$('profile-modal').hidden){
@@ -4077,6 +4215,19 @@ function animate(now){
 
   camera.lookAt(smoothCameraLookAt);
 
+  // 마인부우 GLB의 걷기/대기 애니메이션 갱신
+  const movingNow=myAvatar && !myAvatar.userData.seated &&
+    (held('w')||held('arrowup')||held('arrowdown')||held('s')||
+     held('d')||held('arrowright')||held('arrowleft')||
+     Math.abs(mobileJoystick.x)>.08||Math.abs(mobileJoystick.y)>.08);
+  updateMajinBuuAnimation(myAvatar,dt,now,Boolean(movingNow));
+  for(const a of others.values()){
+    const previous=a.userData.majinBuuLastPosition;
+    const moving=previous && a.position.distanceToSquared(previous)>.0001;
+    updateMajinBuuAnimation(a,dt,now,Boolean(moving));
+    if(!previous)a.userData.majinBuuLastPosition=a.position.clone();
+    else previous.copy(a.position);
+  }
   tickBubbles(now);
   animateNpcModel(myAvatar,now);
   for(const a of others.values())animateNpcModel(a,now);
@@ -4593,6 +4744,8 @@ function spawnRemoteMagic(m){
     scene.add(projectile);
     magicProjectiles.push({id:m.shotId,ownerId:m.senderId,object:projectile,
       direction,born:performance.now(),core,aura,freezeUntil:0,predictedContact:false});
+    const caster=m.senderId===myId?myAvatar:others.get(m.senderId);
+    playMajinBuuAnimation(caster,'attack');
     playMagicCastSfx(magicSoundVolume(x,z));
     return;
   }
