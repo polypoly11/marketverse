@@ -4933,9 +4933,13 @@ function spawnRemoteMagic(m){
     projectile.add(halo,aura,innerGlow,core);
     projectile.position.set(x,y+1.15,z);
     projectile.position.addScaledVector(direction,.85);
-projectile.rotation.y=facing;
-projectile.rotation.z=Math.PI/2;
-scene.add(projectile);
+    // 검기의 긴 축이 수평 진행 방향(+Z)을 바라보도록 눕힌다.
+    // YXZ 순서로 회전해야 발사 방향(facing)에 관계없이 끝이 전방을 향한다.
+    projectile.rotation.order='YXZ';
+    projectile.rotation.y=facing;
+    projectile.rotation.x=Math.PI/2 - 0.18;
+    projectile.rotation.z=0;
+    scene.add(projectile);
     magicProjectiles.push({id:m.shotId,ownerId:m.senderId,object:projectile,
       direction,born:performance.now(),core:null,aura,freezeUntil:0,predictedContact:false,
       baseAuraOpacity:.38});
