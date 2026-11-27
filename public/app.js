@@ -115,86 +115,172 @@ function makeAnimal(id){
     return m;
   }
 
-  // 마인부우(뚱보 부우): 분홍 피부, 머리 촉수, 보라색 망토와 흰 바지
+  // 마인부우(뚱보 부우): 부드러운 곡면, 한쪽으로 휘어진 촉수, 표정과 의상 디테일
   if(id==='majinbuu'){
-    const skin=mat(0xf09abf,.78);
-    const skinLight=mat(0xffbfda,.76);
-    const skinDark=mat(0xb95b83,.9);
-    const eyes=mat(0x151c2a,.4);
-    const pants=mat(0xf2f1e6,.91);
-    const pantsShadow=mat(0xcbd0d4,.88);
-    const cape=mat(0x754b9f,.82);
-    const capeShadow=mat(0x4c306f,.84);
-    const gold=mat(0xf4c246,.4);
-    const boot=mat(0xe3b433,.67);
-    const black=mat(0x161522,.8);
-    const part=(geometry,material,parent,x,y,z)=>{
-      const mesh=new THREE.Mesh(geometry,material);
-      mesh.position.set(x,y,z);
-      parent.add(mesh);
-      return mesh;
+    const skin=new THREE.MeshStandardMaterial({color:0xef93ba,roughness:.81,metalness:0});
+    const skinLight=mat(0xffb3d0,.87);
+    const skinShade=mat(0xc86b96,.94);
+    const skinHole=mat(0x914269,.96);
+    const eyesWhite=mat(0xfff6ed,.6);
+    const pupils=mat(0x21202c,.55);
+    const mouthDark=mat(0x541d3d,.92);
+    const teeth=mat(0xfff7ef,.67);
+    const trousers=mat(0xf5f1e7,.95);
+    const trouserShade=mat(0xd8d7d4,.97);
+    const cape=mat(0x6e4b9e,.85);
+    const capeShade=mat(0x503379,.9);
+    const capeEdge=mat(0x9770c1,.78);
+    const vest=mat(0x17141c,.88);
+    const vestTrim=mat(0xf8ce51,.52);
+    const glove=mat(0xeac545,.7);
+    const boot=mat(0xf0c548,.72);
+    const bootDark=mat(0xbe922e,.85);
+
+    const mesh=(parent,geom,material,x=0,y=0,z=0)=>{
+      const o=new THREE.Mesh(geom,material);
+      o.position.set(x,y,z);
+      parent.add(o);
+      return o;
     };
-    // 통통한 둥근 몸통과 단단한 어깨
-    orb(bodyGroup,0,1.13,0,.77,.81,.60,skin);
-    orb(bodyGroup,0,1.27,.19,.69,.66,.51,skin);
+    const ovoid=(parent,x,y,z,sx,sy,sz,material)=>{
+      const o=mesh(parent,new THREE.SphereGeometry(1,24,16),material,x,y,z);
+      o.scale.set(sx,sy,sz);
+      return o;
+    };
+    const tube=(parent,points,r,material,segments=20)=>{
+      const curve=new THREE.CatmullRomCurve3(points.map(p=>new THREE.Vector3(...p)));
+      return mesh(parent,new THREE.TubeGeometry(curve,segments,r,8,false),material);
+    };
+    // 앞쪽 배는 크게, 등은 살짝 좁게: 몸통이 팔·다리와 자연스럽게 연결되도록 배치
+    ovoid(bodyGroup,0,1.18,-.07,.67,.76,.52,skin);
+    ovoid(bodyGroup,0,1.13,.20,.69,.60,.57,skin);
+    ovoid(bodyGroup,0,1.12,.56,.47,.30,.22,skinLight);
+    // 민소매 조끼: 몸을 완전히 덮지 않고 어깨와 옆선을 따르는 검정 패널
     for(const side of [-1,1]){
-      orb(bodyGroup,side*.69,1.49,.01,.30,.28,.30,skin);
-      // 커다란 팔과 검은 손목 띠, 노란 장갑
-      const arm=orb(bodyGroup,side*.86,1.14,.05,.23,.40,.24,skin);
-      arm.rotation.z=side*.20;
-      orb(bodyGroup,side*.95,.89,.08,.23,.12,.23,black);
-      orb(bodyGroup,side*.96,.70,.14,.24,.23,.22,gold);
-      // 넉넉한 바지와 노란 장화
-      orb(bodyGroup,side*.37,.55,0,.39,.47,.36,pants);
-      orb(bodyGroup,side*.37,.32,.08,.35,.27,.32,pantsShadow);
-      orb(bodyGroup,side*.37,.19,.15,.28,.22,.32,boot);
-      orb(bodyGroup,side*.37,.105,.34,.32,.115,.39,boot);
+      const vestSide=ovoid(bodyGroup,side*.54,1.45,-.015,.22,.48,.46,vest);
+      vestSide.rotation.z=side*.19;
+      const goldHem=ovoid(bodyGroup,side*.55,1.03,.03,.075,.12,.39,vestTrim);
+      goldHem.rotation.z=side*.15;
     }
-    // 검정색 M 문양이 보이는 금빛 벨트 버클
-    orb(bodyGroup,0,.86,.23,.69,.14,.44,black);
-    const buckle=part(new THREE.CylinderGeometry(.18,.18,.065,24),gold,bodyGroup,0,.89,.66);
+    // 목 아래 상단 띠와 금색 장식
+    ovoid(bodyGroup,0,1.71,.10,.46,.105,.36,vest);
+    ovoid(bodyGroup,0,1.72,.39,.40,.055,.12,vestTrim);
+    // 넓은 분홍 팔, 어깨의 연결부, 장갑과 검정 손목띠
+    for(const side of [-1,1]){
+      ovoid(bodyGroup,side*.64,1.48,.01,.31,.28,.31,skin);
+      const upper=ovoid(bodyGroup,side*.89,1.20,.035,.26,.37,.265,skin);
+      upper.rotation.z=side*.24;
+      ovoid(bodyGroup,side*.98,.93,.08,.245,.095,.24,vest);
+      const fist=ovoid(bodyGroup,side*1.00,.735,.13,.25,.22,.235,glove);
+      fist.rotation.z=side*.12;
+      // 장갑의 엄지 실루엣
+      ovoid(bodyGroup,side*.81,.76,.29,.105,.15,.10,glove);
+    }
+
+    // 허리의 검정 벨트와 노란색 둥근 M 버클
+    ovoid(bodyGroup,0,.91,.07,.665,.16,.48,vest);
+    const buckle=mesh(bodyGroup,new THREE.CylinderGeometry(.178,.178,.07,32),
+      vestTrim,0,.925,.565);
     buckle.rotation.x=Math.PI/2;
     const emblemCanvas=document.createElement('canvas');
-    emblemCanvas.width=128;emblemCanvas.height=128;
-    const emblemCtx=emblemCanvas.getContext('2d');
-    if(emblemCtx){
-      emblemCtx.fillStyle='#171322';
-      emblemCtx.font='900 82px Georgia,serif';
-      emblemCtx.textAlign='center';emblemCtx.textBaseline='middle';
-      emblemCtx.fillText('M',64,70);
-      const emblemTex=new THREE.CanvasTexture(emblemCanvas);
-      const emblem=part(new THREE.PlaneGeometry(.25,.25),
-        new THREE.MeshBasicMaterial({map:emblemTex,transparent:true,side:THREE.DoubleSide}),
-        bodyGroup,0,.89,.713);
-    }
-    // 뒷쪽 보라색 망토와 목 부분의 금색 장식
-    const mantle=part(new THREE.ConeGeometry(.73,1.26,10,1,true),cape,bodyGroup,0,1.12,-.38);
-    mantle.rotation.z=Math.PI;
-    const collar=orb(bodyGroup,0,1.72,-.17,.60,.15,.45,capeShadow);
+    emblemCanvas.width=128;
+    emblemCanvas.height=128;
+    const ctx=emblemCanvas.getContext('2d');
+    ctx.fillStyle='#231b20';
+    ctx.font='900 86px Arial,sans-serif';
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.fillText('M',64,67);
+    const emblemTex=new THREE.CanvasTexture(emblemCanvas);
+    emblemTex.colorSpace=THREE.SRGBColorSpace;
+    mesh(bodyGroup,new THREE.PlaneGeometry(.25,.25),
+      new THREE.MeshBasicMaterial({map:emblemTex,transparent:true,depthWrite:false}),
+      0,.925,.610);
+
+    // 풍성한 흰색 바지: 골반과 양쪽 다리의 체적·주름·신발을 분리
+    ovoid(bodyGroup,0,.67,-.06,.62,.36,.45,trousers);
     for(const side of [-1,1]){
-      orb(bodyGroup,side*.31,1.72,.07,.23,.17,.28,cape);
-      orb(bodyGroup,side*.42,1.65,.16,.13,.09,.12,gold);
+      ovoid(bodyGroup,side*.34,.50,.0,.37,.39,.34,trousers);
+      ovoid(bodyGroup,side*.34,.30,.08,.34,.22,.31,trouserShade);
+      const crease=ovoid(bodyGroup,side*.33,.48,.308,.08,.23,.029,trousers);
+      crease.rotation.z=side*.25;
+      ovoid(bodyGroup,side*.35,.17,.09,.27,.20,.31,boot);
+      ovoid(bodyGroup,side*.35,.09,.30,.34,.095,.38,boot);
+      ovoid(bodyGroup,side*.35,.065,.38,.32,.038,.30,bootDark);
     }
-    // 목, 볼, 둥글고 넓은 머리
-    orb(bodyGroup,0,1.86,.04,.25,.22,.25,skin);
-    orb(bodyGroup,0,2.32,.07,.55,.53,.48,skin);
-    orb(bodyGroup,0,2.20,.30,.47,.34,.30,skinLight);
+
+    // 뒤쪽 보라색 망토는 뻣뻣한 원뿔 대신 아래로 늘어지는 천 곡면
+    const capeRows=10, capeCols=12,verts=[],uvs=[],tris=[];
+    for(let row=0;row<=capeRows;row++){
+      const t=row/capeRows;
+      for(let col=0;col<=capeCols;col++){
+        const u=col/capeCols*2-1;
+        const spread=.40+.52*t;
+        const x=u*spread;
+        const y=1.68-1.12*t + .065*Math.cos(u*Math.PI*1.4)*t;
+        const z=-.25-.21*t-.10*(1-u*u)+.045*Math.cos(u*Math.PI*3)*t;
+        verts.push(x,y,z);
+        uvs.push(col/capeCols,t);
+        if(row<capeRows && col<capeCols){
+          const i=row*(capeCols+1)+col;
+          tris.push(i,i+capeCols+1,i+1,i+1,i+capeCols+1,i+capeCols+2);
+        }
+      }
+    }
+    const capeGeometry=new THREE.BufferGeometry();
+    capeGeometry.setAttribute('position',new THREE.Float32BufferAttribute(verts,3));
+    capeGeometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
+    capeGeometry.setIndex(tris);
+    capeGeometry.computeVertexNormals();
+    const capeMaterial=cape.clone();
+    capeMaterial.side=THREE.DoubleSide;
+    mesh(bodyGroup,capeGeometry,capeMaterial);
+    tube(bodyGroup,[[-.43,1.67,-.28],[0,1.72,-.29],[.43,1.67,-.28]],.06,capeEdge);
+    // 어깨에 앉는 망토 칼라
+    ovoid(bodyGroup,0,1.66,-.23,.54,.16,.41,capeShade);
     for(const side of [-1,1]){
-      // 부우 특유의 가늘고 작은 눈과 능청스러운 표정
-      const eye=orb(bodyGroup,side*.22,2.42,.48,.105,.055,.028,eyes);
-      eye.rotation.z=side*.18;
-      orb(bodyGroup,side*.30,2.33,.43,.13,.085,.055,skinLight);
-      orb(bodyGroup,side*.51,2.36,.04,.13,.19,.17,skin);
+      ovoid(bodyGroup,side*.43,1.66,-.15,.21,.14,.34,cape);
+      ovoid(bodyGroup,side*.49,1.67,.14,.09,.075,.09,vestTrim);
     }
-    // 코 대신 작은 콧구멍 2개
-    for(const side of [-1,1])orb(bodyGroup,side*.085,2.26,.565,.027,.022,.015,skinDark);
-    const smile=part(new THREE.TorusGeometry(.22,.022,7,32,Math.PI),skinDark,bodyGroup,0,2.13,.534);
-    smile.rotation.z=Math.PI;
-    // 머리 위에서 앞으로 휘어진 길고 말랑한 촉수
-    const antenna=part(new THREE.CylinderGeometry(.085,.18,.70,12),skin,bodyGroup,0,2.94,.03);
-    antenna.rotation.z=-.32;
-    const antennaTip=part(new THREE.CapsuleGeometry(.105,.31,4,10),skin,bodyGroup,.30,3.16,.11);
-    antennaTip.rotation.z=-1.05;
+
+    // 넓은 턱, 통통한 볼과 귀 구멍까지 구분한 얼굴
+    ovoid(bodyGroup,0,1.89,.04,.23,.23,.22,skin);
+    ovoid(bodyGroup,0,2.24,.05,.50,.49,.43,skin);
+    ovoid(bodyGroup,0,2.105,.27,.44,.34,.30,skin);
+    for(const side of [-1,1]){
+      ovoid(bodyGroup,side*.39,2.16,.21,.19,.20,.19,skinLight);
+      ovoid(bodyGroup,side*.52,2.26,-.01,.16,.19,.14,skin);
+      ovoid(bodyGroup,side*.567,2.27,.105,.052,.075,.028,skinHole);
+    }
+    // 양 눈은 좁고 활짝 웃는 익살스러운 얼굴
+    for(const side of [-1,1]){
+      const eye=ovoid(bodyGroup,side*.19,2.33,.461,.130,.078,.035,eyesWhite);
+      eye.rotation.z=-side*.14;
+      ovoid(bodyGroup,side*.20,2.32,.493,.045,.059,.019,pupils);
+      const brow=tube(bodyGroup,[
+        [side*.08,2.46,.445],[side*.19,2.475,.446],[side*.30,2.44,.397]
+      ],.022,skinShade,12);
+      ovoid(bodyGroup,side*.31,2.17,.459,.14,.075,.05,skinLight);
+    }
+    // 웃는 입은 뒤집힌 원뿔 대신 얼굴 곡면에 밀착한 입선
+    tube(bodyGroup,[
+      [-.23,2.09,.498],[-.13,2.02,.526],[0,2.005,.544],
+      [.13,2.02,.526],[.23,2.09,.498]
+    ],.018,mouthDark,24);
+    ovoid(bodyGroup,0,2.035,.536,.16,.022,.018,teeth);
+    // 입 위의 작은 코와 모공
+    for(const side of [-1,1]){
+      ovoid(bodyGroup,side*.07,2.19,.548,.022,.019,.009,skinShade);
+    }
+
+    // 곧은 막대 대신 머리 꼭대기에서 자연스럽게 굽는 부드러운 촉수
+    ovoid(bodyGroup,0,2.66,-.055,.21,.18,.21,skin);
+    const feeler=[
+      [0,2.66,-.045],[.055,2.79,-.035],[.13,2.91,-.01],
+      [.25,2.97,.03],[.36,2.94,.09],[.43,2.87,.16]
+    ];
+    tube(bodyGroup,feeler,.115,skin,28);
+    ovoid(bodyGroup,.43,2.87,.16,.115,.109,.11,skin);
     root.userData.majinBuu=true;
   } else if(id==='ichigo'){
 
