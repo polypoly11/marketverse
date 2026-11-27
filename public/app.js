@@ -4933,8 +4933,9 @@ function spawnRemoteMagic(m){
     projectile.add(halo,aura,innerGlow,core);
     projectile.position.set(x,y+1.15,z);
     projectile.position.addScaledVector(direction,.85);
-    projectile.rotation.y=facing;
-    scene.add(projectile);
+projectile.rotation.y=facing;
+projectile.rotation.z=Math.PI/2;
+scene.add(projectile);
     magicProjectiles.push({id:m.shotId,ownerId:m.senderId,object:projectile,
       direction,born:performance.now(),core:null,aura,freezeUntil:0,predictedContact:false,
       baseAuraOpacity:.38});
