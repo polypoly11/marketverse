@@ -555,11 +555,8 @@ function updateBossTailAttack() {
   ) {
     warnedTailAttackAt = nextTailAttackAt;
 
-    broadcast({
-      type: 'boss_tail_warning',
-      leadMs: Math.max(0, nextTailAttackAt - now),
-      damage: BOSS_TAIL_DAMAGE
-    });
+    // 꼬리 공격 사전 알림은 표시하지 않음. 실제 공격과 피해 판정은 그대로 유지.
+    // (boss_tail_warning 브로드캐스트 제거)
   }
 
   if (now < nextTailAttackAt) return;
