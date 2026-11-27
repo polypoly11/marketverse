@@ -3139,6 +3139,85 @@ transform: translate(-50%, -50%) !important;
 }
 </style>
 
+
+<!-- 모바일 게임 조작 버튼: 길게 누르거나 드래그할 때 페이지 확대/스크롤 방지 -->
+<style id="jmc-mobile-touch-gesture-guard-style">
+@media (max-width: 980px), (pointer: coarse) {
+  #scene #mobile-controls,
+  #scene #mobile-controls *,
+  #scene #mobile-actions,
+  #scene #mobile-actions *,
+  #scene #jmc-glass-missile,
+  #scene #jmc-glass-missile *,
+  #scene #jmc-missile-inventory,
+  #scene #jmc-missile-inventory *,
+  #scene [data-action="missile"],
+  #scene [data-action="missile"] * {
+    touch-action: none !important;
+    -webkit-user-select: none !important;
+    user-select: none !important;
+    -webkit-touch-callout: none !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+  #scene #mobile-controls button,
+  #scene #mobile-actions button,
+  #scene #jmc-glass-missile,
+  #scene [data-action="missile"] {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+}
+</style>
+<script id="jmc-mobile-touch-gesture-guard">
+(function () {
+  // 버튼에서 시작한 드래그만 브라우저 스크롤/확대 제스처에서 제외.
+  // 채팅·차트·인벤토리 등 다른 화면의 스크롤은 제한하지 않는다.
+  const selector = [
+    '#scene #mobile-controls',
+    '#scene #mobile-actions',
+    '#scene #jmc-glass-missile',
+    '#scene #jmc-missile-inventory',
+    '#scene [data-action="missile"]'
+  ].join(',');
+  let activeTouches = new Set();
+  let lastTouchStartAt = 0;
+  const isGameControl = target =>
+    target instanceof Element && Boolean(target.closest(selector));
+
+  document.addEventListener('touchstart', event => {
+    if (!isGameControl(event.target)) return;
+    for (const touch of event.changedTouches) activeTouches.add(touch.identifier);
+    lastTouchStartAt = Date.now();
+  }, {capture:true, passive:true});
+
+  document.addEventListener('touchmove', event => {
+    if (!activeTouches.size) return;
+    // 손가락이 조작 버튼을 벗어나도 터치가 끝날 때까지 화면 이동 방지
+    if (Array.from(event.changedTouches).some(t => activeTouches.has(t.identifier))) {
+      if (event.cancelable) event.preventDefault();
+    }
+  }, {capture:true, passive:false});
+
+  const finish = event => {
+    for (const touch of event.changedTouches) activeTouches.delete(touch.identifier);
+  };
+  document.addEventListener('touchend', finish, {capture:true, passive:true});
+  document.addEventListener('touchcancel', finish, {capture:true, passive:true});
+
+  document.addEventListener('contextmenu', event => {
+    if (isGameControl(event.target)) event.preventDefault();
+  }, {capture:true});
+
+  document.addEventListener('gesturestart', event => {
+    if (isGameControl(event.target) || activeTouches.size) {
+      if (event.cancelable) event.preventDefault();
+    }
+  }, {capture:true, passive:false});
+
+  window.addEventListener('blur', () => activeTouches.clear());
+})();
+</script>
+
 </body>
 
 
