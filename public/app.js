@@ -183,7 +183,7 @@ function updateMajinBuuAnimation(avatar,dt,now,walking=false){
 }
 
 // 이치고 구매 모델: public/models/ichigo.glb (마인부우와 독립적으로 캐싱)
-const ICHIGO_GLB_URL='/models/ichigo.glb?v=jmc-ichigo-bankai-20261128-face-bone-v5';
+const ICHIGO_GLB_URL='/models/ichigo.glb?v=jmc-ichigo-face-restored-v6';
 const ichigoGLB={promise:null,asset:null,failed:false};
 function loadIchigoGLB(){
   if(!ichigoGLB.promise){
@@ -228,25 +228,7 @@ function attachIchigoGLB(avatar){
     const facingCenter = new THREE.Vector3();
     facingBounds.getCenter(facingCenter);
     model.position.set(-facingCenter.x, -facingBounds.min.y, -facingCenter.z);
-    // 이치고 얼굴/머리카락 정렬 수정:
-    // GLB 원본에서 얼굴 Cube는 metarig 직속 정적 메시이고,
-    // 머리카락 NurbsPath는 spine.006(머리 뼈) 아래에 있는 정적 메시다.
-    // 두 개가 같은 뼈 변환을 따라가도록 얼굴만 머리 뼈에 재부모 설정한다.
-    // Object3D.attach()는 현재 월드 좌표를 보존한다.
-    // 기존처럼 머리카락을 얼굴 아래로 옮기거나 임의 x 좌표 보정하지 않는다.
-    const ichigoFace=model.getObjectByName('Cube');
-    const ichigoHair=model.getObjectByName('NurbsPath');
-    const ichigoHeadBone=ichigoHair?.parent;
-    if(ichigoFace?.isMesh && ichigoHair?.isMesh && ichigoHeadBone?.isBone){
-      model.updateMatrixWorld(true);
-      ichigoHeadBone.attach(ichigoFace);
-      model.updateMatrixWorld(true);
-      console.info('[JMC] 이치고 얼굴을 머리뼈에 고정했습니다.');
-    }else{
-      console.warn('[JMC] 이치고 얼굴/머리뼈 연결을 확인하지 못했습니다.',{
-        face:!!ichigoFace,hair:!!ichigoHair,bone:ichigoHeadBone?.name
-      });
-    }
+    // 복원된 얼굴 메시의 원래 리깅을 유지한다. 머리뼈에 강제로 재연결하지 않는다.
     model.traverse(node=>{
       if(node.isMesh || node.isSkinnedMesh)node.frustumCulled=false;
     });
