@@ -93,20 +93,15 @@ const SYMBOLS = ['BTC', 'ETH', 'SOL', 'XRP'];
 
 const ANIMALS = [
   'seal',
-  'cat',
   'dog',
   'rabbit',
-  'fox',
-  'panda',
   'bear',
   'penguin',
-  'frog',
   'hamster',
   'lion',
   'tiger',
   'koala',
   'raccoon',
-  'deer',
   'ichigo',
   'majinbuu'
 ];
