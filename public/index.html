@@ -4039,6 +4039,105 @@ transform: translate(-50%, -50%) !important;
 }
 </style>
 
+
+<!-- 모바일 조작 제스처 차단 및 보스 꼬리 경고 문구만 숨김: 바닥 공격 범위는 유지 -->
+<style id="jmc-mobile-input-tail-popup-fix-20261128">
+@media (max-width: 980px), (pointer: coarse) {
+  html, body { overscroll-behavior-x: none !important; }
+  #scene, #scene canvas, #scene #mobile-controls,
+  #scene #mobile-controls *, #scene #mobile-actions,
+  #scene #mobile-actions * {
+    touch-action: none !important;
+    -ms-touch-action: none !important;
+    -webkit-user-select: none !important;
+    user-select: none !important;
+    -webkit-touch-callout: none !important;
+  }
+  #scene #mobile-controls, #scene #mobile-actions {
+    -webkit-tap-highlight-color: transparent !important;
+    overscroll-behavior: contain !important;
+  }
+  /* 3D 캔버스·공격 범위 메시 등은 숨기지 않는다. */
+  .jmc-mobile-tail-notice-hidden { display: none !important; }
+}
+</style>
+<script id="jmc-mobile-input-tail-popup-guard-20261128">
+(function(){
+  'use strict';
+  const isMobile = () => matchMedia('(max-width:980px), (pointer:coarse)').matches;
+  const controlSelector = '#scene #mobile-controls, #scene #mobile-actions, #scene [data-action="missile"], #scene #jmc-glass-missile';
+  let pointerOnControl = false;
+  let lastTouchEnd = 0;
+  const onControl = target => target instanceof Element && !!target.closest(controlSelector);
+
+  // 모바일에서 이동 조작 중 웹페이지가 스크롤/확대되는 기본 동작만 차단.
+  document.addEventListener('touchmove', event => {
+    if (!isMobile()) return;
+    if ((pointerOnControl || onControl(event.target)) && event.cancelable) event.preventDefault();
+  }, {capture: true, passive: false});
+  document.addEventListener('touchstart', event => {
+    if (isMobile() && onControl(event.target)) pointerOnControl = true;
+  }, {capture: true, passive: true});
+  const endTouch = event => {
+    if (!isMobile() || !pointerOnControl) return;
+    if (event.type === 'touchend' && event.changedTouches.length === 1) {
+      const now = Date.now();
+      if (now - lastTouchEnd < 380 && event.cancelable) event.preventDefault();
+      lastTouchEnd = now;
+    }
+    if (!event.touches || event.touches.length === 0) pointerOnControl = false;
+  };
+  document.addEventListener('touchend', endTouch, {capture:true, passive:false});
+  document.addEventListener('touchcancel', endTouch, {capture:true, passive:false});
+  document.addEventListener('dblclick', event => {
+    if (isMobile() && onControl(event.target) && event.cancelable) event.preventDefault();
+  }, {capture:true});
+  for(const name of ['gesturestart','gesturechange','gestureend']) {
+    document.addEventListener(name, event => {
+      if (isMobile() && (pointerOnControl || onControl(event.target)) && event.cancelable) event.preventDefault();
+    }, {capture:true, passive:false});
+  }
+  window.addEventListener('blur', () => { pointerOnControl = false; });
+
+  // 별도 boss-client.js에서 생성하는 일반 텍스트 알림만 모바일에서 가림.
+  // 주의: WebGL 캔버스에 그리는 바닥의 붉은 원형 공격 범위는 건드리지 않음.
+  const isTailNotice = text => /(?:고래|보스|꼬리).{0,22}(?:꼬리|공격|경고|준비)|꼬리.{0,22}(?:공격|경고|준비)/.test(text);
+  function hideTailNotices(root){
+    if (!isMobile() || !(root instanceof Element)) return;
+    const walker=document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
+    let el=root;
+    while(el){
+      if (el !== document.body && !el.matches('script,style,canvas,svg,#scene,#mobile-controls,#mobile-actions,button,input,textarea')) {
+        // 짧은 경고 메시지만 대상으로 함. 차트/채팅/게임 영역의 상위 컨테이너는 제외.
+        const t=(el.textContent||'').trim();
+        if (t.length > 0 && t.length < 110 && isTailNotice(t) && el.children.length < 4) {
+          const contentChildren=[...el.children].filter(c=>c.textContent.trim());
+          if (!contentChildren.some(c=>isTailNotice(c.textContent))) {
+            if (!el.closest('#messages,#chat-messages,#scene-chat,.jmc-scene-chat')) el.classList.add('jmc-mobile-tail-notice-hidden');
+          }
+        }
+      }
+      el=walker.nextNode();
+    }
+  }
+  function init(){
+    hideTailNotices(document.body);
+    const observer=new MutationObserver(changes => {
+      if(!isMobile()) return;
+      for(const ch of changes){
+        if(ch.type==='characterData') hideTailNotices(ch.target.parentElement);
+        for(const node of ch.addedNodes){
+          if(node instanceof Element) hideTailNotices(node);
+          else if(node.nodeType===Node.TEXT_NODE) hideTailNotices(node.parentElement);
+        }
+      }
+    });
+    observer.observe(document.body,{subtree:true,childList:true,characterData:true});
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',init,{once:true}); else init();
+})();
+</script>
+
 </body>
 
 
