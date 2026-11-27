@@ -1107,6 +1107,43 @@ html body.jmc-compact-header #jmc-header-help {
   }
 }
 </style>
+
+  <!-- 무료 실시간 청산맵: 외부 임베드 공식 허용 위젯 -->
+  <style>
+    #coinglass-liquidation-panel { min-width:0; }
+    #coinglass-liquidation-panel .jmc-liq-toolbar {
+      display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+      margin:4px 0 12px;
+    }
+    #coinglass-liquidation-panel .jmc-liq-title {
+      font-size:14px;font-weight:800;color:#f0f5fa;letter-spacing:-.2px;
+    }
+    #coinglass-liquidation-panel .jmc-liq-controls {
+      display:flex;align-items:center;gap:7px;
+    }
+    #coinglass-liquidation-panel select,
+    #coinglass-liquidation-panel button {
+      background:#101a29;color:#e6f1fa;border:1px solid #354659;
+      border-radius:7px;padding:8px 10px;font:600 12px Arial,sans-serif;
+    }
+    #coinglass-liquidation-panel button { cursor:pointer; }
+    #coinglass-liquidation-panel .jmc-liq-frame-wrap {
+      position:relative;min-height:520px;border:1px solid #293644;
+      background:#0b0e14;border-radius:9px;overflow:hidden;
+    }
+    #coinglass-liquidation-panel iframe {
+      display:block;width:100%;height:520px;border:0;
+      background:#0b0e14;
+    }
+    #coinglass-liquidation-panel .jmc-liq-note {
+      margin:11px 1px 0;color:#a7bacb;font-size:11px;line-height:1.6;
+    }
+    #coinglass-liquidation-panel .jmc-liq-note a {color:#8fd1fb;}
+    @media(max-width:980px){
+      #coinglass-liquidation-panel .jmc-liq-frame-wrap {min-height:440px;}
+      #coinglass-liquidation-panel iframe {height:440px;}
+    }
+  </style>
 </head>
 
 <body>
@@ -1288,6 +1325,32 @@ html body.jmc-compact-header #jmc-header-help {
           공식 위젯 설정 열기 ↗
         </a>
 
+      </section>
+
+      <!-- 경제 캘린더 바로 아래 무료 실시간 청산맵: 제공사 허용 iframe -->
+      <section class="panel coinglass-liquidation-panel" id="coinglass-liquidation-panel">
+        <div class="jmc-liq-toolbar">
+          <div class="jmc-liq-title">BITCOIN / ETHEREUM LIQUIDATION MAP</div>
+          <div class="jmc-liq-controls">
+            <label for="jmc-liq-coin" style="font-size:11px;color:#a7bacb">종목</label>
+            <select id="jmc-liq-coin" aria-label="청산맵 종목 선택">
+              <option value="BTC">BTC</option>
+              <option value="ETH">ETH</option>
+            </select>
+            <button id="jmc-liq-refresh" type="button" aria-label="청산맵 새로고침" title="새로고침">↻</button>
+          </div>
+        </div>
+        <div class="jmc-liq-frame-wrap">
+          <iframe id="jmc-liq-frame" title="BTC 추정 청산맵" loading="lazy"
+            referrerpolicy="strict-origin-when-cross-origin"
+            src="https://bykaranteli.com/embed/liqmap/BTC"></iframe>
+        </div>
+        <p class="jmc-liq-note">
+          가격대별 추정 청산 집중 구간입니다. <b>CoinGlass 원본 차트가 아니며</b>
+          데이터·모델은 <a href="https://bykaranteli.com/liqmap" target="_blank" rel="noopener noreferrer">ByKaranteli</a> 제공입니다.
+          무료 임베드 조건에 따라 위젯 내부 출처 표기를 유지합니다.
+          <a href="https://www.coinglass.com/pro/futures/LiquidationMap" target="_blank" rel="noopener noreferrer">CoinGlass 원본 열기 ↗</a>
+        </p>
       </section>
 
       <!-- 실시간 채팅 -->
@@ -1503,6 +1566,29 @@ html body.jmc-compact-header #jmc-header-help {
     </div>
 
   </div>
+
+  <!-- 무료 청산맵 종목 선택 / 새로고침 (API 키 불필요) -->
+  <script>
+    (function(){
+      const select=document.getElementById('jmc-liq-coin');
+      const frame=document.getElementById('jmc-liq-frame');
+      const refresh=document.getElementById('jmc-liq-refresh');
+      if(!select||!frame||!refresh)return;
+      function loadMap(reload){
+        const coin=select.value==='ETH'?'ETH':'BTC';
+        const url='https://bykaranteli.com/embed/liqmap/'+coin;
+        frame.title=coin+' 추정 청산맵';
+        if(reload&&frame.src===url){
+          frame.src='about:blank';
+          setTimeout(()=>{frame.src=url;},30);
+        }else{
+          frame.src=url;
+        }
+      }
+      select.addEventListener('change',()=>loadMap(false));
+      refresh.addEventListener('click',()=>loadMap(true));
+    })();
+  </script>
 
   <!-- 경제 캘린더 설정 -->
   <script src="/investing-widget.js"></script>
