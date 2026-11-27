@@ -19,7 +19,8 @@ const animals = [
   ['koala','코알라','🐨',0x9ea7ae],
   ['raccoon','너구리','🦝',0x777d81],
   ['deer','사슴','🦌',0xb87d54],
-  ['ichigo','쿠로사키 이치고','⚔️',0xf2782e]
+  ['ichigo','쿠로사키 이치고','⚔️',0xf2782e],
+  ['majinbuu','마인부우','🍬',0xf28eb5]
 ].map(([id,name,emoji,color])=>({
   id,name,emoji,color
 }));
@@ -119,8 +120,89 @@ function makeAnimal(id){
     return m;
   }
 
-  // 이치고 개선형: 별도 모델 없이도 더 정교한 실루엣을 갖는 경량 3D 아바타
-  if(id==='ichigo'){
+  // 마인부우(뚱보 부우): 분홍 피부, 머리 촉수, 보라색 망토와 흰 바지
+  if(id==='majinbuu'){
+    const skin=mat(0xf09abf,.78);
+    const skinLight=mat(0xffbfda,.76);
+    const skinDark=mat(0xb95b83,.9);
+    const eyes=mat(0x151c2a,.4);
+    const pants=mat(0xf2f1e6,.91);
+    const pantsShadow=mat(0xcbd0d4,.88);
+    const cape=mat(0x754b9f,.82);
+    const capeShadow=mat(0x4c306f,.84);
+    const gold=mat(0xf4c246,.4);
+    const boot=mat(0xe3b433,.67);
+    const black=mat(0x161522,.8);
+    const part=(geometry,material,parent,x,y,z)=>{
+      const mesh=new THREE.Mesh(geometry,material);
+      mesh.position.set(x,y,z);
+      parent.add(mesh);
+      return mesh;
+    };
+    // 통통한 둥근 몸통과 단단한 어깨
+    orb(bodyGroup,0,1.13,0,.77,.81,.60,skin);
+    orb(bodyGroup,0,1.27,.19,.69,.66,.51,skin);
+    for(const side of [-1,1]){
+      orb(bodyGroup,side*.69,1.49,.01,.30,.28,.30,skin);
+      // 커다란 팔과 검은 손목 띠, 노란 장갑
+      const arm=orb(bodyGroup,side*.86,1.14,.05,.23,.40,.24,skin);
+      arm.rotation.z=side*.20;
+      orb(bodyGroup,side*.95,.89,.08,.23,.12,.23,black);
+      orb(bodyGroup,side*.96,.70,.14,.24,.23,.22,gold);
+      // 넉넉한 바지와 노란 장화
+      orb(bodyGroup,side*.37,.55,0,.39,.47,.36,pants);
+      orb(bodyGroup,side*.37,.32,.08,.35,.27,.32,pantsShadow);
+      orb(bodyGroup,side*.37,.19,.15,.28,.22,.32,boot);
+      orb(bodyGroup,side*.37,.105,.34,.32,.115,.39,boot);
+    }
+    // 검정색 M 문양이 보이는 금빛 벨트 버클
+    orb(bodyGroup,0,.86,.23,.69,.14,.44,black);
+    const buckle=part(new THREE.CylinderGeometry(.18,.18,.065,24),gold,bodyGroup,0,.89,.66);
+    buckle.rotation.x=Math.PI/2;
+    const emblemCanvas=document.createElement('canvas');
+    emblemCanvas.width=128;emblemCanvas.height=128;
+    const emblemCtx=emblemCanvas.getContext('2d');
+    if(emblemCtx){
+      emblemCtx.fillStyle='#171322';
+      emblemCtx.font='900 82px Georgia,serif';
+      emblemCtx.textAlign='center';emblemCtx.textBaseline='middle';
+      emblemCtx.fillText('M',64,70);
+      const emblemTex=new THREE.CanvasTexture(emblemCanvas);
+      const emblem=part(new THREE.PlaneGeometry(.25,.25),
+        new THREE.MeshBasicMaterial({map:emblemTex,transparent:true,side:THREE.DoubleSide}),
+        bodyGroup,0,.89,.713);
+    }
+    // 뒷쪽 보라색 망토와 목 부분의 금색 장식
+    const mantle=part(new THREE.ConeGeometry(.73,1.26,10,1,true),cape,bodyGroup,0,1.12,-.38);
+    mantle.rotation.z=Math.PI;
+    const collar=orb(bodyGroup,0,1.72,-.17,.60,.15,.45,capeShadow);
+    for(const side of [-1,1]){
+      orb(bodyGroup,side*.31,1.72,.07,.23,.17,.28,cape);
+      orb(bodyGroup,side*.42,1.65,.16,.13,.09,.12,gold);
+    }
+    // 목, 볼, 둥글고 넓은 머리
+    orb(bodyGroup,0,1.86,.04,.25,.22,.25,skin);
+    orb(bodyGroup,0,2.32,.07,.55,.53,.48,skin);
+    orb(bodyGroup,0,2.20,.30,.47,.34,.30,skinLight);
+    for(const side of [-1,1]){
+      // 부우 특유의 가늘고 작은 눈과 능청스러운 표정
+      const eye=orb(bodyGroup,side*.22,2.42,.48,.105,.055,.028,eyes);
+      eye.rotation.z=side*.18;
+      orb(bodyGroup,side*.30,2.33,.43,.13,.085,.055,skinLight);
+      orb(bodyGroup,side*.51,2.36,.04,.13,.19,.17,skin);
+    }
+    // 코 대신 작은 콧구멍 2개
+    for(const side of [-1,1])orb(bodyGroup,side*.085,2.26,.565,.027,.022,.015,skinDark);
+    const smile=part(new THREE.TorusGeometry(.22,.022,7,32,Math.PI),skinDark,bodyGroup,0,2.13,.534);
+    smile.rotation.z=Math.PI;
+    // 머리 위에서 앞으로 휘어진 길고 말랑한 촉수
+    const antenna=part(new THREE.CylinderGeometry(.085,.18,.70,12),skin,bodyGroup,0,2.94,.03);
+    antenna.rotation.z=-.32;
+    const antennaTip=part(new THREE.CapsuleGeometry(.105,.31,4,10),skin,bodyGroup,.30,3.16,.11);
+    antennaTip.rotation.z=-1.05;
+    root.userData.majinBuu=true;
+  } else if(id==='ichigo'){
+
     const skin=mat(0xf0b994,.78);
     const skinShade=mat(0xd68f71,.85);
     const hair=mat(0xe96919,.8);
@@ -4402,6 +4484,34 @@ function spawnRemoteMagic(m){
       caster.userData.ichigoSword.rotation.z=-1.05;
       caster.userData.ichigoSword.userData.swingAt=performance.now();
     }
+    playMagicCastSfx(magicSoundVolume(x,z));
+    return;
+  }
+
+  // 마인부우 전용 분홍 에너지탄: 기존 서버 판정과 이동 속도 그대로 사용
+  if(m.animal==='majinbuu'){
+    const projectile=new THREE.Group();
+    const core=new THREE.Mesh(
+      new THREE.SphereGeometry(.24,20,14),
+      new THREE.MeshBasicMaterial({color:0xffd9f2,transparent:true,opacity:.98,
+        depthWrite:false,blending:THREE.AdditiveBlending})
+    );
+    const aura=new THREE.Mesh(
+      new THREE.SphereGeometry(.40,18,12),
+      new THREE.MeshBasicMaterial({color:0xff4db8,transparent:true,opacity:.48,
+        depthWrite:false,blending:THREE.AdditiveBlending})
+    );
+    const outer=new THREE.Mesh(
+      new THREE.SphereGeometry(.59,16,12),
+      new THREE.MeshBasicMaterial({color:0xb559f2,transparent:true,opacity:.16,
+        depthWrite:false,blending:THREE.AdditiveBlending})
+    );
+    projectile.add(core,aura,outer);
+    projectile.position.set(x,y+1.15,z);
+    projectile.position.addScaledVector(direction,.85);
+    scene.add(projectile);
+    magicProjectiles.push({id:m.shotId,ownerId:m.senderId,object:projectile,
+      direction,born:performance.now(),core,aura,freezeUntil:0,predictedContact:false});
     playMagicCastSfx(magicSoundVolume(x,z));
     return;
   }
