@@ -1205,7 +1205,7 @@ function selectAnimal(id){
   if(!buuStatus){
     buuStatus=document.createElement('div');
     buuStatus.id='jmc-buu-model-status';
-    buuStatus.style.cssText='margin:6px auto 12px;text-align:center;font:600 12px Arial,sans-serif;color:#a9c5da;';
+buuStatus.style.cssText='display:none !important;';
     $('selected-animal-name').insertAdjacentElement('afterend',buuStatus);
   }
   if(id==='majinbuu' || id==='ichigo'){
