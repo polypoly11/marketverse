@@ -2761,6 +2761,70 @@ function playMagicCastSfx(volume=1) {
   playSfxTone('sine',1450,680,.14,.024*volume);
 }
 
+// 이치고 월아천충 전용: 공기를 가르는 검기 + 낮은 에너지 울림.
+// 별도 MP3 없이 Web Audio로 생성하며 공통 효과음 ON/OFF 설정을 따른다.
+let ichigoWhooshNoise=null;
+let ichigoWhooshNoiseContext=null;
+function playIchigoGetsugaSfx(volume=1) {
+  if(!sfxEnabled || volume<=0)return;
+  const ctx=getAudioContext();
+  if(!ctx || ctx.state!=='running')return;
+
+  const t=ctx.currentTime;
+  const loudness=Math.min(1.1,Math.max(0,volume));
+  const duration=.31;
+  // 짧은 광대역 바람소리: '슈우웅' 하며 앞으로 뻗어 나가는 느낌.
+  if(ichigoWhooshNoiseContext!==ctx || !ichigoWhooshNoise){
+    const length=Math.ceil(ctx.sampleRate*.42);
+    const buffer=ctx.createBuffer(1,length,ctx.sampleRate);
+    const samples=buffer.getChannelData(0);
+    for(let i=0;i<length;i++)samples[i]=Math.random()*2-1;
+    ichigoWhooshNoise=buffer;
+    ichigoWhooshNoiseContext=ctx;
+  }
+  const noise=ctx.createBufferSource();
+  noise.buffer=ichigoWhooshNoise;
+  const sweep=ctx.createBiquadFilter();
+  sweep.type='bandpass';
+  sweep.Q.value=.7;
+  sweep.frequency.setValueAtTime(700,t);
+  sweep.frequency.exponentialRampToValueAtTime(3100,t+.09);
+  sweep.frequency.exponentialRampToValueAtTime(520,t+duration);
+  const air=ctx.createGain();
+  air.gain.setValueAtTime(.0001,t);
+  air.gain.exponentialRampToValueAtTime(.105*loudness,t+.035);
+  air.gain.exponentialRampToValueAtTime(.065*loudness,t+.11);
+  air.gain.exponentialRampToValueAtTime(.0001,t+duration);
+  noise.connect(sweep);
+  sweep.connect(air);
+  air.connect(ctx.destination);
+  noise.start(t);
+  noise.stop(t+duration+.015);
+  noise.onended=()=>{
+    noise.disconnect();
+    sweep.disconnect();
+    air.disconnect();
+  };
+
+  // 파동이 앞으로 뻗는 낮은 공명 (일반 마법탄의 높은 발사음과 구별).
+  const wave=ctx.createOscillator();
+  const waveGain=ctx.createGain();
+  wave.type='triangle';
+  wave.frequency.setValueAtTime(360,t);
+  wave.frequency.exponentialRampToValueAtTime(105,t+.27);
+  waveGain.gain.setValueAtTime(.0001,t);
+  waveGain.gain.exponentialRampToValueAtTime(.068*loudness,t+.025);
+  waveGain.gain.exponentialRampToValueAtTime(.0001,t+.28);
+  wave.connect(waveGain);
+  waveGain.connect(ctx.destination);
+  wave.start(t);
+  wave.stop(t+.30);
+  wave.onended=()=>{
+    wave.disconnect();
+    waveGain.disconnect();
+  };
+}
+
 function playMagicHitSfx(volume=1) {
   if(!sfxEnabled || volume<=0)return;
   playSfxTone('triangle',260,65,.18,.095*volume);
@@ -4977,7 +5041,7 @@ function spawnRemoteMagic(m){
     }
     beginIchigoSwordSwing(caster);
     playIchigoAnimation(caster,'attack');
-    playMagicCastSfx(magicSoundVolume(x,z));
+    playIchigoGetsugaSfx(magicSoundVolume(x,z));
     return;
   }
 
