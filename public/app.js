@@ -259,6 +259,8 @@ function attachIchigoGLB(avatar){
       model.updateMatrixWorld(true);
       swordHand.attach(purchasedSword); // 위치 보존 + 오른손 동작 상속
       avatar.userData.ichigoPurchasedSword=purchasedSword;
+      // 검 자체의 회전값을 보존한다. 본 움직임이 약하더라도 검이 확실히 베도록 사용.
+      avatar.userData.ichigoSwordRestQuaternion=purchasedSword.quaternion.clone();
       console.info('[JMC] 이치고 참백도 오른손 연결 완료');
     }else{
       console.warn('[JMC] 이치고 참백도/오른손 본을 찾지 못했습니다.');
@@ -366,6 +368,20 @@ function updateIchigoSwordSwing(avatar,now){
     );
   }
 
+  // ★ 검 자체도 오른손 좌표계에서 회전: GLB 본의 미세 움직임만으로
+  // 베기가 보이지 않던 문제 보완. 준비 → 강한 대각선 참격 → 원위치.
+  const sword=avatar.userData.ichigoPurchasedSword;
+  const swordRest=avatar.userData.ichigoSwordRestQuaternion;
+  if(sword && swordRest){
+    // 원본 칼의 방향을 보존하며, Z축 대각선 베기와 X축 휘두르기를 동시에 수행.
+    const swingZ=0.85*ready-1.85*cut;
+    const swingX=-0.33*ready+0.65*cut;
+    const swingY=-0.22*ready+0.40*cut;
+    sword.quaternion.copy(swordRest).multiply(
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(swingX,swingY,swingZ,'XYZ'))
+    );
+  }
+
   const trail=avatar.userData.ichigoSwingTrail;
   if(trail){
     const show=t>.22&&t<.69;
@@ -389,6 +405,7 @@ function updateIchigoSwordSwing(avatar,now){
   }
   if(t>=1){
     for(const item of Object.values(bones))item.bone.quaternion.copy(item.rest);
+    if(sword && swordRest)sword.quaternion.copy(swordRest);
     avatar.userData.ichigoSwingStart=undefined;
     if(trail)trail.visible=false;
   }
