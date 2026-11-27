@@ -555,8 +555,13 @@ function updateBossTailAttack() {
   ) {
     warnedTailAttackAt = nextTailAttackAt;
 
-    // 꼬리 공격 사전 알림은 표시하지 않음. 실제 공격과 피해 판정은 그대로 유지.
-    // (boss_tail_warning 브로드캐스트 제거)
+    // 공격 범위 바닥의 빨간 경고 표시를 위해 신호 유지.
+    // 모바일 팝업만 숨기는 처리는 클라이언트 UI에서 별도로 수행.
+    broadcast({
+      type: 'boss_tail_warning',
+      leadMs: Math.max(0, nextTailAttackAt - now),
+      damage: BOSS_TAIL_DAMAGE
+    });
   }
 
   if (now < nextTailAttackAt) return;
