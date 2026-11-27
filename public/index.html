@@ -3652,6 +3652,240 @@ transform: translate(-50%, -50%) !important;
 })();
 </script>
 
+
+<!-- 모바일 헤더: 좌측 LIVE + 인원 / 중앙 여백 / 우측 캐릭터 설정 -->
+<style id="jmc-mobile-live-left-chat-text-v6">
+  @media screen and (max-width: 980px), (pointer: coarse) {
+    html body > header .top,
+    html body.jmc-compact-header > header .top {
+      grid-template-columns: max-content max-content minmax(0,1fr) max-content !important;
+      grid-template-areas:
+        "live online . rename"
+        "account account google tools"
+        "note note note note" !important;
+      align-items: center !important;
+      column-gap: 5px !important;
+      row-gap: 7px !important;
+    }
+    /* 첫 줄: LIVE와 0명을 왼쪽에 붙이고, 가운데는 여백 */
+    html body > header .top > .live,
+    html body.jmc-compact-header > header .top > .live {
+      grid-area: live !important;
+      justify-self: start !important;
+      align-self: center !important;
+      text-align: left !important;
+      margin: 0 !important;
+    }
+    html body > header .top > span:not(.live),
+    html body.jmc-compact-header > header .top > span:not(.live) {
+      grid-area: online !important;
+      justify-self: start !important;
+      align-self: center !important;
+      width: auto !important;
+      margin: 0 !important;
+      font-size: 0 !important; /* '접속자' 텍스트 대신 0명만 표기 */
+      white-space: nowrap !important;
+    }
+    html body > header .top > span:not(.live) > #online,
+    html body.jmc-compact-header > header .top > span:not(.live) > #online {
+      font-size: 11px !important;
+      font-weight: 600 !important;
+    }
+    html body > header .top > span:not(.live)::after,
+    html body.jmc-compact-header > header .top > span:not(.live)::after {
+      content: "명";
+      font-size: 11px !important;
+    }
+    html body > header #rename,
+    html body.jmc-compact-header > header #rename {
+      grid-area: rename !important;
+      justify-self: end !important;
+      align-self: center !important;
+      text-align: center !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      margin: 0 !important;
+    }
+    /* 둘째 줄: 게스트 / Google / 효과음 */
+    html body > header #jmc-account-button,
+    html body.jmc-compact-header > header #jmc-account-button {
+      grid-area: account !important;
+      justify-self: stretch !important;
+      width: 100% !important;
+    }
+    html body > header #jmc-mobile-google-login,
+    html body.jmc-compact-header > header #jmc-mobile-google-login {
+      grid-area: google !important;
+      justify-self: stretch !important;
+      width: 100% !important;
+    }
+    html body > header #jmc-header-tools,
+    html body.jmc-compact-header > header #jmc-header-tools {
+      grid-area: tools !important;
+      justify-self: end !important;
+    }
+    html body > header #jmc-mobile-google-kd-note,
+    html body.jmc-compact-header > header #jmc-mobile-google-kd-note {
+      grid-area: note !important;
+    }
+    html body > header #jmc-header-google-logout:not([hidden]),
+    html body.jmc-compact-header > header #jmc-header-google-logout:not([hidden]) {
+      grid-column: 1 / -1 !important;
+      grid-row: 4 !important;
+    }
+    html body #lounge-clock { display: none !important; }
+  }
+  /* 채팅 미수신 안내와 채팅 입력 안내의 글꼴·크기·톤을 통일 */
+  html body #scene > .jmc-scene-chat #messages:empty::before,
+  html body #scene > .jmc-scene-chat #chat-form #chat-input,
+  html body #scene > .jmc-scene-chat #chat-form #chat-input::placeholder {
+    font-family: Arial, sans-serif !important;
+    font-size: 12px !important;
+    font-weight: 400 !important;
+    letter-spacing: 0 !important;
+  }
+  html body #scene > .jmc-scene-chat #messages:empty::before,
+  html body #scene > .jmc-scene-chat #chat-form #chat-input::placeholder {
+    color: #b0c0d0 !important;
+    opacity: 1 !important;
+  }
+</style>
+
+
+<!-- 모바일 헤더: 게스트/Google/효과음 3열과 첫 줄의 열 위치를 정확히 맞춤 -->
+<style id="jmc-mobile-header-cell-centered-v7">
+@media screen and (max-width: 980px), (pointer: coarse) {
+  html body > header .top,
+  html body.jmc-compact-header > header .top {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-template-areas:
+      "status . rename"
+      "account google tools"
+      "note note note" !important;
+    gap: 7px 6px !important;
+    align-items: center !important;
+    width: 100% !important;
+  }
+  html body > header #jmc-live-status,
+  html body.jmc-compact-header > header #jmc-live-status {
+    grid-area: status !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: center !important;
+    justify-self: stretch !important;
+    gap: 5px !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    white-space: nowrap !important;
+  }
+  html body > header #jmc-live-status > .live,
+  html body.jmc-compact-header > header #jmc-live-status > .live {
+    display: inline !important;
+    position: static !important;
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 11px !important;
+    line-height: 20px !important;
+    white-space: nowrap !important;
+  }
+  html body > header #jmc-live-status > .jmc-live-count,
+  html body.jmc-compact-header > header #jmc-live-status > .jmc-live-count {
+    display: inline !important;
+    position: static !important;
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 0 !important;
+    line-height: 20px !important;
+    white-space: nowrap !important;
+  }
+  html body > header #jmc-live-status > .jmc-live-count #online,
+  html body.jmc-compact-header > header #jmc-live-status > .jmc-live-count #online {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+  }
+  html body > header #jmc-live-status > .jmc-live-count::after,
+  html body.jmc-compact-header > header #jmc-live-status > .jmc-live-count::after {
+    content: "명" !important;
+    font-size: 11px !important;
+  }
+  html body > header #rename,
+  html body.jmc-compact-header > header #rename {
+    grid-area: rename !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    justify-self: stretch !important;
+    align-self: center !important;
+    margin: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    white-space: nowrap !important;
+  }
+  html body > header #jmc-account-button,
+  html body.jmc-compact-header > header #jmc-account-button {
+    grid-area: account !important;
+    justify-self: stretch !important;
+    width: 100% !important;
+  }
+  html body > header #jmc-mobile-google-login,
+  html body.jmc-compact-header > header #jmc-mobile-google-login {
+    grid-area: google !important;
+    justify-self: stretch !important;
+    width: 100% !important;
+  }
+  html body > header #jmc-header-tools,
+  html body.jmc-compact-header > header #jmc-header-tools {
+    grid-area: tools !important;
+    justify-self: center !important;
+    justify-content: center !important;
+    max-width: 100% !important;
+  }
+  html body > header #jmc-header-tools-line,
+  html body.jmc-compact-header > header #jmc-header-tools-line {
+    justify-content: center !important;
+  }
+  html body > header #jmc-mobile-google-kd-note,
+  html body.jmc-compact-header > header #jmc-mobile-google-kd-note {
+    grid-area: note !important;
+    justify-self: stretch !important;
+    text-align: center !important;
+  }
+  html body > header #jmc-header-google-logout:not([hidden]),
+  html body.jmc-compact-header > header #jmc-header-google-logout:not([hidden]) {
+    grid-column: 1 / -1 !important;
+    grid-row: 4 !important;
+  }
+}
+</style>
+<script id="jmc-mobile-header-status-wrapper-v7">
+(function () {
+  function wrapLiveStatus() {
+    const top = document.querySelector('header .top');
+    if (!top || document.getElementById('jmc-live-status')) return;
+    const live = top.querySelector(':scope > .live');
+    const online = Array.from(top.children).find(el => el.tagName === 'SPAN' && el.querySelector('#online'));
+    if (!live || !online) return;
+    const status = document.createElement('div');
+    status.id = 'jmc-live-status';
+    online.classList.add('jmc-live-count');
+    top.insertBefore(status, live);
+    status.appendChild(live);
+    status.appendChild(online);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wrapLiveStatus, { once: true });
+  } else {
+    wrapLiveStatus();
+  }
+})();
+</script>
+
 </body>
 
 
