@@ -1159,6 +1159,7 @@ html body.jmc-compact-header #jmc-header-help {
       <span class="live">● LIVE</span>
       <span>접속자 <b id="online">0</b>명</span>
       <button id="rename" type="button">캐릭터 설정</button>
+      <button id="jmc-mobile-google-login" type="button" aria-label="Google 계정으로 로그인">Google 로그인</button>
     </div>
   </header>
 
@@ -3300,6 +3301,356 @@ transform: translate(-50%, -50%) !important;
       });
     })();
   </script>
+
+
+<!-- 모바일 헤더 최종 정렬: LIVE/접속자/설정 + 계정/효과음, 시계 숨김 -->
+<style id="jmc-mobile-header-clean-v2">
+@media screen and (max-width: 980px), (pointer: coarse) {
+  html body > header,
+  html body.jmc-compact-header > header {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    min-width: 0 !important;
+    gap: 8px !important;
+    padding: 10px 12px !important;
+  }
+  html body > header .logo,
+  html body.jmc-compact-header > header .logo {
+    width: 100% !important;
+    min-width: 0 !important;
+    flex: none !important;
+    margin: 0 !important;
+    font-size: 16px !important;
+    line-height: 1.25 !important;
+  }
+  html body > header .top,
+  html body.jmc-compact-header > header .top {
+    display: grid !important;
+    grid-template-columns: max-content minmax(0, 1fr) max-content !important;
+    grid-template-areas:
+      "live online rename"
+      "account account tools" !important;
+    align-items: center !important;
+    justify-items: stretch !important;
+    justify-content: stretch !important;
+    flex-flow: unset !important;
+    flex-wrap: unset !important;
+    gap: 7px 8px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+  }
+  html body.jmc-compact-header > header .top > .live {
+    grid-area: live !important;
+    order: unset !important;
+    justify-self: start !important;
+    width: auto !important;
+    font-size: 11px !important;
+    white-space: nowrap !important;
+  }
+  html body.jmc-compact-header > header .top > span:not(.live) {
+    grid-area: online !important;
+    order: unset !important;
+    justify-self: center !important;
+    width: auto !important;
+    min-width: 0 !important;
+    font-size: 11px !important;
+    white-space: nowrap !important;
+  }
+  html body.jmc-compact-header > header #rename {
+    grid-area: rename !important;
+    order: unset !important;
+    justify-self: end !important;
+    width: auto !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    margin: 0 !important;
+    padding: 0 9px !important;
+    font-size: 11px !important;
+    white-space: nowrap !important;
+  }
+  html body.jmc-compact-header > header #jmc-account-button {
+    grid-area: account !important;
+    order: unset !important;
+    justify-self: stretch !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    padding: 0 11px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    text-align: center !important;
+    font-size: 11px !important;
+  }
+  html body.jmc-compact-header > header #jmc-header-google-logout:not([hidden]) {
+    grid-column: 1 / 3 !important;
+    grid-row: 3 !important;
+    order: unset !important;
+    justify-self: stretch !important;
+    width: 100% !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+    height: 32px !important;
+    font-size: 11px !important;
+  }
+  html body.jmc-compact-header #jmc-header-tools {
+    grid-area: tools !important;
+    order: unset !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    justify-self: end !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    flex: none !important;
+    margin: 0 !important;
+    gap: 0 !important;
+  }
+  html body.jmc-compact-header #jmc-header-tools-line {
+    display: flex !important;
+    justify-content: flex-end !important;
+    align-items: center !important;
+    width: auto !important;
+    flex: none !important;
+    margin: 0 !important;
+  }
+  html body #lounge-clock,
+  html body.jmc-compact-header #lounge-clock {
+    display: none !important;
+  }
+  html body.jmc-compact-header #jmc-sfx-toggle {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    position: static !important;
+    height: 34px !important;
+    min-height: 34px !important;
+    padding: 0 9px !important;
+    margin: 0 !important;
+    width: auto !important;
+    font-size: 11px !important;
+    white-space: nowrap !important;
+  }
+  html body.jmc-compact-header #jmc-header-help {
+    display: none !important;
+  }
+}
+</style>
+
+
+<!-- 모바일: 게스트 설정과 Google 로그인 버튼 분리 -->
+<style id="jmc-mobile-auth-separated-v3">
+  #jmc-mobile-google-login { display: none; }
+  @media screen and (max-width: 980px), (pointer: coarse) {
+    html body.jmc-compact-header > header .top,
+    html body > header .top {
+      grid-template-columns: minmax(0,1fr) minmax(0,1fr) max-content !important;
+      grid-template-areas:
+        "live online rename"
+        "account google tools" !important;
+      gap: 7px 6px !important;
+    }
+    html body #jmc-mobile-google-login {
+      display: inline-flex !important;
+      grid-area: google !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 100% !important;
+      min-width: 0 !important;
+      height: 34px !important;
+      min-height: 34px !important;
+      padding: 0 8px !important;
+      margin: 0 !important;
+      box-sizing: border-box !important;
+      border: 1px solid #a3bad1 !important;
+      border-radius: 8px !important;
+      background: #f7f9fd !important;
+      color: #243245 !important;
+      font: 700 11px Arial,sans-serif !important;
+      white-space: nowrap !important;
+      cursor: pointer !important;
+    }
+    html body #jmc-mobile-google-login[hidden] { display: none !important; }
+    html body #jmc-account-button {
+      grid-area: account !important;
+      min-width: 0 !important;
+      padding: 0 8px !important;
+      font-size: 11px !important;
+    }
+    html body #jmc-header-tools { grid-area: tools !important; }
+    html body #jmc-header-google-logout:not([hidden]) {
+      grid-column: 1 / -1 !important;
+      grid-row: 3 !important;
+    }
+    html body #lounge-clock { display: none !important; }
+  }
+</style>
+<script>
+(function () {
+  function setupMobileAuth() {
+    const google = document.getElementById('jmc-mobile-google-login');
+    const account = document.getElementById('jmc-account-button');
+    const originalGoogle = document.getElementById('jmc-google-login');
+    if (!google || !account || !originalGoogle) return;
+
+    function syncLabels() {
+      const logout = document.getElementById('jmc-header-google-logout');
+      const googleSignedIn = !!logout && logout.style.display !== 'none' && !logout.hidden;
+      const accountLabel = googleSignedIn ? 'Google 계정 설정' : '게스트 입장';
+      if (account.textContent !== accountLabel) account.textContent = accountLabel;
+      google.hidden = googleSignedIn;
+    }
+
+    // 기존 계정 버튼의 동작은 유지하고 모바일 표시명만 구분한다.
+    google.addEventListener('click', function () {
+      if (originalGoogle.hidden) {
+        window.alert('현재 Google 로그인을 이용할 수 없습니다.');
+        return;
+      }
+      if (originalGoogle.disabled) return;
+      originalGoogle.click();
+    });
+
+    const observer = new MutationObserver(syncLabels);
+    observer.observe(account, { childList: true, characterData: true, subtree: true });
+    syncLabels();
+  }
+  window.addEventListener('load', setupMobileAuth, { once: true });
+})();
+</script>
+
+
+<!-- 모바일: 효과음 토글 복구 및 Google 로그인 킬·데스 저장 안내 -->
+<style id="jmc-mobile-sfx-kd-v4">
+  #jmc-mobile-google-kd-note { display: none; }
+  @media screen and (max-width: 980px), (pointer: coarse) {
+    html body.jmc-compact-header > header .top {
+      grid-template-columns: minmax(0,1fr) minmax(0,1fr) max-content !important;
+      grid-template-areas:
+        "live online rename"
+        "account google tools"
+        "note note note" !important;
+      gap: 6px !important;
+    }
+    html body.jmc-compact-header #jmc-header-tools {
+      grid-area: tools !important;
+      display: flex !important;
+      flex-direction: row !important;
+      align-items: center !important;
+      justify-content: flex-end !important;
+      width: auto !important;
+      max-width: none !important;
+      min-width: max-content !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+    }
+    html body.jmc-compact-header #jmc-header-tools-line {
+      display: flex !important;
+      width: auto !important;
+      flex: 0 0 auto !important;
+      justify-content: flex-end !important;
+      align-items: center !important;
+      min-width: max-content !important;
+      overflow: visible !important;
+    }
+    html body.jmc-compact-header #jmc-sfx-toggle {
+      display: inline-flex !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+      position: static !important;
+      width: auto !important;
+      min-width: 88px !important;
+      height: 34px !important;
+      min-height: 34px !important;
+      margin: 0 !important;
+      padding: 0 7px !important;
+      border-radius: 8px !important;
+      flex: 0 0 auto !important;
+      font: 700 10px Arial, sans-serif !important;
+      white-space: nowrap !important;
+      cursor: pointer !important;
+      pointer-events: auto !important;
+    }
+    html body.jmc-compact-header #jmc-mobile-google-kd-note {
+      display: block !important;
+      grid-area: note !important;
+      width: 100% !important;
+      text-align: center !important;
+      font: 11px/1.4 Arial,sans-serif !important;
+      color: #a7c6df !important;
+      padding: 2px 0 0 !important;
+      margin: 0 !important;
+      white-space: normal !important;
+    }
+    html body.jmc-compact-header #jmc-mobile-google-kd-note[hidden] { display:none !important; }
+    html body.jmc-compact-header #jmc-header-google-logout:not([hidden]) {
+      grid-column: 1 / -1 !important;
+      grid-row: 4 !important;
+    }
+    html body.jmc-compact-header #lounge-clock { display: none !important; }
+  }
+</style>
+<script id="jmc-mobile-sfx-kd-script">
+(function () {
+  function initMobileSfxAndKd() {
+    const top = document.querySelector('header .top');
+    const google = document.getElementById('jmc-mobile-google-login');
+    if (!top || !google) return;
+
+    let note = document.getElementById('jmc-mobile-google-kd-note');
+    if (!note) {
+      note = document.createElement('div');
+      note.id = 'jmc-mobile-google-kd-note';
+      note.textContent = 'Google 로그인 시 킬·데스 기록 저장';
+      google.insertAdjacentElement('afterend', note);
+    }
+
+    // 기존 app.js에서 만든 ON/OFF 버튼을 그대로 사용해 저장·음소거 기능 보존.
+    const sfx = document.getElementById('jmc-sfx-toggle');
+    if (sfx) {
+      let tools = document.getElementById('jmc-header-tools');
+      let line = document.getElementById('jmc-header-tools-line');
+      if (!tools) {
+        tools = document.createElement('div');
+        tools.id = 'jmc-header-tools';
+        top.appendChild(tools);
+      }
+      if (!line) {
+        line = document.createElement('div');
+        line.id = 'jmc-header-tools-line';
+        tools.prepend(line);
+      }
+      if (sfx.parentElement !== line) line.appendChild(sfx);
+    }
+
+    const logout = document.getElementById('jmc-header-google-logout');
+    function sync() {
+      const signedIn = !!logout && !logout.hidden && logout.style.display !== 'none';
+      note.hidden = signedIn;
+    }
+    if (logout) new MutationObserver(sync).observe(logout, {
+      attributes: true, attributeFilter: ['hidden', 'style']
+    });
+    sync();
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initMobileSfxAndKd, {once:true});
+  } else {
+    initMobileSfxAndKd();
+  }
+})();
+</script>
 
 </body>
 
