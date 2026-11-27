@@ -246,11 +246,23 @@ function attachIchigoGLB(avatar){
       return result;
     };
     const swingBones={};
-    for(const name of ['shoulder.R','upper_arm.R','forearm.R','hand.R','spine.003']){
+    for(const name of ['shoulder.R','upper_arm.R','forearm.R','hand.R']){
       const bone=findBone(name);
       if(bone)swingBones[name]={bone,rest:bone.quaternion.clone()};
     }
     avatar.userData.ichigoSwingBones=swingBones;
+    // 구매 GLB에서 검(Cube.023)은 원래 손 뼈 바깥에 놓여 있다.
+    // 현재 월드 위치를 유지하며 hand.R에 연결해야 검이 팔과 함께 움직인다.
+    const swordHand=findBone('hand.R');
+    const purchasedSword=model.getObjectByName('Cube.023');
+    if(swordHand && purchasedSword && purchasedSword.isMesh){
+      model.updateMatrixWorld(true);
+      swordHand.attach(purchasedSword); // 위치 보존 + 오른손 동작 상속
+      avatar.userData.ichigoPurchasedSword=purchasedSword;
+      console.info('[JMC] 이치고 참백도 오른손 연결 완료');
+    }else{
+      console.warn('[JMC] 이치고 참백도/오른손 본을 찾지 못했습니다.');
+    }
     // 캐릭터 근처에서만 순간적으로 빛나는 검 궤적(서버 공격 판정에는 영향 없음).
     const trail=new THREE.Group();
     const trailMat=new THREE.MeshBasicMaterial({color:0x5cefff,transparent:true,
@@ -312,30 +324,40 @@ function updateIchigoAnimation(avatar,dt,now,walking=false){
 
 // 월아천충 발동 시, 실제 GLB 뼈대를 움직이는 0.55초 검술 모션.
 // 기본 포즈 복원까지 처리해 연속 공격 시 팔이 뒤틀리지 않도록 한다.
+// 공격이 200ms 간격으로 연속 발사되더라도 검술 동작이 매번 0프레임으로
+// 리셋되지 않도록 한 번의 베기를 끝낸 뒤 다음 동작을 시작한다.
+const ICHIGO_SWING_MS=440;
 function beginIchigoSwordSwing(avatar){
   if(!avatar || avatar.userData.animal!=='ichigo')return;
-  avatar.userData.ichigoSwingStart=performance.now();
+  const now=performance.now();
+  const start=avatar.userData.ichigoSwingStart;
+  if(Number.isFinite(start) && now-start<ICHIGO_SWING_MS)return;
+  avatar.userData.ichigoSwingStart=now;
 }
+
 function updateIchigoSwordSwing(avatar,now){
   if(!avatar || avatar.userData.animal!=='ichigo')return;
   const start=avatar.userData.ichigoSwingStart;
   const bones=avatar.userData.ichigoSwingBones;
-  if(start===undefined || !bones)return;
-  const t=Math.max(0,(now-start)/560);
-  const smooth=x=>{x=THREE.MathUtils.clamp(x,0,1);return x*x*(3-2*x);};
-  let windup=0,slash=0;
-  if(t<.25){windup=smooth(t/.25);}
-  else if(t<.62){
-    const u=smooth((t-.25)/.37);
-    windup=1-u;slash=u;
-  }else if(t<1){slash=1-smooth((t-.62)/.38);}
-  // 어깨를 뒤로 당기고 전방으로 크게 베며, 팔꿈치와 손목이 따라온다.
+  if(!Number.isFinite(start) || !bones || !Object.keys(bones).length)return;
+
+  const t=THREE.MathUtils.clamp((now-start)/ICHIGO_SWING_MS,0,1);
+  const ease=x=>{x=THREE.MathUtils.clamp(x,0,1);return x*x*(3-2*x);};
+  // 0~0.20: 칼을 뒤로 당김, 0.20~0.64: 크게 사선 베기, 0.64~1: 복귀.
+  let ready=0,cut=0;
+  if(t<.20){ready=ease(t/.20);}
+  else if(t<.64){
+    const u=ease((t-.20)/.44);
+    ready=1-u; cut=u;
+  }else if(t<1){cut=1-ease((t-.64)/.36);}
+
+  // 기존의 상체뼈 회전은 얼굴·머리카락 정렬을 흐트러뜨려 제외한다.
+  // 검을 쥔 오른쪽 어깨/팔꿈치/손목만 크게 움직인다.
   const poses={
-    'shoulder.R':[ -.32*windup+.40*slash, -.22*windup+.44*slash, .30*windup-.40*slash ],
-    'upper_arm.R':[-.62*windup+.68*slash, -.30*windup+.43*slash, .24*windup-.37*slash ],
-    'forearm.R':[ .35*windup-.42*slash, 0, -.12*windup+.22*slash ],
-    'hand.R':[ -.22*windup+.37*slash, .08*windup-.18*slash, 0 ],
-    'spine.003':[0,-.16*windup+.23*slash, -.06*windup+.09*slash]
+    'shoulder.R':[-.30*ready+.72*cut, -.48*ready+.78*cut, .48*ready-.83*cut],
+    'upper_arm.R':[-.85*ready+1.28*cut, -.52*ready+.76*cut, .48*ready-.73*cut],
+    'forearm.R':[ .52*ready-.71*cut, .12*ready-.16*cut, -.14*ready+.30*cut],
+    'hand.R':[-.35*ready+.53*cut, .10*ready-.25*cut, -.18*ready+.22*cut]
   };
   for(const [name,item] of Object.entries(bones)){
     const [x,y,z]=poses[name]||[0,0,0];
@@ -343,14 +365,26 @@ function updateIchigoSwordSwing(avatar,now){
       new THREE.Quaternion().setFromEuler(new THREE.Euler(x,y,z,'XYZ'))
     );
   }
+
   const trail=avatar.userData.ichigoSwingTrail;
   if(trail){
-    const show=t>.27 && t<.68;
+    const show=t>.22&&t<.69;
     trail.visible=show;
     if(show){
-      const pulse=Math.sin(Math.PI*(t-.27)/.41);
-      trail.children[0].material.opacity=.58*Math.max(0,pulse);
-      trail.rotation.z=-1.05+1.80*smooth((t-.27)/.41);
+      const u=ease((t-.22)/.47);
+      const light=trail.children[0];
+      light.material.opacity=.88*Math.sin(Math.PI*u);
+      trail.rotation.z=-1.2+2.15*u;
+      // 실제 검 끝 근처에서 빛이 나도록 손의 위치를 따라간다.
+      const hand=bones['hand.R']?.bone;
+      const body=avatar.userData.bodyGroup;
+      if(hand&&body){
+        avatar.updateMatrixWorld(true);
+        const world=hand.getWorldPosition(new THREE.Vector3());
+        trail.position.copy(body.worldToLocal(world));
+        trail.position.y+=.24;
+        trail.position.z+=.22;
+      }
     }
   }
   if(t>=1){
@@ -4800,6 +4834,7 @@ const MAGIC_LIFETIME=1100;
 
 function castMagic(){
   if(!myAvatar||defeated||reentryRequired||npcMode==='npc'||npcPendingMode)return;
+  if(myAvatar.userData.animal==='ichigo')beginIchigoSwordSwing(myAvatar);
   send({type:'magic'});
 }
 
