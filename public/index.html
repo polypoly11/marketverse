@@ -1108,41 +1108,23 @@ html body.jmc-compact-header #jmc-header-help {
 }
 </style>
 
-  <!-- 무료 실시간 청산맵: 외부 임베드 공식 허용 위젯 -->
+  <!-- Swolecharts 무료 API 기반 JMC 자체 캔버스 차트 -->
   <style>
-    #coinglass-liquidation-panel { min-width:0; }
-    #coinglass-liquidation-panel .jmc-liq-toolbar {
-      display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
-      margin:4px 0 12px;
-    }
-    #coinglass-liquidation-panel .jmc-liq-title {
-      font-size:14px;font-weight:800;color:#f0f5fa;letter-spacing:-.2px;
-    }
-    #coinglass-liquidation-panel .jmc-liq-controls {
-      display:flex;align-items:center;gap:7px;
-    }
-    #coinglass-liquidation-panel select,
-    #coinglass-liquidation-panel button {
-      background:#101a29;color:#e6f1fa;border:1px solid #354659;
-      border-radius:7px;padding:8px 10px;font:600 12px Arial,sans-serif;
-    }
-    #coinglass-liquidation-panel button { cursor:pointer; }
-    #coinglass-liquidation-panel .jmc-liq-frame-wrap {
-      position:relative;min-height:520px;border:1px solid #293644;
-      background:#0b0e14;border-radius:9px;overflow:hidden;
-    }
-    #coinglass-liquidation-panel iframe {
-      display:block;width:100%;height:520px;border:0;
-      background:#0b0e14;
-    }
-    #coinglass-liquidation-panel .jmc-liq-note {
-      margin:11px 1px 0;color:#a7bacb;font-size:11px;line-height:1.6;
-    }
-    #coinglass-liquidation-panel .jmc-liq-note a {color:#8fd1fb;}
-    @media(max-width:980px){
-      #coinglass-liquidation-panel .jmc-liq-frame-wrap {min-height:440px;}
-      #coinglass-liquidation-panel iframe {height:440px;}
-    }
+    #coinglass-liquidation-panel{min-width:0}
+    #coinglass-liquidation-panel .jmc-liq-toolbar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 0 10px}
+    #coinglass-liquidation-panel .jmc-liq-title{font:800 14px Arial,sans-serif;color:#eef6ff}
+    #coinglass-liquidation-panel .jmc-liq-controls{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+    #coinglass-liquidation-panel select,#coinglass-liquidation-panel button{background:#101b2b;color:#e7f0fa;border:1px solid #36495e;border-radius:7px;padding:7px 9px;font:600 12px Arial,sans-serif}
+    #coinglass-liquidation-panel button{cursor:pointer}
+    #coinglass-liquidation-panel button:disabled{opacity:.5;cursor:wait}
+    #coinglass-liquidation-panel .jmc-liq-chart-box{border:1px solid #283849;background:#090f19;border-radius:8px;padding:9px 7px;overflow:hidden}
+    #jmc-liq-canvas{display:block;width:100%;height:360px}
+    #coinglass-liquidation-panel .jmc-liq-legend{display:flex;flex-wrap:wrap;gap:9px;margin:6px 3px 0;font:11px Arial,sans-serif;color:#b9ccda}
+    #coinglass-liquidation-panel .jmc-liq-legend span:before{content:'';display:inline-block;width:9px;height:9px;margin-right:4px;border-radius:2px;background:var(--swatch)}
+    #coinglass-liquidation-panel .jmc-liq-note,#jmc-liq-meta,#jmc-liq-detail{margin:7px 2px 0;color:#a8bfd2;font:11px/1.5 Arial,sans-serif}
+    #coinglass-liquidation-panel .jmc-liq-note a{color:#8bd1ff}
+    #jmc-liq-status{color:#99e4d6;font:11px Arial,sans-serif}
+    @media(max-width:980px){#jmc-liq-canvas{height:310px}}
   </style>
 </head>
 
@@ -1327,29 +1309,30 @@ html body.jmc-compact-header #jmc-header-help {
 
       </section>
 
-      <!-- 경제 캘린더 바로 아래 무료 실시간 청산맵: 제공사 허용 iframe -->
+      <!-- 경제 캘린더 바로 아래: Swolecharts 무료 API 추정 청산맵 -->
       <section class="panel coinglass-liquidation-panel" id="coinglass-liquidation-panel">
         <div class="jmc-liq-toolbar">
-          <div class="jmc-liq-title">BITCOIN / ETHEREUM LIQUIDATION MAP</div>
+          <div class="jmc-liq-title">ESTIMATED LIQUIDATION MAP</div>
           <div class="jmc-liq-controls">
-            <label for="jmc-liq-coin" style="font-size:11px;color:#a7bacb">종목</label>
-            <select id="jmc-liq-coin" aria-label="청산맵 종목 선택">
-              <option value="BTC">BTC</option>
-              <option value="ETH">ETH</option>
-            </select>
-            <button id="jmc-liq-refresh" type="button" aria-label="청산맵 새로고침" title="새로고침">↻</button>
+            <select id="jmc-liq-coin" aria-label="청산맵 종목"><option value="BTC">BTC</option><option value="ETH">ETH</option></select>
+            <select id="jmc-liq-range" aria-label="추정 포지션 생성 기간"><option value="12h">12시간</option><option value="24h" selected>1일</option><option value="3d">3일</option><option value="7d">7일</option><option value="30d">30일</option></select>
+            <button id="jmc-liq-refresh" type="button" aria-label="데이터 새로고침" title="새로고침">↻</button>
           </div>
         </div>
-        <div class="jmc-liq-frame-wrap">
-          <iframe id="jmc-liq-frame" title="BTC 추정 청산맵" loading="lazy"
-            referrerpolicy="strict-origin-when-cross-origin"
-            src="https://bykaranteli.com/embed/liqmap/BTC"></iframe>
+        <div class="jmc-liq-chart-box">
+          <div class="jmc-liq-legend">
+            <span style="--swatch:#f25b69">롱 청산 추정</span>
+            <span style="--swatch:#36c8b5">숏 청산 추정</span>
+            <span style="--swatch:#ff455c">현재가</span>
+          </div>
+          <canvas id="jmc-liq-canvas" role="img" aria-label="가격대별 추정 청산 금액과 누적 곡선"></canvas>
         </div>
-        <p class="jmc-liq-note">
-          가격대별 추정 청산 집중 구간입니다. <b>CoinGlass 원본 차트가 아니며</b>
-          데이터·모델은 <a href="https://bykaranteli.com/liqmap" target="_blank" rel="noopener noreferrer">ByKaranteli</a> 제공입니다.
-          무료 임베드 조건에 따라 위젯 내부 출처 표기를 유지합니다.
-          <a href="https://www.coinglass.com/pro/futures/LiquidationMap" target="_blank" rel="noopener noreferrer">CoinGlass 원본 열기 ↗</a>
+        <p id="jmc-liq-meta" aria-live="polite">데이터 불러오는 중...</p>
+        <p id="jmc-liq-detail">가격대별 모델 추정치이며 실제 포지션이 아닙니다.</p>
+        <p class="jmc-liq-note"><span id="jmc-liq-status">연결 준비</span> · 출처:
+          <a href="https://swolecharts.com/liquidation-levels/BTC" target="_blank" rel="noopener noreferrer" id="jmc-liq-source">Swolecharts</a>
+          · <a href="https://swolecharts.com/developers" target="_blank" rel="noopener noreferrer">무료 API 설명</a>
+          <br>코인글래스 원본이 아니며, 거래소별 세분화가 아닌 <b>주요 추정 청산 구간</b>을 표시합니다.
         </p>
       </section>
 
@@ -1567,28 +1550,8 @@ html body.jmc-compact-header #jmc-header-help {
 
   </div>
 
-  <!-- 무료 청산맵 종목 선택 / 새로고침 (API 키 불필요) -->
-  <script>
-    (function(){
-      const select=document.getElementById('jmc-liq-coin');
-      const frame=document.getElementById('jmc-liq-frame');
-      const refresh=document.getElementById('jmc-liq-refresh');
-      if(!select||!frame||!refresh)return;
-      function loadMap(reload){
-        const coin=select.value==='ETH'?'ETH':'BTC';
-        const url='https://bykaranteli.com/embed/liqmap/'+coin;
-        frame.title=coin+' 추정 청산맵';
-        if(reload&&frame.src===url){
-          frame.src='about:blank';
-          setTimeout(()=>{frame.src=url;},30);
-        }else{
-          frame.src=url;
-        }
-      }
-      select.addEventListener('change',()=>loadMap(false));
-      refresh.addEventListener('click',()=>loadMap(true));
-    })();
-  </script>
+  <!-- Swolecharts 무료 데이터 자체 차트 -->
+  <script src="/jmc-swole-liquidation.js?v=20261127-1" defer></script>
 
   <!-- 경제 캘린더 설정 -->
   <script src="/investing-widget.js"></script>
