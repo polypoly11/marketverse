@@ -4138,6 +4138,28 @@ transform: translate(-50%, -50%) !important;
 })();
 </script>
 
+
+<!-- 모바일 조이스틱 레이아웃·브라우저 제스처 방지 최종 보정 -->
+<style id="jmc-mobile-joystick-lock-final">
+@media (max-width:980px), (pointer:coarse) {
+  html body #scene #mobile-controls.jmc-joystick,
+  html body #scene #mobile-controls.jmc-joystick * {
+    touch-action: none !important;
+    overscroll-behavior: none !important;
+    -webkit-user-select: none !important;
+    user-select: none !important;
+    -webkit-touch-callout: none !important;
+  }
+  html.jmc-joystick-active #scene {
+    overscroll-behavior: none !important;
+    contain: layout style !important;
+  }
+  html.jmc-joystick-active #scene canvas {
+    touch-action: none !important;
+  }
+}
+</style>
+
 </body>
 
 
