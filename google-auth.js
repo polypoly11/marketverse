@@ -8,8 +8,8 @@ const PENDING_MAX_AGE_MS = 10 * 60 * 1000;
 const INVENTORY_TOKEN_PATTERN = /^[0-9a-f]{64}$/i;
 const pending = new Map();
 const PROFILE_ANIMALS = new Set([
-  'seal','cat','dog','rabbit','fox','panda','bear','penguin',
-  'frog','hamster','lion','tiger','koala','raccoon','deer','ichigo','majinbuu'
+  'seal','dog','rabbit','bear','penguin',
+  'hamster','lion','tiger','koala','raccoon','ichigo','majinbuu'
 ]);
 function normalizeNickname(value) {
   const name=String(value??'').normalize('NFC').trim();
@@ -77,6 +77,13 @@ export async function createGoogleAuth(app) {
       ADD COLUMN IF NOT EXISTS account_nickname TEXT,
       ADD COLUMN IF NOT EXISTS account_animal TEXT
     `);
+    // 삭제된 5종을 선택했던 기존 계정만 아기물개로 변경한다.
+    // 계정 닉네임과 Google 계정 정보는 그대로 유지된다.
+    await pool.query(`
+      UPDATE jmc_google_users
+      SET account_animal='seal'
+      WHERE account_animal IN ('cat','fox','panda','frog','deer')
+    `);
     await pool.query(`
       CREATE UNIQUE INDEX IF NOT EXISTS jmc_google_nickname_unique
       ON jmc_google_users (LOWER(account_nickname))
@@ -113,7 +120,11 @@ export async function createGoogleAuth(app) {
       JOIN jmc_google_users u ON u.google_sub=s.google_sub
       WHERE s.token_hash=$1 AND s.expires_at>NOW()
     `,[sha256(token)]);
-    return result.rows[0] || null;
+    const user=result.rows[0] || null;
+    if(user?.accountAnimal && !PROFILE_ANIMALS.has(user.accountAnimal)) {
+      user.accountAnimal='seal';
+    }
+    return user;
   }
 
   app.get('/api/auth/me',async (req,res) => {
