@@ -183,7 +183,7 @@ function updateMajinBuuAnimation(avatar,dt,now,walking=false){
 }
 
 // 이치고 구매 모델: public/models/ichigo.glb (마인부우와 독립적으로 캐싱)
-const ICHIGO_GLB_URL='/models/ichigo.glb?v=jmc-ichigo-bankai-20261128-hair-fix-v4';
+const ICHIGO_GLB_URL='/models/ichigo.glb?v=jmc-ichigo-bankai-20261128-face-bone-v5';
 const ichigoGLB={promise:null,asset:null,failed:false};
 function loadIchigoGLB(){
   if(!ichigoGLB.promise){
@@ -228,33 +228,24 @@ function attachIchigoGLB(avatar){
     const facingCenter = new THREE.Vector3();
     facingBounds.getCenter(facingCenter);
     model.position.set(-facingCenter.x, -facingBounds.min.y, -facingCenter.z);
-    // 이치고 머리카락이 얼굴에서 분리되는 현상 보정.
-    // 구매 GLB에서 얼굴 Cube는 metarig 바로 아래, 머리카락 NurbsPath는
-    // spine.006 아래에 있어 서로 다른 부모 변환을 받는다.
-    // attach()는 현재 화면상의 위치/회전을 유지하면서 부모만 얼굴로 변경한다.
-    const ichigoHead=model.getObjectByName('Cube');
+    // 이치고 얼굴/머리카락 정렬 수정:
+    // GLB 원본에서 얼굴 Cube는 metarig 직속 정적 메시이고,
+    // 머리카락 NurbsPath는 spine.006(머리 뼈) 아래에 있는 정적 메시다.
+    // 두 개가 같은 뼈 변환을 따라가도록 얼굴만 머리 뼈에 재부모 설정한다.
+    // Object3D.attach()는 현재 월드 좌표를 보존한다.
+    // 기존처럼 머리카락을 얼굴 아래로 옮기거나 임의 x 좌표 보정하지 않는다.
+    const ichigoFace=model.getObjectByName('Cube');
     const ichigoHair=model.getObjectByName('NurbsPath');
-    if(ichigoHead?.isMesh && ichigoHair?.isMesh){
+    const ichigoHeadBone=ichigoHair?.parent;
+    if(ichigoFace?.isMesh && ichigoHair?.isMesh && ichigoHeadBone?.isBone){
       model.updateMatrixWorld(true);
-      ichigoHead.attach(ichigoHair);
+      ichigoHeadBone.attach(ichigoFace);
       model.updateMatrixWorld(true);
-      // 얼굴과 머리카락의 좌우 중심만 맞춰 머리카락이 옆으로 이탈하지 않도록 보정.
-      const faceBox=new THREE.Box3().setFromObject(ichigoHead);
-      const hairBox=new THREE.Box3().setFromObject(ichigoHair);
-      if(!faceBox.isEmpty() && !hairBox.isEmpty()){
-        const faceCenter=faceBox.getCenter(new THREE.Vector3());
-        const hairCenter=hairBox.getCenter(new THREE.Vector3());
-        const targetWorld=new THREE.Vector3(faceCenter.x-hairCenter.x,0,0);
-        // 모델 자체가 회전돼 있으므로 월드 이동량을 새 부모의 로컬 좌표로 변환.
-        const parentInverse=new THREE.Matrix4().copy(ichigoHead.matrixWorld).invert();
-        const localShift=targetWorld.applyMatrix3(new THREE.Matrix3().setFromMatrix4(parentInverse));
-        ichigoHair.position.add(localShift);
-      }
-      model.updateMatrixWorld(true);
-      console.info('[JMC] 이치고 머리카락을 얼굴에 연결했습니다.');
+      console.info('[JMC] 이치고 얼굴을 머리뼈에 고정했습니다.');
     }else{
-      console.warn('[JMC] 이치고 머리카락/얼굴 메시를 찾지 못했습니다.',
-        {head:!!ichigoHead,hair:!!ichigoHair});
+      console.warn('[JMC] 이치고 얼굴/머리뼈 연결을 확인하지 못했습니다.',{
+        face:!!ichigoFace,hair:!!ichigoHair,bone:ichigoHeadBone?.name
+      });
     }
     model.traverse(node=>{
       if(node.isMesh || node.isSkinnedMesh)node.frustumCulled=false;
