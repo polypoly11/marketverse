@@ -4933,14 +4933,15 @@ function spawnRemoteMagic(m){
     projectile.add(halo,aura,innerGlow,core);
     projectile.position.set(x,y+1.15,z);
     projectile.position.addScaledVector(direction,.85);
-    // 검기의 긴 축이 수평 진행 방향(+Z)을 바라보도록 눕힌다.
-    // YXZ 순서로 회전해야 발사 방향(facing)에 관계없이 끝이 전방을 향한다.
-projectile.rotation.order='YXZ';
-projectile.rotation.y=facing;
-projectile.rotation.x=Math.PI/2 - 0.18;
-projectile.rotation.z=0;
-projectile.scale.x=-1;
-scene.add(projectile);
+    // 초승달의 가운데 볼록한 날(+local X)이 실제 발사 진행방향(+local Z)을 향하도록 정렬.
+    // Z축 90도 회전으로 볼록한 부분을 앞에 놓고 X축으로 수평으로 눕힌다.
+    // Y축은 플레이어의 발사 방향만 반영한다. 이동/충돌 판정은 기존 그대로.
+    projectile.rotation.order='YXZ';
+    projectile.rotation.y=facing;
+    projectile.rotation.x=Math.PI/2;
+    projectile.rotation.z=Math.PI/2;
+    projectile.scale.x=1;
+    scene.add(projectile);
     magicProjectiles.push({id:m.shotId,ownerId:m.senderId,object:projectile,
       direction,born:performance.now(),core:null,aura,freezeUntil:0,predictedContact:false,
       baseAuraOpacity:.38});
