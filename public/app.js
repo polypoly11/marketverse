@@ -5,20 +5,15 @@ const $ = id => document.getElementById(id);
 
 const animals = [
   ['seal','아기물개','🦭',0xe9f0ed],
-  ['cat','고양이','🐱',0xd89b61],
   ['dog','강아지','🐶',0xc9945b],
   ['rabbit','토끼','🐰',0xf1e9e3],
-  ['fox','여우','🦊',0xe7833d],
-  ['panda','판다','🐼',0xf0eee8],
   ['bear','곰','🐻',0x9b6548],
   ['penguin','펭귄','🐧',0x293746],
-  ['frog','개구리','🐸',0x6bba59],
   ['hamster','햄스터','🐹',0xe6bb83],
   ['lion','사자','🦁',0xd5a052],
   ['tiger','호랑이','🐯',0xe69a40],
   ['koala','코알라','🐨',0x9ea7ae],
   ['raccoon','너구리','🦝',0x777d81],
-  ['deer','사슴','🦌',0xb87d54],
   ['ichigo','쿠로사키 이치고','⚔️',0xf2782e],
   ['majinbuu','마인부우','🍬',0xf28eb5]
 ].map(([id,name,emoji,color])=>({
