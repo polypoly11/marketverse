@@ -65,9 +65,14 @@
       return;
     }
     const {price,long,short,all}=current;
-    const minData=Math.min(price*.94,...all.map(p=>p.lo > 0 ? p.lo : p.mid));
-    const maxData=Math.max(price*1.06,...all.map(p=>p.hi > 0 ? p.hi : p.mid));
-    const min=Math.min(minData,price*.94),max=Math.max(maxData,price*1.06);
+    // 데이터가 없는 가격대까지 과도하게 확장하지 않도록 실제 제공 구간 중심으로 설정
+    const priceLows=all.map(p=>p.lo > 0 && p.lo <= p.mid ? p.lo : p.mid);
+    const priceHighs=all.map(p=>p.hi >= p.mid ? p.hi : p.mid);
+    const dataMin=Math.min(...priceLows), dataMax=Math.max(...priceHighs);
+    const dataSpan=Math.max(1,dataMax-dataMin);
+    const pad=Math.max(price*.003, dataSpan*.035);
+    const min=Math.min(price,dataMin)-pad;
+    const max=Math.max(price,dataMax)+pad;
     const span=Math.max(1,max-min);
     const x = p => m.l + (p-min)/span*plotW;
     const maxBar=Math.max(1,...all.map(p=>p.usd));
@@ -87,15 +92,27 @@
       const p=min+span*i/5;
       drawText(number(p),x(p),bottom+19,'#92a5b6','center');
     }
-    // Main bars are peak CLUSTERS from the free API, not a continuous heatmap or per-exchange feed.
-    const barW=Math.max(3,Math.min(22,plotW/Math.max(22,all.length*2.7)));
+    // 공급사가 제공하는 실제 [lo, hi] 가격 구간의 폭을 막대 너비로 사용.
+    // 빈 가격대에는 추정치를 생성하거나 보간하지 않음.
     for(const p of all){
-      const bx=x(p.mid)-barW/2;
+      const validBounds=Number.isFinite(p.lo)&&Number.isFinite(p.hi)&&p.lo>0&&p.hi>p.lo;
+      const left=validBounds?x(p.lo):x(p.mid)-2;
+      const right=validBounds?x(p.hi):x(p.mid)+2;
+      const bx=Math.max(m.l,left);
+      const bw=Math.max(2,Math.min(width-m.r,right)-bx-0.6);
       const h=Math.max(2,Math.min(plotH,p.usd/maxBar*plotH*.91));
-      ctx.fillStyle=p.side==='long'?'#f25b69':'#36c8b5';
-      ctx.fillRect(bx,bottom-h,barW,h);
-      ctx.fillStyle=p.side==='long'?'rgba(255,154,166,.62)':'rgba(146,255,236,.63)';
-      ctx.fillRect(bx,bottom-h,barW,Math.min(2,h));
+      const gradient=ctx.createLinearGradient(0,bottom-h,0,bottom);
+      if(p.side==='long'){
+        gradient.addColorStop(0,'#ff8894');
+        gradient.addColorStop(1,'#a82c49');
+      }else{
+        gradient.addColorStop(0,'#70ebd5');
+        gradient.addColorStop(1,'#157e83');
+      }
+      ctx.fillStyle=gradient;
+      ctx.fillRect(bx,bottom-h,bw,h);
+      ctx.fillStyle=p.side==='long'?'rgba(255,198,202,.8)':'rgba(181,255,244,.8)';
+      ctx.fillRect(bx,bottom-h,bw,Math.min(1.6,h));
     }
     // Cumulative curves: source's cum values describe liquidation volume reached as
     // price moves away from current; long curve is drawn from lower prices to current.
@@ -119,8 +136,8 @@
     if (!current) return;
     const {price,asOf,long,short}=current;
     const time = Number.isFinite(asOf) && asOf>0 ? new Date(asOf).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour:'2-digit',minute:'2-digit',month:'numeric',day:'numeric'})+' KST' : '시간 미확인';
-    meta.textContent=`기준가 ${number(price)} USD · ${time} · 롱 ${long.length}개 / 숏 ${short.length}개 주요 구간`;
-    detail.textContent='막대: 추정 주요 청산 구간 · 곡선: 공급사 누적 추정값 · 실제 청산 체결 데이터가 아닙니다.';
+    meta.textContent=`기준가 ${number(price)} USD · ${time} · 롱 ${long.length}개 / 숏 ${short.length}개 원본 가격 구간`;
+    detail.textContent='막대 폭: 공급사 가격 구간(lo~hi) 그대로 · 빈 구간은 보간하지 않음 · 곡선: 공급사 누적 추정값';
   }
   async function load(force=false){
     if(loading)return;
