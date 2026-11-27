@@ -185,6 +185,103 @@ function updateMajinBuuAnimation(avatar,dt,now,walking=false){
   playMajinBuuAnimation(avatar,walking?'walk':'idle');
 }
 
+// 이치고 구매 모델: public/models/ichigo.glb (마인부우와 독립적으로 캐싱)
+const ICHIGO_GLB_URL='/models/ichigo.glb?v=jmc-ichigo-bankai-20261128-v2';
+const ichigoGLB={promise:null,asset:null,failed:false};
+function loadIchigoGLB(){
+  if(!ichigoGLB.promise){
+    ichigoGLB.promise=new GLTFLoader().loadAsync(ICHIGO_GLB_URL)
+      .then(gltf=>{
+        if(!gltf?.scene)throw Error('이치고 GLB scene이 없습니다.');
+        ichigoGLB.asset=gltf;
+        return gltf;
+      })
+      .catch(error=>{
+        if(!ichigoGLB.failed){
+          console.warn('[JMC] 이치고 GLB 로드 실패:',ICHIGO_GLB_URL,error);
+          ichigoGLB.failed=true;
+        }
+        return null;
+      });
+  }
+  return ichigoGLB.promise;
+}
+function attachIchigoGLB(avatar){
+  if(!avatar || avatar.userData.animal!=='ichigo')return;
+  const body=avatar.userData.bodyGroup;
+  if(!body || avatar.userData.ichigoGLBRequested)return;
+  avatar.userData.ichigoGLBRequested=true;
+  const fallback=body.children.slice();
+  void loadIchigoGLB().then(gltf=>{
+    if(!gltf || !avatar.parent || avatar.userData.ichigoModel)return;
+    const model=cloneSkinnedModel(gltf.scene);
+    model.updateMatrixWorld(true);
+    const bounds=new THREE.Box3().setFromObject(model);
+    const size=new THREE.Vector3();
+    bounds.getSize(size);
+    if(!Number.isFinite(size.y)||size.y<=.001)return;
+    // root의 CHARACTER_SCALE(0.7)은 그대로 두고 모델 높이를 일치시킴.
+    model.scale.multiplyScalar(Math.min(100,Math.max(.001,2.95/size.y)));
+    model.updateMatrixWorld(true);
+    const scaledBounds=new THREE.Box3().setFromObject(model);
+    const center=new THREE.Vector3();
+    scaledBounds.getCenter(center);
+    model.position.set(-center.x,-scaledBounds.min.y,-center.z);
+    model.traverse(node=>{
+      if(node.isMesh || node.isSkinnedMesh)node.frustumCulled=false;
+    });
+    body.add(model);
+    fallback.forEach(child=>child.visible=false);
+    avatar.userData.ichigoModel=model;
+    avatar.userData.ichigoFallback=fallback;
+    // 구매 GLB에는 애니메이션이 없지만 향후 클립 추가 시 사용 가능.
+    const clips=gltf.animations||[];
+    if(clips.length){
+      const mixer=new THREE.AnimationMixer(model);
+      const actions={};
+      for(const clip of clips){
+        const name=clip.name.toLowerCase();
+        const key=/attack|slash|swing|cast|skill|action/i.test(name)?'attack':
+          /walk|run|move/i.test(name)?'walk':
+          /idle|stand|breath|rest/i.test(name)?'idle':null;
+        if(key && !actions[key])actions[key]=mixer.clipAction(clip);
+      }
+      if(!actions.idle)actions.idle=mixer.clipAction(clips[0]);
+      if(actions.attack){
+        actions.attack.setLoop(THREE.LoopOnce,1);
+        actions.attack.clampWhenFinished=true;
+      }
+      avatar.userData.ichigoMixer=mixer;
+      avatar.userData.ichigoActions=actions;
+      avatar.userData.ichigoCurrent=null;
+      playIchigoAnimation(avatar,'idle');
+    }
+    console.info('[JMC] 이치고 GLB 로드 성공:',clips.length,'개 애니메이션');
+  });
+}
+function playIchigoAnimation(avatar,requested){
+  const actions=avatar?.userData?.ichigoActions;
+  if(!actions)return;
+  const now=performance.now();
+  if(requested!=='attack' && now<(avatar.userData.ichigoAttackUntil||0))return;
+  const key=actions[requested]?requested:(actions.idle?'idle':null);
+  if(!key || (avatar.userData.ichigoCurrent===key && key!=='attack'))return;
+  const prev=actions[avatar.userData.ichigoCurrent];
+  const next=actions[key];
+  if(prev && prev!==next)prev.fadeOut(.12);
+  next.reset().setEffectiveWeight(1).fadeIn(.12).play();
+  avatar.userData.ichigoCurrent=key;
+  if(key==='attack')avatar.userData.ichigoAttackUntil=now+
+    Math.min(850,Math.max(200,next.getClip().duration*1000));
+}
+function updateIchigoAnimation(avatar,dt,now,walking=false){
+  const mixer=avatar?.userData?.ichigoMixer;
+  if(!mixer || avatar.userData.npcMode==='npc')return;
+  mixer.update(dt);
+  if(now<(avatar.userData.ichigoAttackUntil||0))return;
+  playIchigoAnimation(avatar,walking?'walk':'idle');
+}
+
 function makeAnimal(id){
   const a = animal(id);
   const root = new THREE.Group();
@@ -723,6 +820,7 @@ function makeAnimal(id){
   root.userData.targetDirection = Math.PI;
   root.userData.animal = id;
   if(id==='majinbuu')attachMajinBuuGLB(root);
+  if(id==='ichigo')attachIchigoGLB(root);
   root.userData.walk = 0;
   root.userData.seated = false;
 root.userData.jumpHeight = 0;
@@ -981,16 +1079,17 @@ function selectAnimal(id){
     buuStatus.style.cssText='margin:6px auto 12px;text-align:center;font:600 12px Arial,sans-serif;color:#a9c5da;';
     $('selected-animal-name').insertAdjacentElement('afterend',buuStatus);
   }
-  if(id==='majinbuu'){
+  if(id==='majinbuu' || id==='ichigo'){
     buuStatus.hidden=false;
     buuStatus.textContent='구매한 3D 모델 불러오는 중…';
-    void loadMajinBuuGLB().then(gltf=>{
-      if(selectedAnimal!=='majinbuu')return;
+    const getModel=id==='ichigo'?loadIchigoGLB:loadMajinBuuGLB;
+    void getModel().then(gltf=>{
+      if(selectedAnimal!==id)return;
       if(gltf){
         buuStatus.textContent='✓ 구매한 3D 모델 로딩 성공';
         buuStatus.style.color='#83e4b6';
       }else{
-        buuStatus.textContent='⚠ GLB 모델 로딩 실패: /models/majinbuu.glb 경로와 배포를 확인하세요';
+        buuStatus.textContent=`⚠ GLB 모델 로딩 실패: /models/${id}.glb 경로와 배포를 확인하세요`;
         buuStatus.style.color='#ffb2a0';
       }
     });
@@ -4086,6 +4185,7 @@ function animate(now){
     previewModel.userData.bodyGroup.position.y=
       Math.sin(now*.002)*.025;
     updateMajinBuuAnimation(previewModel,dt,now,false);
+    updateIchigoAnimation(previewModel,dt,now,false);
   }
 
   if(!$('profile-modal').hidden){
@@ -4221,10 +4321,12 @@ function animate(now){
      held('d')||held('arrowright')||held('arrowleft')||
      Math.abs(mobileJoystick.x)>.08||Math.abs(mobileJoystick.y)>.08);
   updateMajinBuuAnimation(myAvatar,dt,now,Boolean(movingNow));
+  updateIchigoAnimation(myAvatar,dt,now,Boolean(movingNow));
   for(const a of others.values()){
     const previous=a.userData.majinBuuLastPosition;
     const moving=previous && a.position.distanceToSquared(previous)>.0001;
     updateMajinBuuAnimation(a,dt,now,Boolean(moving));
+    updateIchigoAnimation(a,dt,now,Boolean(moving));
     if(!previous)a.userData.majinBuuLastPosition=a.position.clone();
     else previous.copy(a.position);
   }
@@ -4669,53 +4771,49 @@ function spawnRemoteMagic(m){
     Math.sin(facing),0,Math.cos(facing)
   ).normalize();
 
-  // 이치고 전용 월아천충: 서버 검증을 거친 발사자 캐릭터로 판정
+  // 이치고 월아천충: 참고 이미지처럼 S자로 휘어진 청백색 초승달 검기.
+  // 발사 위치, 방향, 서버 HP 판정, 이동속도는 변경하지 않음.
   if(m.animal==='ichigo'){
     const projectile=new THREE.Group();
     const crescent=new THREE.Shape();
-    // 기존 0.46 두께에서 0.16으로 축소: 날카롭고 얇은 칼날형 월아천충
-    const outer=1.02, inner=.86;
-    const start=-Math.PI*.64, end=Math.PI*.64;
-    for(let i=0;i<=32;i++){
-      const t=start+(end-start)*i/32;
-      const px=Math.sin(t)*outer, py=Math.cos(t)*outer;
-      if(i===0)crescent.moveTo(px,py);else crescent.lineTo(px,py);
-    }
-    for(let i=32;i>=0;i--){
-      const t=start+(end-start)*i/32;
-      crescent.lineTo(Math.sin(t)*inner,Math.cos(t)*inner);
-    }
+    // 날카로운 상하 끝 + 중앙이 오른쪽으로 볼록한 휘어진 검기.
+    crescent.moveTo(-.72,1.24);
+    crescent.bezierCurveTo(.08,.84,.54,.34,.55,.03);
+    crescent.bezierCurveTo(.54,-.38,.06,-.88,-.72,-1.24);
+    crescent.bezierCurveTo(-.11,-.66,.20,-.31,.22,.02);
+    crescent.bezierCurveTo(.21,.35,-.12,.78,-.72,1.24);
     crescent.closePath();
-    const core=new THREE.Mesh(
-      new THREE.ShapeGeometry(crescent),
-      new THREE.MeshBasicMaterial({color:0xeaffff,side:THREE.DoubleSide,
-        transparent:true,opacity:.98,depthWrite:false,blending:THREE.AdditiveBlending})
-    );
-    const aura=new THREE.Mesh(
-      new THREE.ShapeGeometry(crescent),
-      new THREE.MeshBasicMaterial({color:0x1a8fff,side:THREE.DoubleSide,
-        transparent:true,opacity:.30,depthWrite:false,blending:THREE.AdditiveBlending})
-    );
-    aura.scale.set(1.1,1.08,1);
+    const geom=new THREE.ShapeGeometry(crescent,32);
+    const mat=(color,opacity)=>new THREE.MeshBasicMaterial({
+      color,side:THREE.DoubleSide,transparent:true,opacity,
+      depthWrite:false,blending:THREE.AdditiveBlending
+    });
+    const core=new THREE.Mesh(geom,mat(0xf2ffff,.98));
+    core.position.z=.018;
+    const innerGlow=new THREE.Mesh(geom.clone(),mat(0x48ecff,.62));
+    innerGlow.scale.set(1.05,1.045,1);
+    innerGlow.position.z=.005;
+    const aura=new THREE.Mesh(geom.clone(),mat(0x0d9aff,.38));
+    aura.scale.set(1.17,1.11,1);
     aura.position.z=-.02;
-    // 가느다란 밝은 윤곽선으로 검날 느낌 강조
-    const edge=new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints(crescent.getPoints(50)),
-      new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:.75})
-    );
-    edge.position.z=.012;
-    projectile.add(core,aura,edge);
+    const halo=new THREE.Mesh(geom.clone(),mat(0x46caff,.15));
+    halo.scale.set(1.32,1.18,1);
+    halo.position.z=-.04;
+    // 단면에서도 시인성이 유지되도록 양면 광원 처리.
+    projectile.add(halo,aura,innerGlow,core);
     projectile.position.set(x,y+1.15,z);
     projectile.position.addScaledVector(direction,.85);
     projectile.rotation.y=facing;
     scene.add(projectile);
     magicProjectiles.push({id:m.shotId,ownerId:m.senderId,object:projectile,
-      direction,born:performance.now(),core:null,aura,freezeUntil:0,predictedContact:false});
+      direction,born:performance.now(),core:null,aura,freezeUntil:0,predictedContact:false,
+      baseAuraOpacity:.38});
     const caster=m.senderId===myId?myAvatar:others.get(m.senderId);
     if(caster?.userData?.ichigoSword){
       caster.userData.ichigoSword.rotation.z=-1.05;
       caster.userData.ichigoSword.userData.swingAt=performance.now();
     }
+    playIchigoAnimation(caster,'attack');
     playMagicCastSfx(magicSoundVolume(x,z));
     return;
   }
@@ -5245,7 +5343,7 @@ function updateMagic(now){
     );
 
     shot.aura.material.opacity=
-      remaining*.48;
+      remaining*(shot.baseAuraOpacity??.48);
 
     if(age>=MAGIC_LIFETIME){
       disposeMagicProjectile(shot);
