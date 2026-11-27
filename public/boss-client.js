@@ -24,6 +24,11 @@ export function createBossClient({
   const bossPos=new THREE.Vector3(0,1.7,-13);
   const effects=[];
 
+  // 모바일에서는 꼬리 공격 텍스트 팝업만 숨긴다. 3D 바닥 경고 범위는 유지.
+  const isMobileTailUI=()=>window.matchMedia(
+    '(max-width: 980px), (pointer: coarse)'
+  ).matches;
+
 // ========================================
 // 고래 꼬리 광역공격 시각 효과
 // ========================================
@@ -85,6 +90,7 @@ function createTailShockwave() {
 
 // 고래 꼬리 움직임과 충격파 갱신
 function updateTailEffects(now) {
+  if (isMobileTailUI()) tailWarning.hidden = true;
 
   if (current.state !== 'active') {
     tailWarningUntil = 0;
@@ -1240,7 +1246,7 @@ case 'boss_tail_warning':
     performance.now() +
     Math.max(0, Number(m.leadMs) || 1400);
 
-  tailWarning.hidden = false;
+  tailWarning.hidden = isMobileTailUI();
   tailWarning.textContent =
     '🐋 고래 꼬리 광역공격 준비! 점프해서 피하세요!';
   return true;
@@ -1255,10 +1261,12 @@ case 'boss_tail_strike':
   return true;
 
 case 'boss_tail_result':
-  if (m.dodged) {
-    say('✅ 점프 성공! 고래 공격 회피 · 피해 0');
-  } else {
-    say('💥 고래 꼬리 공격 적중! HP -40');
+  if (!isMobileTailUI()) {
+    if (m.dodged) {
+      say('✅ 점프 성공! 고래 공격 회피 · 피해 0');
+    } else {
+      say('💥 고래 꼬리 공격 적중! HP -40');
+    }
   }
   return true;
       case 'raid_notice':
@@ -1473,7 +1481,7 @@ function jmcTailOnMessage(m) {
       performance.now() +
       Math.max(0, Number(m.leadMs) || 1400);
 
-    jmcTailNotice.hidden = false;
+    jmcTailNotice.hidden = isMobileTailUI();
     return true;
   }
 
@@ -1486,12 +1494,12 @@ function jmcTailOnMessage(m) {
 
   if (m.type === 'boss_tail_result') {
 
-if (m.outOfRange) {
-  // 공격 범위 밖에서는 알림 표시하지 않음
-} else if (m.dodged) {
-  say('✅ 점프 성공! 고래 공격 회피');
-} else {
-  say('💥 고래 꼬리 공격 적중! HP -40');
+if (!isMobileTailUI() && !m.outOfRange) {
+  if (m.dodged) {
+    say('✅ 점프 성공! 고래 공격 회피');
+  } else {
+    say('💥 고래 꼬리 공격 적중! HP -40');
+  }
 }
 
     return true;
@@ -1524,7 +1532,7 @@ function jmcTailUpdate(now, dt) {
 
   // 공격 1.4초 전: 원형 범위 표시
   jmcDangerZone.visible = remaining > 0;
-  jmcTailNotice.hidden = remaining <= 0;
+  jmcTailNotice.hidden = isMobileTailUI() || remaining <= 0;
 
   if (remaining > 0) {
 
