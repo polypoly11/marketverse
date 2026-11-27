@@ -183,7 +183,7 @@ function updateMajinBuuAnimation(avatar,dt,now,walking=false){
 }
 
 // 이치고 구매 모델: public/models/ichigo.glb (마인부우와 독립적으로 캐싱)
-const ICHIGO_GLB_URL='/models/ichigo.glb?v=jmc-ichigo-bankai-20261128-v2';
+const ICHIGO_GLB_URL='/models/ichigo.glb?v=jmc-ichigo-bankai-20261128-swing-v3';
 const ichigoGLB={promise:null,asset:null,failed:false};
 function loadIchigoGLB(){
   if(!ichigoGLB.promise){
@@ -235,6 +235,29 @@ function attachIchigoGLB(avatar){
     fallback.forEach(child=>child.visible=false);
     avatar.userData.ichigoModel=model;
     avatar.userData.ichigoFallback=fallback;
+    // 리깅된 이치고의 오른팔/상체 뼈를 저장해 직접 참백도 휘두르기 구현.
+    const findBone=name=>{
+      let result=null;
+      model.traverse(node=>{if(!result && node.isBone && node.name===name)result=node;});
+      return result;
+    };
+    const swingBones={};
+    for(const name of ['shoulder.R','upper_arm.R','forearm.R','hand.R','spine.003']){
+      const bone=findBone(name);
+      if(bone)swingBones[name]={bone,rest:bone.quaternion.clone()};
+    }
+    avatar.userData.ichigoSwingBones=swingBones;
+    // 캐릭터 근처에서만 순간적으로 빛나는 검 궤적(서버 공격 판정에는 영향 없음).
+    const trail=new THREE.Group();
+    const trailMat=new THREE.MeshBasicMaterial({color:0x5cefff,transparent:true,
+      opacity:0,side:THREE.DoubleSide,depthWrite:false,blending:THREE.AdditiveBlending});
+    const trailMesh=new THREE.Mesh(new THREE.TorusGeometry(.83,.045,5,54,Math.PI*1.15),trailMat);
+    trailMesh.rotation.z=-.40;
+    trail.add(trailMesh);
+    trail.position.set(0,1.30,.63);
+    trail.visible=false;
+    body.add(trail);
+    avatar.userData.ichigoSwingTrail=trail;
     // 구매 GLB에는 애니메이션이 없지만 향후 클립 추가 시 사용 가능.
     const clips=gltf.animations||[];
     if(clips.length){
@@ -281,6 +304,56 @@ function updateIchigoAnimation(avatar,dt,now,walking=false){
   mixer.update(dt);
   if(now<(avatar.userData.ichigoAttackUntil||0))return;
   playIchigoAnimation(avatar,walking?'walk':'idle');
+}
+
+// 월아천충 발동 시, 실제 GLB 뼈대를 움직이는 0.55초 검술 모션.
+// 기본 포즈 복원까지 처리해 연속 공격 시 팔이 뒤틀리지 않도록 한다.
+function beginIchigoSwordSwing(avatar){
+  if(!avatar || avatar.userData.animal!=='ichigo')return;
+  avatar.userData.ichigoSwingStart=performance.now();
+}
+function updateIchigoSwordSwing(avatar,now){
+  if(!avatar || avatar.userData.animal!=='ichigo')return;
+  const start=avatar.userData.ichigoSwingStart;
+  const bones=avatar.userData.ichigoSwingBones;
+  if(start===undefined || !bones)return;
+  const t=Math.max(0,(now-start)/560);
+  const smooth=x=>{x=THREE.MathUtils.clamp(x,0,1);return x*x*(3-2*x);};
+  let windup=0,slash=0;
+  if(t<.25){windup=smooth(t/.25);}
+  else if(t<.62){
+    const u=smooth((t-.25)/.37);
+    windup=1-u;slash=u;
+  }else if(t<1){slash=1-smooth((t-.62)/.38);}
+  // 어깨를 뒤로 당기고 전방으로 크게 베며, 팔꿈치와 손목이 따라온다.
+  const poses={
+    'shoulder.R':[ -.32*windup+.40*slash, -.22*windup+.44*slash, .30*windup-.40*slash ],
+    'upper_arm.R':[-.62*windup+.68*slash, -.30*windup+.43*slash, .24*windup-.37*slash ],
+    'forearm.R':[ .35*windup-.42*slash, 0, -.12*windup+.22*slash ],
+    'hand.R':[ -.22*windup+.37*slash, .08*windup-.18*slash, 0 ],
+    'spine.003':[0,-.16*windup+.23*slash, -.06*windup+.09*slash]
+  };
+  for(const [name,item] of Object.entries(bones)){
+    const [x,y,z]=poses[name]||[0,0,0];
+    item.bone.quaternion.copy(item.rest).multiply(
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(x,y,z,'XYZ'))
+    );
+  }
+  const trail=avatar.userData.ichigoSwingTrail;
+  if(trail){
+    const show=t>.27 && t<.68;
+    trail.visible=show;
+    if(show){
+      const pulse=Math.sin(Math.PI*(t-.27)/.41);
+      trail.children[0].material.opacity=.58*Math.max(0,pulse);
+      trail.rotation.z=-1.05+1.80*smooth((t-.27)/.41);
+    }
+  }
+  if(t>=1){
+    for(const item of Object.values(bones))item.bone.quaternion.copy(item.rest);
+    avatar.userData.ichigoSwingStart=undefined;
+    if(trail)trail.visible=false;
+  }
 }
 
 function makeAnimal(id){
@@ -4814,6 +4887,7 @@ function spawnRemoteMagic(m){
       caster.userData.ichigoSword.rotation.z=-1.05;
       caster.userData.ichigoSword.userData.swingAt=performance.now();
     }
+    beginIchigoSwordSwing(caster);
     playIchigoAnimation(caster,'attack');
     playMagicCastSfx(magicSoundVolume(x,z));
     return;
@@ -5319,6 +5393,9 @@ function updateMagic(now){
           .2
         );
   }
+
+  // 리깅된 이치고 오른팔·검의 휘두르기(본인과 다른 이용자 모두).
+  for(const avatar of [myAvatar,...others.values()])updateIchigoSwordSwing(avatar,now);
 
   // 참백도 참격 모션을 다른 이용자에게도 표시
   for(const avatar of [myAvatar,...others.values()]){
