@@ -3968,6 +3968,77 @@ transform: translate(-50%, -50%) !important;
 })();
 </script>
 
+
+<!-- 모바일 헤더 최종 보정: 게스트 / Google / 효과음 3개 버튼 동일 폭·높이·중앙 정렬 -->
+<style id="jmc-mobile-auth-sfx-equal-cells-v8">
+@media screen and (max-width: 980px), (pointer: coarse) {
+  html body > header .top {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    grid-template-areas:
+      "status . rename"
+      "account google tools"
+      "note note note" !important;
+    column-gap: 6px !important;
+    align-items: center !important;
+  }
+  html body > header #jmc-account-button,
+  html body > header #jmc-mobile-google-login,
+  html body > header #jmc-sfx-toggle {
+    box-sizing: border-box !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    height: 36px !important;
+    min-height: 36px !important;
+    margin: 0 !important;
+    padding: 0 4px !important;
+    border-radius: 8px !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+  }
+  html body > header #jmc-account-button { grid-area: account !important; justify-self: stretch !important; }
+  html body > header #jmc-mobile-google-login { grid-area: google !important; justify-self: stretch !important; }
+  html body > header #jmc-mobile-google-login[hidden] { display: none !important; }
+  html body > header #jmc-header-tools {
+    grid-area: tools !important;
+    justify-self: stretch !important;
+    align-self: stretch !important;
+    display: flex !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    justify-content: center !important;
+    align-items: center !important;
+    overflow: visible !important;
+  }
+  html body > header #jmc-header-tools-line {
+    display: flex !important;
+    flex: 1 1 100% !important;
+    justify-content: center !important;
+    align-items: center !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  html body > header #jmc-sfx-toggle {
+    flex: 1 1 100% !important;
+    justify-self: stretch !important;
+    position: static !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+}
+</style>
+
 </body>
 
 
