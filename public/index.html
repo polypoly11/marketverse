@@ -1108,30 +1108,41 @@ html body.jmc-compact-header #jmc-header-help {
 }
 </style>
 
-  <!-- Hunter Killer 무료 BTC 청산맵: 공식 iframe 위젯 (2시간 지연) -->
+  <!-- MarketTrace BTC 청산 히트맵 이미지: 기존 청산맵 패널 대체 -->
   <style>
-    #hunterkiller-liquidation-panel { min-width: 0; }
-    #hunterkiller-liquidation-panel .hk-map-shell {
+    #markettrace-liquidation-panel { min-width: 0; }
+    #markettrace-liquidation-panel .mt-map-shell {
+      position: relative;
       border: 1px solid #283849;
       background: #090f19;
       border-radius: 10px;
       overflow: hidden;
     }
-    #hunterkiller-liquidation-panel .hk-map-frame {
+    #markettrace-liquidation-panel .mt-map-link {
+      display: block;
+      text-decoration: none;
+    }
+    #markettrace-liquidation-panel .mt-map-image {
       display: block;
       width: 100%;
-      height: 440px;
-      border: 0;
+      height: auto;
+      aspect-ratio: 1200 / 630;
+      object-fit: contain;
       background: #090f19;
     }
-    #hunterkiller-liquidation-panel .hk-map-note {
+    #markettrace-liquidation-panel .mt-map-error {
+      display: none;
+      padding: 28px 16px;
+      color: #c3d5e7;
+      text-align: center;
+      font: 13px/1.7 Arial, sans-serif;
+    }
+    #markettrace-liquidation-panel .mt-map-error a,
+    #markettrace-liquidation-panel .mt-map-note a { color: #8bd1ff; }
+    #markettrace-liquidation-panel .mt-map-note {
       margin: 10px 2px 0;
       color: #a8bfd2;
       font: 12px/1.6 Arial, sans-serif;
-    }
-    #hunterkiller-liquidation-panel .hk-map-note a { color: #8bd1ff; }
-    @media (max-width: 980px) {
-      #hunterkiller-liquidation-panel .hk-map-frame { height: 460px; }
     }
   </style>
 </head>
@@ -1317,25 +1328,40 @@ html body.jmc-compact-header #jmc-header-help {
 
       </section>
 
-      <!-- 경제 캘린더 바로 아래: Hunter Killer 공식 무료 BTC 청산맵 -->
-      <section class="panel" id="hunterkiller-liquidation-panel">
+      <!-- 경제 캘린더 바로 아래: MarketTrace BTC 청산 히트맵 이미지 -->
+      <section class="panel" id="markettrace-liquidation-panel">
         <div class="panel-head">
-          <h2>BTC LIQUIDATION MAP</h2>
-          <span>2시간 지연 · FREE</span>
+          <h2>BTC LIQUIDATION HEATMAP</h2>
+          <span>MARKETTRACE · BTC</span>
         </div>
-        <div class="hk-map-shell">
-          <iframe
-            class="hk-map-frame"
-            src="https://hunterkiller.io/widget/liq-map"
-            title="Hunter Killer BTC 청산맵 · 2시간 지연 데이터"
-            loading="lazy"
-            referrerpolicy="strict-origin-when-cross-origin"
-          ></iframe>
+        <div class="mt-map-shell">
+          <a
+            class="mt-map-link"
+            href="https://markettrace.ai/perpetuals/liquidation-heatmap"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="MarketTrace BTC 청산 히트맵 원본 열기"
+          >
+            <img
+              class="mt-map-image"
+              id="jmc-markettrace-liquidation-image"
+              src="https://markettrace.ai/og/liquidation-heatmap/btc.png"
+              alt="MarketTrace BTC 청산 히트맵"
+              width="1200"
+              height="630"
+              loading="lazy"
+              referrerpolicy="strict-origin-when-cross-origin"
+            >
+          </a>
+          <div class="mt-map-error" id="jmc-markettrace-liquidation-error" role="status">
+            청산맵 이미지를 불러오지 못했습니다.<br>
+            <a href="https://markettrace.ai/perpetuals/liquidation-heatmap" target="_blank" rel="noopener noreferrer">MarketTrace에서 직접 확인하기</a>
+          </div>
         </div>
-        <p class="hk-map-note">
-          Hunter Killer의 추정 청산 집중 구간을 표시합니다. 무료 위젯은 실시간이 아닌 2시간 지연 데이터입니다.
-          위젯 내 출처·지연시간 표시는 유지됩니다.
-          <a href="https://hunterkiller.io/embed" target="_blank" rel="noopener noreferrer">공식 위젯 안내</a>
+        <p class="mt-map-note">
+          MarketTrace 제공 BTC 청산 히트맵 이미지입니다. 이미지를 누르면 원본 인터랙티브 차트로 이동합니다.
+          60초마다 새 이미지를 요청하지만, 실제 데이터 갱신은 제공사 정책에 따릅니다.
+          <a href="https://markettrace.ai/perpetuals/liquidation-heatmap" target="_blank" rel="noopener noreferrer">원본 사이트</a>
         </p>
       </section>
 
@@ -3241,6 +3267,39 @@ transform: translate(-50%, -50%) !important;
   window.addEventListener('blur', () => activeTouches.clear());
 })();
 </script>
+
+  <!-- MarketTrace 청산맵 이미지 새로고침: 중복 요청 및 이미지 실패 안내 -->
+  <script>
+    (function () {
+      const image = document.getElementById('jmc-markettrace-liquidation-image');
+      const error = document.getElementById('jmc-markettrace-liquidation-error');
+      const baseUrl = 'https://markettrace.ai/og/liquidation-heatmap/btc.png';
+      if (!image || !error) return;
+
+      let loading = false;
+      image.addEventListener('load', function () {
+        loading = false;
+        image.style.display = 'block';
+        error.style.display = 'none';
+      });
+      image.addEventListener('error', function () {
+        loading = false;
+        image.style.display = 'none';
+        error.style.display = 'block';
+      });
+
+      function refreshImage() {
+        if (document.hidden || loading) return;
+        loading = true;
+        image.src = baseUrl + '?t=' + Date.now();
+      }
+
+      setInterval(refreshImage, 60000);
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) refreshImage();
+      });
+    })();
+  </script>
 
 </body>
 
