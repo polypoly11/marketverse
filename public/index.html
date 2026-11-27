@@ -3886,6 +3886,88 @@ transform: translate(-50%, -50%) !important;
 })();
 </script>
 
+
+<!-- JMC 모바일: HUD 스크롤 잔상 및 터치 제스처 안정화 (20261128) -->
+<style id="jmc-mobile-hud-scroll-touch-fix">
+@media (max-width:980px), (pointer:coarse) {
+  /* Safari 주소창이 접혀도 메타버스 영역이 계속 늘었다 줄지 않도록 안정적인 뷰포트 높이 사용 */
+  html body #scene {
+    height: 65svh !important;
+    min-height: 350px !important;
+    max-height: 650px !important;
+    overflow: clip !important;
+    isolation: isolate;
+    overscroll-behavior: contain !important;
+  }
+  html body #scene #mobile-controls,
+  html body #scene #mobile-controls *,
+  html body #scene #mobile-actions,
+  html body #scene #mobile-actions *,
+  html body #scene #jmc-missile-inventory,
+  html body #scene [data-action="missile"] {
+    touch-action: none !important;
+    overscroll-behavior: none !important;
+    -webkit-user-select: none !important;
+    user-select: none !important;
+    -webkit-touch-callout: none !important;
+  }
+  /* 게임 영역이 완전히 화면 밖으로 내려가면 고정 HUD도 사라지게 처리 */
+  html body.jmc-game-outside-viewport #jmc-missile-inventory,
+  html body.jmc-game-outside-viewport #jmc-glass-controls,
+  html body.jmc-game-outside-viewport #jmc-hp-hud,
+  html body.jmc-game-outside-viewport #mobile-controls,
+  html body.jmc-game-outside-viewport #mobile-actions,
+  html body.jmc-game-outside-viewport #scene [data-action="missile"] {
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+}
+</style>
+<script id="jmc-mobile-hud-visibility-and-gesture">
+(function () {
+  'use strict';
+  const mobile = () => window.matchMedia('(max-width:980px), (pointer:coarse)').matches;
+  function init() {
+    const scene = document.getElementById('scene');
+    if (!scene) return;
+    let pending = false;
+    function syncVisibility() {
+      pending = false;
+      if (!mobile()) {
+        document.body.classList.remove('jmc-game-outside-viewport');
+        return;
+      }
+      const rect = scene.getBoundingClientRect();
+      const visible = rect.bottom > 0 && rect.top < window.innerHeight;
+      document.body.classList.toggle('jmc-game-outside-viewport', !visible);
+    }
+    function scheduleSync() {
+      if (!pending) {
+        pending = true;
+        requestAnimationFrame(syncVisibility);
+      }
+    }
+    window.addEventListener('scroll', scheduleSync, { passive: true });
+    window.addEventListener('resize', scheduleSync, { passive: true });
+    window.visualViewport?.addEventListener('resize', scheduleSync, { passive: true });
+    syncVisibility();
+
+    // 화면 확대를 유발하는 '조작 키에서의 연속 두 번 탭'만 방지.
+    // 일반 탭과 화면 다른 영역의 확대/스크롤은 유지한다.
+    const controlSelector = '#mobile-controls, #mobile-actions, #jmc-missile-inventory, [data-action="missile"]';
+    let lastTap = 0;
+    scene.addEventListener('touchend', event => {
+      if (!mobile() || !event.target.closest?.(controlSelector) || event.changedTouches.length !== 1) return;
+      const now = Date.now();
+      if (now - lastTap < 300 && event.cancelable) event.preventDefault();
+      lastTap = now;
+    }, { capture: true, passive: false });
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, {once: true});
+  else init();
+})();
+</script>
+
 </body>
 
 
