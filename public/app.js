@@ -117,6 +117,9 @@ function attachMajinBuuGLB(avatar){
     const scale=Math.min(100,Math.max(.001,2.85/size.y));
     model.scale.multiplyScalar(scale);
     model.updateMatrixWorld(true);
+    const scaledBounds=new THREE.Box3().setFromObject(model);
+    const center=new THREE.Vector3();
+    scaledBounds.getCenter(center);
     model.position.x-=center.x;
     model.position.z-=center.z;
     model.position.y-=scaledBounds.min.y;
