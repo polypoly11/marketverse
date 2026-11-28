@@ -4278,6 +4278,71 @@ transform: translate(-50%, -50%) !important;
 })();
 </script>
 
+<!-- 모바일 미사일 버튼: ITEM 버튼 아래 정렬 (기존 조이스틱 화면 고정 코드는 유지) -->
+<style id="jmc-mobile-rocket-under-item-fix">
+@media (max-width:980px), (pointer:coarse) {
+  html body #scene #jmc-missile-inventory {
+    position: absolute !important;
+    right: auto !important;
+    bottom: auto !important;
+    margin: 0 !important;
+    transform: none !important;
+    box-sizing: border-box !important;
+  }
+  html body.jmc-rocket-item-outside #scene #jmc-missile-inventory {
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+}
+</style>
+<script id="jmc-mobile-rocket-under-item-script">
+(function () {
+  'use strict';
+  const isMobile = () => window.matchMedia('(max-width:980px), (pointer:coarse)').matches;
+  const scene = document.getElementById('scene');
+  if (!scene) return;
+  let scheduled = false;
+  function positionMissile() {
+    scheduled = false;
+    const item = document.getElementById('jmc-inventory-toggle');
+    const rocket = document.getElementById('jmc-missile-inventory');
+    if (!item || !rocket || !isMobile()) {
+      document.body.classList.remove('jmc-rocket-item-outside');
+      return;
+    }
+    // fixed ITEM과 absolute 로켓의 좌표계를 변환한다.
+    if (rocket.parentElement !== scene) scene.appendChild(rocket);
+    const itemRect = item.getBoundingClientRect();
+    const sceneRect = scene.getBoundingClientRect();
+    const gap = 6;
+    const left = itemRect.left - sceneRect.left;
+    const top = itemRect.bottom - sceneRect.top + gap;
+    const visible = itemRect.width > 0 && itemRect.height > 0 &&
+      sceneRect.bottom > 0 && sceneRect.top < window.innerHeight &&
+      top >= 0 && top + Math.max(rocket.offsetHeight, 40) <= scene.clientHeight;
+    document.body.classList.toggle('jmc-rocket-item-outside', !visible);
+    if (!visible) return;
+    rocket.style.setProperty('left', left + 'px', 'important');
+    rocket.style.setProperty('top', top + 'px', 'important');
+    rocket.style.setProperty('width', itemRect.width + 'px', 'important');
+    rocket.style.setProperty('max-width', itemRect.width + 'px', 'important');
+  }
+  function schedule() {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(positionMissile);
+  }
+  // 인벤토리/미사일 버튼이 비동기로 생성돼도 배치한다.
+  new MutationObserver(schedule).observe(document.body, {childList: true, subtree: true});
+  window.addEventListener('scroll', schedule, {passive: true});
+  window.addEventListener('resize', schedule, {passive: true});
+  window.visualViewport?.addEventListener('resize', schedule, {passive: true});
+  window.addEventListener('orientationchange', schedule, {passive: true});
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', schedule, {once: true});
+  schedule();
+})();
+</script>
+
 </body>
 
 
